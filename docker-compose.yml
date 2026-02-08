@@ -36,9 +36,14 @@ services:
       - "8443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx:/etc/nginx/certs:ro
+      - ./nginx/init-certs.sh:/docker-entrypoint.d/init-certs.sh:ro
+      - nginx-certs:/etc/nginx/certs
+    command: ["sh", "/docker-entrypoint.d/init-certs.sh"]
     networks:
       - sap-network
+
+volumes:
+  nginx-certs:
 
 networks:
   sap-network:
