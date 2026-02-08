@@ -1,6 +1,5 @@
 // restore-now.mjs
-import pkg from '../generated/prisma/index.js';
-const { PrismaClient } = pkg;
+import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
 
 const prisma = new PrismaClient();
