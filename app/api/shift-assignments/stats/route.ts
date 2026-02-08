@@ -1,0 +1,118 @@
+// app/api/shift-assignments/stats/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth';
+
+// GET - Récupérer les statistiques des assignations de shifts
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const dateFilter = searchParams.get('dateFilter'); // '24h', '7d', '30d', '90d', '180d'
+    const teamId = searchParams.get('teamId');
+
+    // Calculer la date de début basée sur le filtre
+    const where: any = {};
+
+    if (dateFilter) {
+      let startDate = new Date();
+      if (dateFilter === '24h') {
+        startDate.setHours(startDate.getHours() - 24);
+      } else if (dateFilter === '7d') {
+        startDate.setDate(startDate.getDate() - 7);
+      } else if (dateFilter === '30d') {
+        startDate.setDate(startDate.getDate() - 30);
+      } else if (dateFilter === '90d') {
+        startDate.setDate(startDate.getDate() - 90);
+      } else if (dateFilter === '180d') {
+        startDate.setDate(startDate.getDate() - 180);
+      }
+
+      where.createdAt = {
+        gte: startDate
+      };
+    }
+
+    // Récupérer toutes les assignations pour le filtre
+    const allAssignments = await prisma.shiftAssignment.findMany({
+      where,
+      include: {
+        shift: {
+          select: {
+            teamId: true
+          }
+        }
+      }
+    });
+
+    // Filtrer par équipe si spécifié
+    let assignments = allAssignments;
+    if (teamId) {
+      assignments = allAssignments.filter(a => a.shift.teamId === teamId);
+    }
+
+    // Compter par status
+    const accepted = assignments.filter(a => a.status === 'ACCEPTED').length;
+    const refused = assignments.filter(a => a.status === 'REFUSED').length;
+    const pending = assignments.filter(a => a.status === 'PENDING').length;
+    const cancelled = assignments.filter(a => a.status === 'CANCELLED').length;
+    const total = assignments.length;
+
+    // Statistiques par utilisateur
+    const userStats: any = {};
+    assignments.forEach(assignment => {
+      const userId = assignment.userId;
+      if (!userStats[userId]) {
+        userStats[userId] = {
+          userId,
+          total: 0,
+          accepted: 0,
+          refused: 0,
+          pending: 0,
+          cancelled: 0
+        };
+      }
+      userStats[userId].total++;
+      userStats[userId][assignment.status.toLowerCase()]++;
+    });
+
+    // Statistiques par équipe
+    const teamStats: any = {};
+    allAssignments.forEach(assignment => {
+      const teamId = assignment.shift.teamId;
+      if (!teamStats[teamId]) {
+        teamStats[teamId] = {
+          teamId,
+          total: 0,
+          accepted: 0,
+          refused: 0,
+          pending: 0,
+          cancelled: 0
+        };
+      }
+      teamStats[teamId].total++;
+      teamStats[teamId][assignment.status.toLowerCase()]++;
+    });
+
+    return NextResponse.json({
+      stats: {
+        accepted,
+        refused,
+        pending,
+        cancelled,
+        total
+      },
+      userStats: Object.values(userStats),
+      teamStats: Object.values(teamStats)
+    });
+  } catch (error) {
+    console.error('Error fetching shift assignment stats:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch stats' },
+      { status: 500 }
+    );
+  }
+}

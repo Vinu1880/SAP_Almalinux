@@ -1,0 +1,246 @@
+// lib/hooks/useShiftAssignments.ts
+
+import { useState, useEffect, useCallback } from 'react';
+import { useAuthFetch } from './useAuthFetch';
+
+export interface ShiftAssignment {
+  id: string;
+  date: Date;
+  status: 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
+  reason?: string;
+  respondedAt?: Date;
+  outlookEventId?: string;
+  resent?: boolean;
+  resentAt?: Date;
+  shiftId: string;
+  shift: {
+    id: string;
+    name: string;
+    description?: string;
+    startTime: string;
+    endTime: string;
+    color: string;
+    teamId: string;
+    team: {
+      id: string;
+      name: string;
+      color: string;
+    };
+  };
+  userId: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    teamId?: string;
+    team?: {
+      id: string;
+      name: string;
+      color: string;
+    };
+  };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ShiftAssignmentStats {
+  accepted: number;
+  refused: number;
+  pending: number;
+  cancelled: number;
+  total: number;
+}
+
+export interface UserStats {
+  userId: string;
+  total: number;
+  accepted: number;
+  refused: number;
+  pending: number;
+  cancelled: number;
+}
+
+export interface TeamStats {
+  teamId: string;
+  total: number;
+  accepted: number;
+  refused: number;
+  pending: number;
+  cancelled: number;
+}
+
+interface UseShiftAssignmentsOptions {
+  dateFilter?: '24h' | '7d' | '30d' | '90d' | '180d';
+  teamId?: string;
+  userId?: string;
+  status?: 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
+}
+
+export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
+  const authFetch = useAuthFetch();
+  const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
+  const [stats, setStats] = useState<ShiftAssignmentStats>({
+    accepted: 0,
+    refused: 0,
+    pending: 0,
+    cancelled: 0,
+    total: 0
+  });
+  const [userStats, setUserStats] = useState<UserStats[]>([]);
+  const [teamStats, setTeamStats] = useState<TeamStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAssignments = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Construire les paramètres de requête
+      const params = new URLSearchParams();
+      if (options.dateFilter) params.append('dateFilter', options.dateFilter);
+      if (options.teamId) params.append('teamId', options.teamId);
+      if (options.userId) params.append('userId', options.userId);
+      if (options.status) params.append('status', options.status);
+
+      const response = await authFetch(`/api/shift-assignments?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch assignments');
+
+      const data = await response.json();
+      setAssignments(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      console.error('Error fetching shift assignments:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [options.dateFilter, options.teamId, options.userId, options.status]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (options.dateFilter) params.append('dateFilter', options.dateFilter);
+      if (options.teamId) params.append('teamId', options.teamId);
+
+      const response = await authFetch(`/api/shift-assignments/stats?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch stats');
+
+      const data = await response.json();
+      setStats(data.stats);
+      setUserStats(data.userStats);
+      setTeamStats(data.teamStats);
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+    }
+  }, [options.dateFilter, options.teamId]);
+
+  const createAssignments = async (assignmentsData: Array<{
+    date: string;
+    shiftId: string;
+    userId: string;
+    status?: 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
+    reason?: string;
+  }>) => {
+    try {
+      const response = await authFetch('/api/shift-assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignments: assignmentsData })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create assignments');
+      }
+
+      const result = await response.json();
+
+      // Rafraîchir les données après création
+      await fetchAssignments();
+      await fetchStats();
+
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      throw err;
+    }
+  };
+
+  const updateAssignment = async (id: string, updateData: {
+    status?: 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
+    reason?: string;
+  }) => {
+    try {
+      const response = await authFetch(`/api/shift-assignments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update assignment');
+      }
+
+      const updated = await response.json();
+
+      // Mettre à jour localement
+      setAssignments(prev =>
+        prev.map(a => a.id === id ? updated : a)
+      );
+
+      // Rafraîchir les stats
+      await fetchStats();
+
+      return updated;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      throw err;
+    }
+  };
+
+  const deleteAssignment = async (id: string) => {
+    try {
+      const response = await authFetch(`/api/shift-assignments/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete assignment');
+      }
+
+      // Retirer localement
+      setAssignments(prev => prev.filter(a => a.id !== id));
+
+      // Rafraîchir les stats
+      await fetchStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      throw err;
+    }
+  };
+
+  const refresh = useCallback(async () => {
+    await Promise.all([fetchAssignments(), fetchStats()]);
+  }, [fetchAssignments, fetchStats]);
+
+  useEffect(() => {
+    fetchAssignments();
+    fetchStats();
+  }, [fetchAssignments, fetchStats]);
+
+  return {
+    assignments,
+    stats,
+    userStats,
+    teamStats,
+    loading,
+    error,
+    createAssignments,
+    updateAssignment,
+    deleteAssignment,
+    refresh
+  };
+}

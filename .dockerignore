@@ -1,0 +1,79 @@
+# =============================================
+# Fichiers à ignorer lors du build Docker
+# =============================================
+
+# Dépendances
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js build output
+.next
+out
+
+# Fichiers de test
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__
+coverage
+
+# Environnement
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE et éditeurs
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker
+
+# Documentation
+README.md
+*.md
+docs
+
+# Logs
+logs
+*.log
+
+# Fichiers temporaires
+tmp
+temp
+*.tmp
+
+# Prisma (garder le schema mais ignorer les migrations locales)
+# prisma/migrations - On garde les migrations pour la prod
+
+# Scripts de développement
+scripts/*.ts
+!scripts/backup.ts
+!scripts/restore.ts
+
+# Fichiers Windows spécifiques
+*.lnk
+nul
+
+# Claude/AI
+.claude
