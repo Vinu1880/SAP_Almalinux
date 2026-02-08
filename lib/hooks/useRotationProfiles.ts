@@ -1,7 +1,7 @@
 // /lib/hooks/useRotationProfiles.ts
 
 import { useState, useEffect } from 'react';
-import { useAuthFetch } from './useAuthFetch';
+import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
 interface RotationProfile {
   id: string;
@@ -31,6 +31,7 @@ interface RotationProfile {
 
 export const useRotationProfiles = () => {
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [rotationProfiles, setRotationProfiles] = useState<RotationProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,8 +108,10 @@ export const useRotationProfiles = () => {
   };
 
   useEffect(() => {
-    fetchRotationProfiles();
-  }, []);
+    if (isReady) {
+      fetchRotationProfiles();
+    }
+  }, [isReady]);
 
   return {
     rotationProfiles,

@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
         name: body.name,
         description: body.description || null,
         cycleLength: body.cycleLength,
-        weeks: body.weeks
+        weeks: body.weeks,
+        userShifts: body.userShifts || []
       }
     });
     return NextResponse.json(pattern);

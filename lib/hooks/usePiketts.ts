@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuthFetch } from './useAuthFetch';
+import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
 interface Pikett {
   id: string;
@@ -19,6 +19,7 @@ interface Pikett {
 
 export function usePiketts() {
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [piketts, setPiketts] = useState<Pikett[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,8 +99,10 @@ export function usePiketts() {
   }, []);
 
   useEffect(() => {
-    fetchPiketts();
-  }, [fetchPiketts]);
+    if (isReady) {
+      fetchPiketts();
+    }
+  }, [isReady, fetchPiketts]);
 
   return {
     piketts,

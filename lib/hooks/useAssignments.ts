@@ -1,7 +1,7 @@
 // lib/hooks/useAssignments.ts
 
 import { useState, useEffect } from 'react';
-import { useAuthFetch } from './useAuthFetch';
+import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
 export interface Assignment {
   id: string;
@@ -35,6 +35,7 @@ export function useAssignments(filters?: {
   status?: string;
 }) {
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,8 +109,10 @@ export function useAssignments(filters?: {
   };
 
   useEffect(() => {
-    fetchAssignments();
-  }, [filters?.userId, filters?.shiftId, filters?.startDate, filters?.endDate, filters?.status]);
+    if (isReady) {
+      fetchAssignments();
+    }
+  }, [isReady, filters?.userId, filters?.shiftId, filters?.startDate, filters?.endDate, filters?.status]);
 
   return {
     assignments,

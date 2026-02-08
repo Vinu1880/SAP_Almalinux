@@ -1,7 +1,7 @@
 // lib/hooks/useHolidays.ts
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuthFetch } from './useAuthFetch';
+import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
 export interface Holiday {
   id: string;
@@ -17,6 +17,7 @@ export interface Holiday {
 
 export function useHolidays(year?: number) {
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,8 +209,10 @@ const isUserOnHoliday = useCallback((userLocation: string, date: string): boolea
 };
 
   useEffect(() => {
-    fetchHolidays();
-  }, [fetchHolidays]);
+    if (isReady) {
+      fetchHolidays();
+    }
+  }, [isReady, fetchHolidays]);
 
   return {
     holidays,

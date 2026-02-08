@@ -153,10 +153,10 @@ const Navigation = () => {
                       </div>
                       <div className="text-left hidden md:block">
                         <p className="text-sm font-semibold text-slate-800 leading-tight">
-                          {account?.name || 'Utilisateur'}
+                          {account?.name || t('user')}
                         </p>
                         <p className="text-xs text-slate-500 leading-tight">
-                          {account?.username?.split('@')[0] || 'Non connecté'}
+                          {account?.username?.split('@')[0] || t('notConnected')}
                         </p>
                       </div>
                     </div>
@@ -172,10 +172,10 @@ const Navigation = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-slate-900 truncate">
-                          {account?.name || 'Utilisateur'}
+                          {account?.name || t('user')}
                         </p>
                         <p className="text-xs text-slate-600 truncate">
-                          {account?.username || 'Non connecté'}
+                          {account?.username || t('notConnected')}
                         </p>
                       </div>
                     </div>
@@ -264,10 +264,10 @@ const Navigation = () => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-slate-900 truncate">
-                              {account?.name || 'Utilisateur'}
+                              {account?.name || t('user')}
                             </p>
                             <p className="text-xs text-slate-600 truncate">
-                              {account?.username || 'Non connecté'}
+                              {account?.username || t('notConnected')}
                             </p>
                           </div>
                         </div>

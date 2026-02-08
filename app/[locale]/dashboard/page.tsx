@@ -54,10 +54,14 @@ import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useShifts } from '@/lib/hooks/useShifts';
+import { useAuthFetch } from '@/lib/hooks/useAuthFetch';
+import { useAuth } from '@/contexts/AuthContext';
 
 const DashboardPage = () => {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
+  const authFetch = useAuthFetch();
+  const { getAccessToken } = useAuth();
   const [dateFilter, setDateFilter] = useState<'7d' | '30d' | '90d' | '180d' | 'all'>('7d');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedView, setSelectedView] = useState<'shifts' | 'users'>('shifts');
@@ -121,7 +125,8 @@ const DashboardPage = () => {
   // Fonction pour récupérer les événements Out of Office pour une date spécifique
   const fetchOutOfOfficeForDate = async (date: string): Promise<any[]> => {
     try {
-      const ACCESS_TOKEN = 'EwBIBMl6BAAUBKgm8k1UswUNwklmy2v7U/S+1fEAAfE5qWiSGl/A5nPJ6UXeHCM9bdpbXNpJmGtsQy9Dbyo4+sdANdypRmLIbrInKvJ3kH5EGToAdTFBtYFj4wpQcQGL3t0aZuHTGD++eeYn4NyOlAVLVTrmxDq6X+tiDdqYeic3lrCFfKaR2NHZdDqKJPWoJBhcPa/Im7epNnlS0t12FB5a1ddBQ61fu/oc9G5mjt8H7KUqaQcct2kUTthKCHr1zvsMR3LOZ5lV13GgDDSbSfHz2o0klqaRUGOe+VtUiIDLoSOfq9HWXQbWNOV6TehuByp+d9BQah8kCkKGTkMBaSpqXYHZMeAsGk7+UasQ4BNCn1jXfSAMC9qREdMcWX0QZgAAEB2BZeFaW0ocBfQB7O6IhggQA4vBqghYKsl58/TY/fCaPJRPWx9Rr7jNNPXsQsyFMu3rvmRxi0i+HDqO92w1rt8qL/l68b54PI8pIeWGBBrwF8H8tGqHXmZrZUQfP3DUMZpqR5HjQtx3B312NHQlWR7p85G0eEIt64jz9JGPOTDQUNjdiVZOTQf1Ns6lqrgUvUkQieko8/EgU0r2mdPXRFs2xy+/GJE1f9kN7VAWX9P2prQJ+06Ym+5sb+uK6RwgYNyGFptJfTKycschehlZN53XxZc1nUDP8Mx1ryR9hOW/Z1yyLdY4bWlGZnhqsDjkQOmC2oQmQyvzEINx8R1FZsANT7seu9wh6/4BuuVC/Wf27zxXrUyqpiySCyX5xQB345sGNpygRw9UHhlL6o0BkZJRXCbWMrJ+HbieQ/4Hxdya5DSYxUDthR/pOxlOfY+3/5ea/dH+knmlVxOVEpHbz9TMS6n0aAjRYLEa8pKfpxN7UlBOos+XV216zfo1XLnJHLwjRXHWHKl00Yt0Yv4vIxgSaCnxKxpNfFrrP9lMwsHhmrD6GuosKzPIGApG1JbJTEsXdNs+K8/R+65vpeB0GtpTskfla509OIPIaUMA4t54UZ3/3zWY4LxLQjL2FwecaiOzt2E2Q4qnYCqlWBj7BY+7ZyR8oTGXOrah75mXgHOocRdmvFsvpzMs8BgKY6oxilYhy7M1DQAp2mwk3A+ToqIBdOM967dcvlnOxc840BBVQMvCw/KAd7SxWp+Z5Qsc4xAiQqovXloQ6UhbmF7t1xCrwmgsAtDmhp4FHfWXnEloPtQ5u0LM5lVN4ShB2DCu9RZxVkJeBIh71pcQbJDVwiHiAD8X/a5ul9yBwjDsEJe4Z9ZbaNTu0dEevHNv6U8MhqWhPkJqp0l6l6+MRYidV2ghKrYvhzPKBpCT0nnusZF5/cGZcmwsT5U4C0TdUnqmVneA8jsh+kPczA6vcVprTVarHtUp53MzkBeElnM7QPxLz0GHmy5pjRPA9Tr/95LgA+dP6/p4h4uKxYF9BtOyhA4EBILRNkAIhxYcjXi3mVo/3apBAw==';
+      const accessToken = await getAccessToken();
+      if (!accessToken) return [];
 
       // Récupérer les événements pour le jour précédent, le jour même et le jour suivant
       const targetDate = new Date(date);
@@ -137,7 +142,7 @@ const DashboardPage = () => {
 
       const calendarsResponse = await fetch('https://graph.microsoft.com/v1.0/me/calendars', {
         headers: {
-          'Authorization': `Bearer ${ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -153,7 +158,7 @@ const DashboardPage = () => {
 
         const eventsResponse = await fetch(eventsUrl, {
           headers: {
-            'Authorization': `Bearer ${ACCESS_TOKEN}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
             'Prefer': 'outlook.timezone="Europe/Zurich"'
           }
@@ -281,26 +286,26 @@ const DashboardPage = () => {
       });
       return {
         available: false,
-        reason: holidayForDate ? `Jour férié : ${holidayForDate.name}` : 'Jour férié'
+        reason: holidayForDate ? t('reasonHolidayWithName', { name: holidayForDate.name }) : t('reasonHoliday')
       };
     }
 
     // Vérifier si l'utilisateur travaille ce jour
     if (!isUserWorkingOnDay(user, date, shift?.startTime)) {
-      return { available: false, reason: 'Ne travaille pas ce jour' };
+      return { available: false, reason: t('reasonNotWorkingToday') };
     }
 
     // Vérifier Out of Office
     if (outOfOfficeEvents.length > 0) {
       const availability = isUserAvailable(user, date, outOfOfficeEvents, shift);
       if (!availability.available) {
-        return { available: false, reason: 'Out of Office' };
+        return { available: false, reason: t('reasonOutOfOffice') };
       }
     }
 
     // Vérifier les shifts consécutifs
     try {
-      const response = await fetch('/api/shift-assignments/check-consecutive', {
+      const response = await authFetch('/api/shift-assignments/check-consecutive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, date })
@@ -310,7 +315,7 @@ const DashboardPage = () => {
         const data = await response.json();
         if (data.hasConsecutiveShift) {
           const shiftNames = data.consecutiveAssignments.map((a: any) => a.shiftName).join(', ');
-          return { available: false, reason: `Shift consécutif (${shiftNames})` };
+          return { available: false, reason: t('reasonConsecutiveShift', { shifts: shiftNames }) };
         }
       }
     } catch (error) {
@@ -396,7 +401,7 @@ const DashboardPage = () => {
           if (availability.available) {
             available.push(user);
           } else {
-            unavailable.push({ user, reason: availability.reason || 'Non disponible' });
+            unavailable.push({ user, reason: availability.reason || t('notAvailable') });
           }
         }
 
@@ -419,9 +424,10 @@ const DashboardPage = () => {
 
     try {
       const newUser = users?.find(u => u.id === selectedNewUser);
-      if (!newUser) throw new Error('Utilisateur non trouvé');
+      if (!newUser) throw new Error(t('userNotFound'));
 
-      const ACCESS_TOKEN = 'EwBIBMl6BAAUBKgm8k1UswUNwklmy2v7U/S+1fEAAfE5qWiSGl/A5nPJ6UXeHCM9bdpbXNpJmGtsQy9Dbyo4+sdANdypRmLIbrInKvJ3kH5EGToAdTFBtYFj4wpQcQGL3t0aZuHTGD++eeYn4NyOlAVLVTrmxDq6X+tiDdqYeic3lrCFfKaR2NHZdDqKJPWoJBhcPa/Im7epNnlS0t12FB5a1ddBQ61fu/oc9G5mjt8H7KUqaQcct2kUTthKCHr1zvsMR3LOZ5lV13GgDDSbSfHz2o0klqaRUGOe+VtUiIDLoSOfq9HWXQbWNOV6TehuByp+d9BQah8kCkKGTkMBaSpqXYHZMeAsGk7+UasQ4BNCn1jXfSAMC9qREdMcWX0QZgAAEB2BZeFaW0ocBfQB7O6IhggQA4vBqghYKsl58/TY/fCaPJRPWx9Rr7jNNPXsQsyFMu3rvmRxi0i+HDqO92w1rt8qL/l68b54PI8pIeWGBBrwF8H8tGqHXmZrZUQfP3DUMZpqR5HjQtx3B312NHQlWR7p85G0eEIt64jz9JGPOTDQUNjdiVZOTQf1Ns6lqrgUvUkQieko8/EgU0r2mdPXRFs2xy+/GJE1f9kN7VAWX9P2prQJ+06Ym+5sb+uK6RwgYNyGFptJfTKycschehlZN53XxZc1nUDP8Mx1ryR9hOW/Z1yyLdY4bWlGZnhqsDjkQOmC2oQmQyvzEINx8R1FZsANT7seu9wh6/4BuuVC/Wf27zxXrUyqpiySCyX5xQB345sGNpygRw9UHhlL6o0BkZJRXCbWMrJ+HbieQ/4Hxdya5DSYxUDthR/pOxlOfY+3/5ea/dH+knmlVxOVEpHbz9TMS6n0aAjRYLEa8pKfpxN7UlBOos+XV216zfo1XLnJHLwjRXHWHKl00Yt0Yv4vIxgSaCnxKxpNfFrrP9lMwsHhmrD6GuosKzPIGApG1JbJTEsXdNs+K8/R+65vpeB0GtpTskfla509OIPIaUMA4t54UZ3/3zWY4LxLQjL2FwecaiOzt2E2Q4qnYCqlWBj7BY+7ZyR8oTGXOrah75mXgHOocRdmvFsvpzMs8BgKY6oxilYhy7M1DQAp2mwk3A+ToqIBdOM967dcvlnOxc840BBVQMvCw/KAd7SxWp+Z5Qsc4xAiQqovXloQ6UhbmF7t1xCrwmgsAtDmhp4FHfWXnEloPtQ5u0LM5lVN4ShB2DCu9RZxVkJeBIh71pcQbJDVwiHiAD8X/a5ul9yBwjDsEJe4Z9ZbaNTu0dEevHNv6U8MhqWhPkJqp0l6l6+MRYidV2ghKrYvhzPKBpCT0nnusZF5/cGZcmwsT5U4C0TdUnqmVneA8jsh+kPczA6vcVprTVarHtUp53MzkBeElnM7QPxLz0GHmy5pjRPA9Tr/95LgA+dP6/p4h4uKxYF9BtOyhA4EBILRNkAIhxYcjXi3mVo/3apBAw==';
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error(t('tokenError'));
 
       // 1. Créer l'événement Outlook
       const shift = resendingAssignment.shift;
@@ -471,7 +477,7 @@ const DashboardPage = () => {
           }
         ],
         location: {
-          displayName: shift.location || newUser.location || 'Non spécifié'
+          displayName: shift.location || newUser.location || t('notSpecified')
         },
         isReminderOn: true,
         reminderMinutesBeforeStart: 1440,
@@ -485,7 +491,7 @@ const DashboardPage = () => {
       const outlookResponse = await fetch('https://graph.microsoft.com/v1.0/me/events', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(event)
@@ -493,13 +499,27 @@ const DashboardPage = () => {
 
       if (!outlookResponse.ok) {
         const error = await outlookResponse.json();
-        throw new Error(error.error?.message || 'Erreur lors de l\'envoi de l\'invitation');
+        throw new Error(error.error?.message || t('outlookSendError'));
       }
 
       const createdEvent = await outlookResponse.json();
 
-      // 2. Créer la nouvelle assignation dans la DB
-      const createResponse = await fetch('/api/shift-assignments', {
+      // 2. Marquer l'ancienne assignation comme "resent"
+      const patchResponse = await authFetch(`/api/shift-assignments/${resendingAssignment.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resent: true,
+          resentAt: new Date().toISOString()
+        })
+      });
+
+      if (!patchResponse.ok) {
+        throw new Error(t('updateError'));
+      }
+
+      // 3. Créer la nouvelle assignation dans la DB
+      const createResponse = await authFetch('/api/shift-assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -507,53 +527,29 @@ const DashboardPage = () => {
             date: resendingAssignment.date,
             shiftId: shift.id,
             userId: newUser.id,
-            status: 'PENDING'
+            status: 'PENDING',
+            outlookEventId: createdEvent.id
           }]
         })
       });
 
       if (!createResponse.ok) {
-        throw new Error('Erreur lors de la création de l\'assignation');
+        throw new Error(t('createError'));
       }
 
-      const createResult = await createResponse.json();
-      const newAssignment = createResult.assignments[0];
-
-      // 3. Mettre à jour avec l'outlookEventId et marquer comme resent
-      await fetch(`/api/shift-assignments/${newAssignment.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          outlookEventId: createdEvent.id,
-          resent: true,
-          resentAt: new Date().toISOString()
-        })
-      });
-
-      // 4. Supprimer l'ancienne assignation et son événement Outlook
-      if (resendingAssignment.status === 'PENDING') {
-        // Supprimer l'événement Outlook si il existe
-        if (resendingAssignment.outlookEventId) {
-          try {
-            const deleteEventUrl = `https://graph.microsoft.com/v1.0/me/events/${resendingAssignment.outlookEventId}`;
-            await fetch(deleteEventUrl, {
-              method: 'DELETE',
-              headers: {
-                'Authorization': `Bearer ${ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            console.log('Ancien événement Outlook supprimé');
-          } catch (deleteError) {
-            console.error('Erreur lors de la suppression de l\'ancien événement:', deleteError);
-            // On continue même si la suppression échoue
-          }
+      // 4. Supprimer l'ancien événement Outlook si il existe
+      if (resendingAssignment.outlookEventId) {
+        try {
+          await fetch(`https://graph.microsoft.com/v1.0/me/events/${resendingAssignment.outlookEventId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } catch (deleteError) {
+          console.error('Erreur lors de la suppression de l\'ancien événement:', deleteError);
         }
-
-        // Supprimer l'assignation de la DB
-        await fetch(`/api/shift-assignments/${resendingAssignment.id}`, {
-          method: 'DELETE'
-        });
       }
 
       // Rafraîchir les données
@@ -561,7 +557,7 @@ const DashboardPage = () => {
 
       setSyncMessage({
         type: 'success',
-        text: `Invitation renvoyée avec succès à ${newUser.firstName} ${newUser.lastName} !`
+        text: t('resendSuccess', { name: `${newUser.firstName} ${newUser.lastName}` })
       });
       setTimeout(() => setSyncMessage(null), 5000);
 
@@ -573,7 +569,7 @@ const DashboardPage = () => {
       console.error('Erreur lors du resend:', error);
       setSyncMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Erreur lors du renvoi de l\'invitation'
+        text: error instanceof Error ? error.message : t('resendError')
       });
       setTimeout(() => setSyncMessage(null), 5000);
     } finally {
@@ -607,7 +603,7 @@ const DashboardPage = () => {
       // Afficher le message de succès
       setSyncMessage({
         type: 'success',
-        text: `Synchronisation réussie ! ${result.updated} assignation(s) mise(s) à jour.`
+        text: t('syncSuccess', { count: result.updated })
       });
 
       // Masquer le message après 5 secondes
@@ -616,7 +612,7 @@ const DashboardPage = () => {
       console.error('Error syncing with Outlook:', err);
       setSyncMessage({
         type: 'error',
-        text: 'Erreur lors de la synchronisation avec Outlook.'
+        text: t('syncError')
       });
 
       // Masquer le message d'erreur après 5 secondes
@@ -842,19 +838,16 @@ const DashboardPage = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
           <div>
             <h1 className="text-3xl font-bold text-slate-800">{t('title')}</h1>
-            <p className="text-slate-600 mt-1">
-              {t('subtitle')}
-            </p>
           </div>
 
           <div className="flex items-center space-x-3">
             <Tabs value={dateFilter} onValueChange={(v) => setDateFilter(v as any)} className="w-auto">
               <TabsList className="grid grid-cols-5 w-auto">
-                <TabsTrigger value="7d" className="text-xs">7 jours</TabsTrigger>
-                <TabsTrigger value="30d" className="text-xs">30 jours</TabsTrigger>
-                <TabsTrigger value="90d" className="text-xs">90 jours</TabsTrigger>
-                <TabsTrigger value="180d" className="text-xs">180 jours</TabsTrigger>
-                <TabsTrigger value="all" className="text-xs">Tout</TabsTrigger>
+                <TabsTrigger value="7d" className="text-xs">{t('days7')}</TabsTrigger>
+                <TabsTrigger value="30d" className="text-xs">{t('days30')}</TabsTrigger>
+                <TabsTrigger value="90d" className="text-xs">{t('days90')}</TabsTrigger>
+                <TabsTrigger value="180d" className="text-xs">{t('days180')}</TabsTrigger>
+                <TabsTrigger value="all" className="text-xs">{t('allPeriod')}</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -866,7 +859,7 @@ const DashboardPage = () => {
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Actualisation...' : 'Actualiser'}
+              {syncing ? t('syncing') : t('sync')}
             </Button>
 
             <Button variant="outline" size="sm" onClick={handleExport} className="hover:bg-secondary/20">
@@ -985,13 +978,13 @@ const DashboardPage = () => {
                   <div className="grid grid-cols-5 gap-4">
                     {/* Filtre par utilisateur */}
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-medium text-slate-600">Utilisateur</label>
+                      <label className="text-xs font-medium text-slate-600">{t('userFilter')}</label>
                       <Select value={selectedUser} onValueChange={setSelectedUser}>
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Tous" />
+                          <SelectValue placeholder={t('allFilter')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Tous</SelectItem>
+                          <SelectItem value="all">{t('allFilter')}</SelectItem>
                           {users?.map(user => (
                             <SelectItem key={user.id} value={user.id}>
                               {user.firstName} {user.lastName}
@@ -1003,13 +996,13 @@ const DashboardPage = () => {
 
                     {/* Filtre par shift */}
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-medium text-slate-600">Shift</label>
+                      <label className="text-xs font-medium text-slate-600">{t('shiftFilter')}</label>
                       <Select value={selectedShift} onValueChange={setSelectedShift}>
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Tous" />
+                          <SelectValue placeholder={t('allFilter')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Tous</SelectItem>
+                          <SelectItem value="all">{t('allFilter')}</SelectItem>
                           {shifts?.map(shift => (
                             <SelectItem key={shift.id} value={shift.id}>
                               {shift.name}
@@ -1021,7 +1014,7 @@ const DashboardPage = () => {
 
                     {/* Filtre par date */}
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-medium text-slate-600">Date</label>
+                      <label className="text-xs font-medium text-slate-600">{tCommon('date')}</label>
                       <Input
                         type="date"
                         value={selectedDate}
@@ -1032,17 +1025,17 @@ const DashboardPage = () => {
 
                     {/* Filtre par statut */}
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-medium text-slate-600">Statut</label>
+                      <label className="text-xs font-medium text-slate-600">{t('statusFilter')}</label>
                       <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Tous" />
+                          <SelectValue placeholder={t('allFilter')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Tous</SelectItem>
-                          <SelectItem value="ACCEPTED">Accepté</SelectItem>
-                          <SelectItem value="REFUSED">Refusé</SelectItem>
-                          <SelectItem value="PENDING">En attente</SelectItem>
-                          <SelectItem value="CANCELLED">Annulé</SelectItem>
+                          <SelectItem value="all">{t('allFilter')}</SelectItem>
+                          <SelectItem value="ACCEPTED">{t('statusAccepted')}</SelectItem>
+                          <SelectItem value="REFUSED">{t('statusRefused')}</SelectItem>
+                          <SelectItem value="PENDING">{t('statusPending')}</SelectItem>
+                          <SelectItem value="CANCELLED">{t('statusCancelled')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1057,7 +1050,7 @@ const DashboardPage = () => {
                         className="hover:bg-secondary/20 w-full"
                       >
                         <X className="w-4 h-4 mr-2" />
-                        Réinitialiser
+                        {tCommon('refresh')}
                       </Button>
                     </div>
                   </div>
@@ -1142,7 +1135,7 @@ const DashboardPage = () => {
                               <td className="py-4 px-2">
                                 {assignment.resent ? (
                                   <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs px-3 py-1.5">
-                                    ✓ Renvoyé
+                                    ✓ {t('resent')}
                                   </Badge>
                                 ) : (
                                   <Button
@@ -1152,7 +1145,7 @@ const DashboardPage = () => {
                                     className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
                                   >
                                     <Send className="w-4 h-4 mr-2" />
-                                    Resend
+                                    {t('resend')}
                                   </Button>
                                 )}
                               </td>
@@ -1165,7 +1158,7 @@ const DashboardPage = () => {
 
                     <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
                       <p className="text-sm text-slate-600">
-                        Page {currentPage} sur {totalPages} • {filteredAssignments.length} {filteredAssignments.length > 1 ? 'résultats' : 'résultat'}
+                        {t('pageOf', { current: currentPage, total: totalPages })} • {t('results', { count: filteredAssignments.length })}
                       </p>
 
                       {totalPages > 1 && (
@@ -1177,7 +1170,7 @@ const DashboardPage = () => {
                             disabled={currentPage === 1}
                             className="hover:bg-secondary/20"
                           >
-                            Précédent
+                            {t('previous')}
                           </Button>
 
                           <div className="flex items-center gap-1">
@@ -1214,7 +1207,7 @@ const DashboardPage = () => {
                             disabled={currentPage === totalPages}
                             className="hover:bg-secondary/20"
                           >
-                            Suivant
+                            {t('next')}
                           </Button>
                         </div>
                       )}
@@ -1315,14 +1308,12 @@ const DashboardPage = () => {
       }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Renvoyer l'invitation</DialogTitle>
+            <DialogTitle>{t('resendTitle')}</DialogTitle>
             <DialogDescription>
-              Sélectionnez un nouvel utilisateur éligible pour recevoir l'invitation du shift{' '}
-              <span className="font-semibold">{resendingAssignment?.shift?.name}</span>
-              {' '}du{' '}
-              <span className="font-semibold">
-                {resendingAssignment && new Date(resendingAssignment.date).toLocaleDateString('fr-FR')}
-              </span>
+              {t('resendDescription', {
+                shift: resendingAssignment?.shift?.name || '',
+                date: resendingAssignment ? new Date(resendingAssignment.date).toLocaleDateString('fr-FR') : ''
+              })}
             </DialogDescription>
           </DialogHeader>
 
@@ -1330,7 +1321,7 @@ const DashboardPage = () => {
             {checkingAvailability ? (
               <div className="text-center py-8">
                 <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-blue-600" />
-                <p className="text-slate-500">Vérification de la disponibilité...</p>
+                <p className="text-slate-500">{t('checkingAvailability')}</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -1340,7 +1331,7 @@ const DashboardPage = () => {
                  usersAvailability.unavailable.length === 0 && (
                   <div className="text-center py-8">
                     <AlertCircle className="w-12 h-12 mx-auto mb-3 text-orange-400" />
-                    <p className="text-slate-600">Aucun utilisateur éligible trouvé pour ce shift.</p>
+                    <p className="text-slate-600">{t('noEligibleUsers')}</p>
                   </div>
                 )}
 
@@ -1349,7 +1340,7 @@ const DashboardPage = () => {
                   <div>
                     <h4 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
-                      Disponibles ({usersAvailability.available.length})
+                      {t('availableCount', { count: usersAvailability.available.length })}
                     </h4>
                     <div className="space-y-2">
                       {usersAvailability.available.map(user => (
@@ -1394,7 +1385,7 @@ const DashboardPage = () => {
                     <div className="border-t pt-3">
                       <h4 className="text-sm font-semibold text-orange-700 mb-2 flex items-center gap-2">
                         <AlertCircle className="w-4 h-4" />
-                        ⚠️ Déjà assignés aujourd'hui ({usersAvailability.alreadyAssigned.length})
+                        ⚠️ {t('alreadyAssignedTodayWithCount', { count: usersAvailability.alreadyAssigned.length })}
                       </h4>
                       <div className="space-y-2">
                         {usersAvailability.alreadyAssigned.map(user => {
@@ -1429,7 +1420,7 @@ const DashboardPage = () => {
                                     </p>
                                   </div>
                                   <Badge variant="outline" className="text-xs bg-white">
-                                    {otherAssignment?.shift?.name || 'Autre shift'}
+                                    {otherAssignment?.shift?.name || t('otherShift')}
                                   </Badge>
                                 </div>
                                 {selectedNewUser === user.id && (
@@ -1450,7 +1441,7 @@ const DashboardPage = () => {
                     <div className="border-t pt-3">
                       <h4 className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2">
                         <XCircle className="w-4 h-4" />
-                        ⚠️ Contraintes brisées ({usersAvailability.unavailable.length})
+                        {t('brokenConstraints', { count: usersAvailability.unavailable.length })}
                       </h4>
                       <div className="space-y-2">
                         {usersAvailability.unavailable.map(({ user, reason }) => (
@@ -1507,7 +1498,7 @@ const DashboardPage = () => {
               className="hover:bg-secondary/20"
             >
               <X className="w-4 h-4 mr-2" />
-              Annuler
+              {tCommon('cancel')}
             </Button>
             <Button
               onClick={handleResend}
@@ -1517,12 +1508,12 @@ const DashboardPage = () => {
               {resending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Envoi en cours...
+                  {t('sending')}
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4 mr-2" />
-                  Confirmer
+                  {tCommon('confirm')}
                 </>
               )}
             </Button>

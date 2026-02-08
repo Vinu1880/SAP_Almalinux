@@ -494,7 +494,7 @@ const getUserCantonFromLocation = (location: string): string => {
 
       const originalConstraint = a.unavailableUsers.find(u =>
         u.user.id === tempAssignedUser &&
-        u.reason !== 'Déjà assigné à un shift aujourd\'hui'
+        u.reason !== t('reasonAlreadyAssignedToday')
       );
 
       const hasOtherShift = selectedDayAssignments.some(other =>
@@ -510,9 +510,9 @@ const getUserCantonFromLocation = (location: string): string => {
         ...a,
         assignedUsers: selectedUser ? [selectedUser] : [],
         isManualOverride: isChanged || originalConstraint || hasOtherShift ? true : false,
-        overrideReason: isChanged ? 'Modification manuelle' :
+        overrideReason: isChanged ? t('manualModification') :
                        originalConstraint ? originalConstraint.reason :
-                       hasOtherShift ? 'Déjà assigné à un autre shift' :
+                       hasOtherShift ? t('alreadyAssignedToAnotherShift') :
                        undefined,
         // Ne pas modifier unavailableUsers - le filtrage se fait à l'affichage
         unavailableUsers: a.unavailableUsers
@@ -532,7 +532,7 @@ const getUserCantonFromLocation = (location: string): string => {
 
       const originalConstraint = a.unavailableUsers.find(u =>
         u.user.id === tempAssignedUser &&
-        u.reason !== 'Déjà assigné à un shift aujourd\'hui'
+        u.reason !== t('reasonAlreadyAssignedToday')
       );
 
       const hasOtherShift = updatedDayAssignments?.some(other =>
@@ -550,9 +550,9 @@ const getUserCantonFromLocation = (location: string): string => {
         ...a,
         assignedUsers: selectedUser ? [selectedUser] : [],
         isManualOverride: isChanged || originalConstraint || hasOtherShift ? true : false,
-        overrideReason: isChanged ? 'Modification manuelle' :
+        overrideReason: isChanged ? t('manualModification') :
                        originalConstraint ? originalConstraint.reason :
-                       hasOtherShift ? 'Déjà assigné à un autre shift' :
+                       hasOtherShift ? t('alreadyAssignedToAnotherShift') :
                        undefined,
         // Ne pas modifier unavailableUsers - le filtrage se fait à l'affichage
         unavailableUsers: a.unavailableUsers,
@@ -955,7 +955,7 @@ const processShiftAssignments = async () => {
                 availableUsers: [],
                 unavailableUsers: eligibleUsers.map(u => ({
                   user: u,
-                  reason: 'Aucun utilisateur disponible',
+                  reason: t('reasonNoUserAvailable'),
                   conflictEvents: []
                 })),
                 isPikett: true,
@@ -975,10 +975,10 @@ const processShiftAssignments = async () => {
                   return holidayDate === date;
                 });
                 dayAvailable = false;
-                unavailabilityReason = `Jour férié${holidayForDate ? ` : ${holidayForDate.name}` : ''}`;
+                unavailabilityReason = holidayForDate ? t('reasonHolidayWithName', { name: holidayForDate.name }) : t('reasonHoliday');
                 dayConflicts = [{
                   id: 'holiday',
-                  subject: holidayForDate?.name || 'Jour férié',
+                  subject: holidayForDate?.name || t('reasonHoliday'),
                   start: { dateTime: new Date(date + 'T00:00:00').toISOString() },
                   end: { dateTime: new Date(date + 'T23:59:59').toISOString() },
                   showAs: 'oof' as const,
@@ -993,7 +993,7 @@ const processShiftAssignments = async () => {
                 dayAvailable = availability.available;
                 if (!dayAvailable) {
                   dayConflicts = availability.conflictEvents;
-                  unavailabilityReason = 'Out of Office';
+                  unavailabilityReason = t('reasonOutOfOffice');
                 }
               }
 
@@ -1011,14 +1011,14 @@ const processShiftAssignments = async () => {
                 unavailableUsers: [
                   ...(!dayAvailable ? [{
                     user: assignedUserForWeek,
-                    reason: unavailabilityReason || 'Non disponible',
+                    reason: unavailabilityReason || t('reasonNotAvailable'),
                     conflictEvents: dayConflicts
                   }] : []),
                   ...shuffledUsers
                     .filter(u => u.id !== assignedUserForWeek.id)
                     .map(u => ({
                       user: u,
-                      reason: 'Rotation hebdomadaire',
+                      reason: t('reasonWeeklyRotation'),
                       conflictEvents: []
                     }))
                 ],
@@ -1156,7 +1156,7 @@ const processShiftAssignments = async () => {
                 .filter(u => u.id !== rotationUser.id)
                 .map(u => ({
                   user: u,
-                  reason: 'Réservé (rotation automatique)',
+                  reason: t('reasonReservedRotation'),
                   conflictEvents: []
                 })),
               isRotationAssignment: true,
@@ -1208,10 +1208,10 @@ const processShiftAssignments = async () => {
 
             unavailableUsers.push({
               user,
-              reason: `Jour férié${holidayForDate ? ` : ${holidayForDate.name}` : ''}`,
+              reason: holidayForDate ? t('reasonHolidayWithName', { name: holidayForDate.name }) : t('reasonHoliday'),
               conflictEvents: [{
                 id: 'holiday',
-                subject: holidayForDate?.name || 'Jour férié',
+                subject: holidayForDate?.name || t('reasonHoliday'),
                 start: { dateTime: new Date(date + 'T00:00:00').toISOString() },
                 end: { dateTime: new Date(date + 'T23:59:59').toISOString() },
                 showAs: 'oof' as const,
@@ -1228,7 +1228,7 @@ const processShiftAssignments = async () => {
           if (!worksThisDay) {
             unavailableUsers.push({
               user,
-              reason: 'Ne travaille pas ce jour',
+              reason: t('reasonNotWorkingToday'),
               conflictEvents: []
             });
             continue;
@@ -1246,12 +1246,12 @@ const processShiftAssignments = async () => {
           if (hasNormalShiftToday) {
             unavailableUsers.push({
               user,
-              reason: 'Déjà assigné à un shift aujourd\'hui',
+              reason: t('reasonAlreadyAssignedToday'),
               conflictEvents: []
             });
             continue;
           }
-          
+
           // ========================================
           // PRIORITÉ 4: CALENDRIER OUTLOOK (si activé)
           // ========================================
@@ -1260,13 +1260,13 @@ const processShiftAssignments = async () => {
             if (!availability.available) {
               unavailableUsers.push({
                 user,
-                reason: 'Out of Office',
+                reason: t('reasonOutOfOffice'),
                 conflictEvents: availability.conflictEvents
               });
               continue;
             }
           }
-          
+
           // ========================================
           // PRIORITÉ 5: SHIFTS CONSÉCUTIFS (si activé)
           // ========================================
@@ -1293,7 +1293,7 @@ const processShiftAssignments = async () => {
             if (hasConsecutiveNormalShift) {
               unavailableUsers.push({
                 user,
-                reason: 'Shifts consécutifs',
+                reason: t('reasonConsecutiveShifts'),
                 conflictEvents: []
               });
               continue;
@@ -1343,28 +1343,28 @@ const processShiftAssignments = async () => {
             console.log(`    ⚠ Aucune personne disponible`);
             
             // Déterminer la raison principale
-            const holidayCount = unavailableUsers.filter(u => u.reason.includes('Jour férié')).length;
-            const oofCount = unavailableUsers.filter(u => u.reason === 'Out of Office').length;
-            const workDayCount = unavailableUsers.filter(u => u.reason === 'Ne travaille pas ce jour').length;
-            const consecutiveCount = unavailableUsers.filter(u => u.reason === 'Shifts consécutifs').length;
-            const alreadyAssignedCount = unavailableUsers.filter(u => u.reason === 'Déjà assigné à un shift aujourd\'hui').length;
-            
+            const holidayCount = unavailableUsers.filter(u => u.reason.includes(t('reasonHoliday'))).length;
+            const oofCount = unavailableUsers.filter(u => u.reason === t('reasonOutOfOffice')).length;
+            const workDayCount = unavailableUsers.filter(u => u.reason === t('reasonNotWorkingToday')).length;
+            const consecutiveCount = unavailableUsers.filter(u => u.reason === t('reasonConsecutiveShifts')).length;
+            const alreadyAssignedCount = unavailableUsers.filter(u => u.reason === t('reasonAlreadyAssignedToday')).length;
+
             if (holidayCount > 0 && holidayCount >= unavailableUsers.length * 0.5) {
               // Trouver le nom du jour férié pour cette date
               const holidayForDate = holidays.find(holiday => {
                 const holidayDate = new Date(holiday.date).toISOString().split('T')[0];
                 return holidayDate === date;
               });
-              
-              noAssignmentReason = holidayForDate 
-                ? `Jour férié : ${holidayForDate.name}`
-                : 'Jour férié pour la plupart des utilisateurs';
+
+              noAssignmentReason = holidayForDate
+                ? t('reasonHolidayWithName', { name: holidayForDate.name })
+                : t('reasonHolidayForMost');
             } else if (workDayCount > 0 && workDayCount >= unavailableUsers.length * 0.5) {
-              noAssignmentReason = 'Jour non travaillé pour la plupart des utilisateurs';
+              noAssignmentReason = t('reasonNonWorkDayForMost');
             } else if (oofCount > 0) {
-              noAssignmentReason = `${oofCount} utilisateur(s) en congé`;
+              noAssignmentReason = t('reasonUsersOnLeave', { count: oofCount });
             } else if (alreadyAssignedCount > 0) {
-              noAssignmentReason = `${alreadyAssignedCount} utilisateur(s) déjà assigné(s)`;
+              noAssignmentReason = t('reasonUsersAlreadyAssigned', { count: alreadyAssignedCount });
             } else if (consecutiveCount > 0) {
               noAssignmentReason = t('consecutiveShiftsConflict');
             } else {
@@ -1725,7 +1725,7 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                 </span>
                 {assignment.assignedUsers.length > 0 ? (
                   <span className="text-slate-700 truncate text-xs">
-                    : {assignment.assignedUsers[0].firstName?.substring(0, expandedCalendar ? 10 : 6)}
+                    : {assignment.assignedUsers[0].firstName} {assignment.assignedUsers[0].lastName}
                   </span>
                 ) : (
                   <span className="text-orange-600 text-xs">: ⚠</span>
@@ -2592,8 +2592,8 @@ useEffect(() => {
                                         const selectedUser = availableUsers.find(u => u.id === selectedUserId);
                                         const constraint = assignment.unavailableUsers.find(u =>
                                           u.user.id === selectedUserId &&
-                                          u.reason !== 'Déjà assigné à un shift aujourd\'hui' &&
-                                          u.reason !== 'Déjà assignés aujourd\'hui'
+                                          u.reason !== t('reasonAlreadyAssignedToday') &&
+                                          u.reason !== t('alreadyAssignedToday')
                                         );
 
                                         if (!selectedUser) {
@@ -2703,7 +2703,7 @@ useEffect(() => {
                                             if (!availability.available) {
                                               usersWithOOF.push({
                                                 user,
-                                                reason: 'Out of Office',
+                                                reason: t('reasonOutOfOffice'),
                                                 conflictEvents: availability.conflictEvents || []
                                               });
                                               continue;
@@ -2715,7 +2715,7 @@ useEffect(() => {
                                           if (!worksThisDay) {
                                             usersNotWorkingToday.push({
                                               user,
-                                              reason: 'Ne travaille pas ce jour',
+                                              reason: t('reasonNotWorkingToday'),
                                               conflictEvents: []
                                             });
                                             continue;
@@ -2730,7 +2730,7 @@ useEffect(() => {
                                           if (hasConsecutiveShift) {
                                             usersWithConsecutiveShifts.push({
                                               user,
-                                              reason: 'Shifts consécutifs',
+                                              reason: t('reasonConsecutiveShifts'),
                                               conflictEvents: []
                                             });
                                             continue;
@@ -3004,7 +3004,7 @@ useEffect(() => {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="w-6 h-6" />
-                Invitations envoyées avec succès !
+                {t('invitationsSentSuccess')}
               </DialogTitle>
             </DialogHeader>
 
@@ -3018,7 +3018,7 @@ useEffect(() => {
                       <CheckCircle className="w-5 h-5 text-green-600" />
                     </div>
                     <p className="text-2xl font-bold text-green-700">{successMessage.outlookSuccess}</p>
-                    <p className="text-sm text-green-600">Invitation{successMessage.outlookSuccess > 1 ? 's' : ''} envoyée{successMessage.outlookSuccess > 1 ? 's' : ''}</p>
+                    <p className="text-sm text-green-600">{t('invitationsSent', { count: successMessage.outlookSuccess })}</p>
                   </div>
 
                   <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -3027,7 +3027,7 @@ useEffect(() => {
                       <CheckCircle className="w-5 h-5 text-blue-600" />
                     </div>
                     <p className="text-2xl font-bold text-blue-700">{successMessage.dbCount}</p>
-                    <p className="text-sm text-blue-600">Assignation{successMessage.dbCount > 1 ? 's' : ''} créée{successMessage.dbCount > 1 ? 's' : ''}</p>
+                    <p className="text-sm text-blue-600">{t('assignmentsCreated', { count: successMessage.dbCount })}</p>
                   </div>
                 </div>
 
@@ -3036,8 +3036,7 @@ useEffect(() => {
                   <Alert className="border-orange-200 bg-orange-50">
                     <AlertCircle className="h-4 w-4 text-orange-600" />
                     <AlertDescription className="text-orange-800">
-                      <strong>{successMessage.outlookErrors}</strong> erreur{successMessage.outlookErrors > 1 ? 's' : ''} lors de l'envoi.
-                      Vérifiez votre access token et les adresses email.
+                      {t('sendErrors', { count: successMessage.outlookErrors })}
                     </AlertDescription>
                   </Alert>
                 )}

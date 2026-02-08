@@ -1,7 +1,8 @@
 // contexts/RotationPatternsContext.tsx
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface WeekPattern {
   [key: string]: string[];
@@ -28,13 +29,25 @@ const RotationPatternsContext = createContext<RotationPatternsContextType | unde
 export function RotationPatternsProvider({ children }: { children: ReactNode }) {
   const [patterns, setPatterns] = useState<RotationPattern[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const { getAccessToken, isAuthenticated } = useAuth();
+
+  const authFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
+    const token = await getAccessToken();
+    const headers = new Headers(options.headers);
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(url, { ...options, headers });
+  }, [getAccessToken]);
 
   // Charger les patterns depuis la DB au montage
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const loadPatterns = async () => {
       try {
         // Essayer de charger depuis la DB
-        const response = await fetch('/api/rotation-patterns');
+        const response = await authFetch('/api/rotation-patterns');
         if (response.ok) {
           const dbPatterns = await response.json();
 
@@ -48,7 +61,7 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
 
                 // Sauvegarder chaque pattern dans la DB
                 for (const pattern of localPatterns) {
-                  await fetch('/api/rotation-patterns', {
+                  await authFetch('/api/rotation-patterns', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(pattern)
@@ -56,7 +69,7 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
                 }
 
                 // Recharger depuis la DB après migration
-                const migratedResponse = await fetch('/api/rotation-patterns');
+                const migratedResponse = await authFetch('/api/rotation-patterns');
                 if (migratedResponse.ok) {
                   const migratedPatterns = await migratedResponse.json();
                   setPatterns(migratedPatterns);
@@ -83,12 +96,12 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
     };
 
     loadPatterns();
-  }, []);
+  }, [isAuthenticated, authFetch]);
 
   const addPattern = async (pattern: RotationPattern) => {
     try {
       // Sauvegarder dans la DB
-      const response = await fetch('/api/rotation-patterns', {
+      const response = await authFetch('/api/rotation-patterns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pattern)
@@ -109,7 +122,7 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
   const updatePattern = async (pattern: RotationPattern) => {
     try {
       // Mettre à jour dans la DB
-      const response = await fetch(`/api/rotation-patterns/${pattern.id}`, {
+      const response = await authFetch(`/api/rotation-patterns/${pattern.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pattern)
@@ -130,7 +143,7 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
   const deletePattern = async (id: string) => {
     try {
       // Supprimer de la DB
-      const response = await fetch(`/api/rotation-patterns/${id}`, {
+      const response = await authFetch(`/api/rotation-patterns/${id}`, {
         method: 'DELETE'
       });
 

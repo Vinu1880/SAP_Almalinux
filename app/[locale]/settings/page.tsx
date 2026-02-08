@@ -41,6 +41,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useHolidays } from '@/lib/hooks/useHolidays';
+import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -69,6 +70,8 @@ interface SettingItemProps {
 const SettingsPage = () => {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
+  const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [settings, setSettings] = useState({
     avoidConsecutiveShifts: true,
     balanceShifts: true,
@@ -126,13 +129,15 @@ const SettingsPage = () => {
   });
 
   useEffect(() => {
-    loadBackups();
-  }, []);
+    if (isReady) {
+      loadBackups();
+    }
+  }, [isReady]);
 
   const loadBackups = async () => {
     setIsLoadingBackups(true);
     try {
-      const response = await fetch('/api/backups');
+      const response = await authFetch('/api/backup');
       if (response.ok) {
         const data = await response.json();
         setBackups(data);
@@ -157,7 +162,7 @@ const SettingsPage = () => {
   const createBackup = async () => {
     setIsCreatingBackup(true);
     try {
-      const response = await fetch('/api/backup', {
+      const response = await authFetch('/api/backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -178,7 +183,17 @@ const SettingsPage = () => {
 
   const downloadBackup = async (fileName: string) => {
     try {
-      window.location.href = `/api/backup/download/${fileName}`;
+      const response = await authFetch(`/api/backup/download/${fileName}`);
+      if (!response.ok) throw new Error('Download failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       showNotification(t('downloadError'), 'error');
     }
@@ -188,7 +203,7 @@ const SettingsPage = () => {
     if (!deleteBackupFileName) return;
 
     try {
-      const response = await fetch(`/api/backup/${deleteBackupFileName}`, {
+      const response = await authFetch(`/api/backup/${deleteBackupFileName}`, {
         method: 'DELETE'
       });
 
@@ -209,7 +224,7 @@ const SettingsPage = () => {
     
     setIsRestoring(true);
     try {
-      const response = await fetch('/api/backup/restore', {
+      const response = await authFetch('/api/backup/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileName: selectedBackup })
@@ -261,7 +276,7 @@ const SettingsPage = () => {
       const backupData = JSON.parse(fileContent);
 
       // Utiliser la même API que pour restaurer depuis la liste
-      const response = await fetch('/api/backup/restore', {
+      const response = await authFetch('/api/backup/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(backupData)
@@ -433,7 +448,6 @@ const SettingsPage = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800">{t("title")}</h1>
-          <p className="text-slate-600 mt-1">{t("subtitle")}</p>
         </div>
 
         {/* Notification */}
@@ -1005,9 +1019,9 @@ const SettingsPage = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="FEDERAL">Fédéral</SelectItem>
-                      <SelectItem value="CANTONAL">Cantonal</SelectItem>
-                      <SelectItem value="CUSTOM">Personnalisé</SelectItem>
+                      <SelectItem value="FEDERAL">{t("federal")}</SelectItem>
+                      <SelectItem value="CANTONAL">{t("cantonal")}</SelectItem>
+                      <SelectItem value="CUSTOM">{t("custom")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1056,8 +1070,7 @@ const SettingsPage = () => {
                 {t("restoreBackup")}
               </DialogTitle>
               <DialogDescription>
-                {t("restoreBackupDesc")}
-                <strong className="block mt-2 text-red-600">
+                <strong className="text-red-600">
                   {t("restoreWarning")}
                 </strong>
               </DialogDescription>

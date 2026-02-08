@@ -1,10 +1,11 @@
 // lib/hooks/useTeams.ts
 
 import { useState, useEffect } from 'react';
-import { useAuthFetch } from './useAuthFetch';
+import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
 export function useTeams() {
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,8 +85,10 @@ export function useTeams() {
   };
 
   useEffect(() => {
-    fetchTeams();
-  }, []);
+    if (isReady) {
+      fetchTeams();
+    }
+  }, [isReady]);
 
   return {
     teams,

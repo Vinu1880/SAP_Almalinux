@@ -1,9 +1,10 @@
 // lib/hooks/useUsers.ts
 import { useState, useEffect } from 'react';
-import { useAuthFetch } from './useAuthFetch';
+import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
 export function useUsers() {
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -147,8 +148,10 @@ export function useUsers() {
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (isReady) {
+      fetchUsers();
+    }
+  }, [isReady]);
 
   return {
     users,

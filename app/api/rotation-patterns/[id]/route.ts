@@ -53,7 +53,8 @@ export async function PUT(
         name: body.name,
         description: body.description || null,
         cycleLength: body.cycleLength,
-        weeks: body.weeks
+        weeks: body.weeks,
+        userShifts: body.userShifts || []
       }
     });
 

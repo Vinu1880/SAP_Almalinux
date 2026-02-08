@@ -180,6 +180,8 @@ const UsersPage = () => {
   const [isCreateTeamDialogOpen, setIsCreateTeamDialogOpen] = useState(false);
   const [isEditTeamDialogOpen, setIsEditTeamDialogOpen] = useState(false);
   const [isCreatePatternOpen, setIsCreatePatternOpen] = useState(false);
+  const [editingPattern, setEditingPattern] = useState<RotationPattern | null>(null);
+  const [savingPattern, setSavingPattern] = useState(false);
   const [deletePatternId, setDeletePatternId] = useState<string | null>(null);
   const [isDeletePatternDialogOpen, setIsDeletePatternDialogOpen] = useState(false);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
@@ -466,7 +468,7 @@ const UsersPage = () => {
 
           {localWorkType === 'partial' && (
             <div className="border rounded-lg p-4 space-y-3 bg-slate-50">
-              <p className="text-sm font-medium text-slate-700">Définir les créneaux de travail :</p>
+              <p className="text-sm font-medium text-slate-700">{t("defineWorkSlots")}</p>
               {days.map(day => (
                 <div key={day.key} className="flex items-center justify-between">
                   <span className="text-sm font-medium w-24">{day.label}</span>
@@ -480,7 +482,7 @@ const UsersPage = () => {
                       />
                       <span className="text-sm flex items-center gap-1">
                         <Sun className="w-3 h-3" />
-                        Matin
+                        {t("morning")}
                       </span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -492,7 +494,7 @@ const UsersPage = () => {
                       />
                       <span className="text-sm flex items-center gap-1">
                         <Moon className="w-3 h-3" />
-                        Après-midi
+                        {t("afternoon")}
                       </span>
                     </label>
                   </div>
@@ -518,7 +520,7 @@ const UsersPage = () => {
             <div className="flex items-center space-x-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
               <Checkbox
                 id={`rotation-${userId || 'new'}`}
-                checked={!!(rotationConfig?.patternId)}
+                checked={rotationConfig !== null && rotationConfig !== undefined}
                 onCheckedChange={(checked) => {
                   if (checked) {
                     onRotationConfigChange({
@@ -536,43 +538,16 @@ const UsersPage = () => {
               </Label>
             </div>
 
-            {rotationConfig?.patternId !== undefined && (
+            {rotationConfig !== null && rotationConfig !== undefined && (
               <div className="border rounded-lg p-4 space-y-4 bg-gradient-to-r from-purple-50 to-indigo-50">
                 {/* Configuration de la rotation */}
                 <div className="space-y-4">
-                  {/* Afficher les shifts disponibles pour cet utilisateur */}
-                  {isEditMode && userId && (
-                    <div className="p-3 bg-white rounded-lg">
-                      <p className="text-xs font-medium text-slate-700 mb-2">
-                        Shifts assignés à cet utilisateur :
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {getUserShifts().map((shift: any) => (
-                          <Badge key={shift.id} variant="outline" className="text-xs">
-                            <div className="flex items-center gap-1">
-                              <div 
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: shift.color }}
-                              />
-                              <span>{shift.name}</span>
-                              <span className="text-slate-500">({shift.startTime}-{shift.endTime})</span>
-                            </div>
-                          </Badge>
-                        ))}
-                      </div>
-                      {getUserShifts().length === 0 && (
-                        <p className="text-xs text-slate-500 italic">
-                          Aucun shift assigné à cet utilisateur
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  
                   <div>
                     <Label>{t("rotationPattern")}</Label>
                     <Select
                       value={rotationConfig?.patternId || ''}
                       onValueChange={(patternId) => {
+                        setEditingPattern(null);
                         onRotationConfigChange({
                           ...rotationConfig,
                           patternId,
@@ -595,7 +570,7 @@ const UsersPage = () => {
 
                     {/* Liste des patterns existants avec suppression */}
                     <div className="mt-4 p-3 bg-slate-50 rounded-lg">
-                      <p className="text-sm font-medium text-slate-700 mb-2">Patterns existants :</p>
+                      <p className="text-sm font-medium text-slate-700 mb-2">{t("existingPatterns")}</p>
                       {rotationPatterns.length > 0 ? (
                         <div className="space-y-2">
                           {rotationPatterns.map(pattern => (
@@ -606,7 +581,7 @@ const UsersPage = () => {
                                   <p className="text-xs text-slate-600">{pattern.description}</p>
                                 )}
                                 <p className="text-xs text-slate-500">
-                                  Cycle de {pattern.cycleLength} semaine{pattern.cycleLength > 1 ? 's' : ''}
+                                  {t("cycleOfWeeks", { count: pattern.cycleLength })}
                                 </p>
                               </div>
                               <div className="flex items-center gap-1">
@@ -642,7 +617,7 @@ const UsersPage = () => {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500 italic">Aucun pattern créé</p>
+                        <p className="text-xs text-slate-500 italic">{t("noPatternCreated")}</p>
                       )}
                     </div>
 
@@ -670,7 +645,7 @@ const UsersPage = () => {
                   </div>
 
                   <div>
-                    <Label>Priorité d'assignation</Label>
+                    <Label>{t("assignmentPriority")}</Label>
                     <RadioGroup
                       value={rotationConfig?.priority || 'medium'}
                       onValueChange={(value) => {
@@ -684,73 +659,205 @@ const UsersPage = () => {
                     >
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="high" id="high" />
-                        <Label htmlFor="high" className="font-normal">Haute - Toujours assigné en priorité</Label>
+                        <Label htmlFor="high" className="font-normal">{t("priorityHighDesc")}</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="medium" id="medium" />
-                        <Label htmlFor="medium" className="font-normal">Moyenne - Selon disponibilité</Label>
+                        <Label htmlFor="medium" className="font-normal">{t("priorityMediumDesc")}</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="low" id="low" />
-                        <Label htmlFor="low" className="font-normal">Basse - Si nécessaire</Label>
+                        <Label htmlFor="low" className="font-normal">{t("priorityLowDesc")}</Label>
                       </div>
                     </RadioGroup>
                   </div>
 
-                  {/* Afficher le pattern actuel si sélectionné */}
-                  {getCurrentPattern() && (
-                    <div className="p-3 bg-white rounded-lg border">
-                      <p className="text-xs font-medium text-slate-700 mb-2">
-                        Pattern actuel : {getCurrentPattern()?.name}
-                      </p>
-                      <div className="space-y-2">
-                        {getCurrentPattern()?.weeks.map((week: any, weekIndex: number) => (
-                          <div key={weekIndex} className="border rounded-lg p-2">
-                            <p className="text-xs font-semibold mb-2 text-purple-700">
-                              Semaine {weekIndex + 1} sur {getCurrentPattern()?.cycleLength}
-                            </p>
-                            <div className="grid grid-cols-7 gap-1">
-                              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
-                                const shiftId = week[day]?.[0];
-                                const shift = shiftId ? shifts.find((s: any) => s.id === shiftId) : null;
-                                const dayLabel = day.substring(0, 3).toUpperCase();
-                                const isAvailable = isDayAvailable(day);
-                                
-                                return (
-                                  <div key={day} className="text-center">
-                                    <p className="text-xs font-medium text-slate-600 mb-1">{dayLabel}</p>
-                                    <div className={`p-2 rounded border min-h-[60px] flex flex-col justify-center ${
-                                      !isAvailable ? 'bg-slate-100 opacity-50' : 
-                                      shift ? 'bg-white' : 'bg-slate-50'
-                                    }`}>
-                                      {!isAvailable ? (
-                                        <p className="text-xs text-slate-400 italic">Indispo</p>
-                                      ) : shift ? (
-                                        <>
-                                          <div 
-                                            className="w-full h-1 rounded mb-1"
-                                            style={{ backgroundColor: shift.color }}
-                                          />
-                                          <p className="text-xs font-medium truncate" title={shift.name}>
-                                            {shift.name}
-                                          </p>
-                                          <p className="text-xs text-slate-500">
-                                            {shift.startTime}-{shift.endTime}
-                                          </p>
-                                        </>
-                                      ) : (
-                                        <p className="text-xs text-slate-400 italic">Libre</p>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
+                  {/* Afficher et éditer le pattern actuel si sélectionné */}
+                  {getCurrentPattern() && (() => {
+                    const currentPat = getCurrentPattern()!;
+                    const userShifts = getUserShifts();
+                    const isInlineEditing = isEditMode && editingPattern && editingPattern.id === currentPat.id;
+
+                    return (
+                      <div className="p-3 bg-white rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-medium text-slate-700">
+                            {t("currentPattern")} {currentPat.name}
+                          </p>
+                          {isEditMode && !isInlineEditing && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingPattern({
+                                ...currentPat,
+                                userShifts: (currentPat as any).userShifts || userShifts.map((s: any) => s.id)
                               })}
-                            </div>
+                              className="text-blue-600 hover:bg-blue-50 text-xs"
+                            >
+                              <Edit className="w-3 h-3 mr-1" />
+                              {tCommon("edit")}
+                            </Button>
+                          )}
+                          {isInlineEditing && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingPattern(null)}
+                              className="text-slate-500 hover:bg-slate-100 text-xs"
+                            >
+                              <X className="w-3 h-3 mr-1" />
+                              {tCommon("cancel")}
+                            </Button>
+                          )}
+                        </div>
+
+                        {isInlineEditing && editingPattern ? (
+                          <div className="space-y-3">
+                            {editingPattern.weeks.map((week: any, weekIndex: number) => (
+                              <div key={weekIndex} className="border rounded-lg p-2">
+                                <p className="text-xs font-semibold mb-2 text-purple-700">
+                                  {t("weekXOfY", { week: weekIndex + 1, total: editingPattern.cycleLength })}
+                                </p>
+                                <div className="grid grid-cols-7 gap-1">
+                                  {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
+                                    const dayLabel = day.substring(0, 3).toUpperCase();
+                                    const dayAvailable = isDayAvailable(day);
+
+                                    return (
+                                      <div key={day} className="text-center">
+                                        <p className="text-xs font-medium text-slate-600 mb-1">{dayLabel}</p>
+                                        <Select
+                                          value={week[day]?.[0] || 'none'}
+                                          onValueChange={(shiftId) => {
+                                            const updatedWeeks = [...editingPattern.weeks];
+                                            updatedWeeks[weekIndex] = { ...updatedWeeks[weekIndex] };
+                                            if (shiftId === 'none') {
+                                              updatedWeeks[weekIndex][day] = [];
+                                            } else {
+                                              updatedWeeks[weekIndex][day] = [shiftId];
+                                            }
+                                            setEditingPattern({ ...editingPattern, weeks: updatedWeeks });
+                                          }}
+                                          disabled={!dayAvailable}
+                                        >
+                                          <SelectTrigger className={`w-full h-auto text-xs py-1 ${
+                                            !dayAvailable ? 'opacity-50 bg-slate-100' : ''
+                                          }`}>
+                                            <SelectValue>
+                                              {!dayAvailable ? (
+                                                <span className="text-slate-400">{t("unavailableShort")}</span>
+                                              ) : week[day]?.[0] ? (
+                                                <span className="truncate">
+                                                  {shifts.find((s: any) => s.id === week[day][0])?.name || 'Shift'}
+                                                </span>
+                                              ) : (
+                                                <span className="text-slate-400">{t("free")}</span>
+                                              )}
+                                            </SelectValue>
+                                          </SelectTrigger>
+                                          {dayAvailable && (
+                                            <SelectContent>
+                                              <SelectItem value="none">
+                                                <span className="text-slate-400">{t("free")}</span>
+                                              </SelectItem>
+                                              {userShifts.map((shift: any) => (
+                                                <SelectItem key={shift.id} value={shift.id}>
+                                                  <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: shift.color }} />
+                                                    <span>{shift.name}</span>
+                                                    <span className="text-xs text-slate-500">({shift.startTime}-{shift.endTime})</span>
+                                                  </div>
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          )}
+                                        </Select>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={savingPattern}
+                              onClick={async () => {
+                                try {
+                                  setSavingPattern(true);
+                                  await updatePattern({
+                                    ...editingPattern,
+                                    userShifts: editingPattern.userShifts || []
+                                  } as any);
+                                  setEditingPattern(null);
+                                } catch (err) {
+                                  console.error('Error updating pattern:', err);
+                                } finally {
+                                  setSavingPattern(false);
+                                }
+                              }}
+                              className="w-full bg-[#00ff7b] text-black hover:bg-secondary/90"
+                            >
+                              {savingPattern ? (
+                                <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> {t("saving") || tCommon("save")}</>
+                              ) : (
+                                <><Save className="w-3 h-3 mr-1" /> {t("savePatternChanges") || tCommon("save")}</>
+                              )}
+                            </Button>
                           </div>
-                        ))}
+                        ) : (
+                          <div className="space-y-2">
+                            {currentPat.weeks.map((week: any, weekIndex: number) => (
+                              <div key={weekIndex} className="border rounded-lg p-2">
+                                <p className="text-xs font-semibold mb-2 text-purple-700">
+                                  {t("weekXOfY", { week: weekIndex + 1, total: currentPat.cycleLength })}
+                                </p>
+                                <div className="grid grid-cols-7 gap-1">
+                                  {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
+                                    const shiftId = week[day]?.[0];
+                                    const shift = shiftId ? shifts.find((s: any) => s.id === shiftId) : null;
+                                    const dayLabel = day.substring(0, 3).toUpperCase();
+                                    const dayAvailable = isDayAvailable(day);
+
+                                    return (
+                                      <div key={day} className="text-center">
+                                        <p className="text-xs font-medium text-slate-600 mb-1">{dayLabel}</p>
+                                        <div className={`p-2 rounded border min-h-[60px] flex flex-col justify-center ${
+                                          !dayAvailable ? 'bg-slate-100 opacity-50' :
+                                          shift ? 'bg-white' : 'bg-slate-50'
+                                        }`}>
+                                          {!dayAvailable ? (
+                                            <p className="text-xs text-slate-400 italic">{t("unavailableShort")}</p>
+                                          ) : shift ? (
+                                            <>
+                                              <div
+                                                className="w-full h-1 rounded mb-1"
+                                                style={{ backgroundColor: shift.color }}
+                                              />
+                                              <p className="text-xs font-medium truncate" title={shift.name}>
+                                                {shift.name}
+                                              </p>
+                                              <p className="text-xs text-slate-500">
+                                                {shift.startTime}-{shift.endTime}
+                                              </p>
+                                            </>
+                                          ) : (
+                                            <p className="text-xs text-slate-400 italic">{t("free")}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -1156,36 +1263,49 @@ const UsersPage = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
           <div>
             <h1 className="text-3xl font-bold text-slate-800">{t("title")}</h1>
-            <p className="text-slate-600 mt-1">{t("subtitle")}</p>
           </div>
         </div>
 
-        {/* Switcher Users/Teams */}
-        <div className="flex items-center space-x-4">
-          <Button
-            variant={viewMode === 'users' ? 'default' : 'outline'}
-            onClick={() => setViewMode('users')}
-            className={viewMode === 'users' ? 'bg-primary hover:bg-primary/90' : 'hover:bg-secondary/20'}
-            size="lg"
-          >
-            <Users className="w-5 h-5 mr-2" />
-            {t("users")}
-            <Badge variant="secondary" className="ml-2">
-              {users.length}
-            </Badge>
-          </Button>
-          <Button
-            variant={viewMode === 'teams' ? 'default' : 'outline'}
-            onClick={() => setViewMode('teams')}
-            className={viewMode === 'teams' ? 'bg-primary hover:bg-primary/90' : 'hover:bg-secondary/20'}
-            size="lg"
-          >
-            <Building2 className="w-5 h-5 mr-2" />
-            {t("teams")}
-            <Badge variant="secondary" className="ml-2">
-              {teams.length}
-            </Badge>
-          </Button>
+        {/* Switcher Users/Teams + Create button */}
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant={viewMode === 'users' ? 'default' : 'outline'}
+              onClick={() => setViewMode('users')}
+              className={viewMode === 'users' ? 'bg-primary hover:bg-primary/90' : 'hover:bg-secondary/20'}
+              size="lg"
+            >
+              <Users className="w-5 h-5 mr-2" />
+              {t("users")}
+              <Badge variant="secondary" className="ml-2">
+                {users.length}
+              </Badge>
+            </Button>
+            <Button
+              variant={viewMode === 'teams' ? 'default' : 'outline'}
+              onClick={() => setViewMode('teams')}
+              className={viewMode === 'teams' ? 'bg-primary hover:bg-primary/90' : 'hover:bg-secondary/20'}
+              size="lg"
+            >
+              <Building2 className="w-5 h-5 mr-2" />
+              {t("teams")}
+              <Badge variant="secondary" className="ml-2">
+                {teams.length}
+              </Badge>
+            </Button>
+          </div>
+
+          {viewMode === 'users' ? (
+            <Button className="bg-primary hover:bg-primary/90" onClick={() => setIsCreateUserDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t("createUser")}
+            </Button>
+          ) : (
+            <Button className="bg-primary hover:bg-primary/90" onClick={() => setIsCreateTeamDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t("createTeam")}
+            </Button>
+          )}
         </div>
 
         {/* Barre de filtres et actions */}
@@ -1339,12 +1459,6 @@ const UsersPage = () => {
                 
                 {viewMode === 'users' ? (
                   <Dialog open={isCreateUserDialogOpen} onOpenChange={setIsCreateUserDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-primary hover:bg-primary/90">
-                        <Plus className="w-4 h-4 mr-2" />
-                        {t("createUser")}
-                      </Button>
-                    </DialogTrigger>
                     <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>{t("createUser")}</DialogTitle>
@@ -1449,7 +1563,7 @@ const UsersPage = () => {
                             disabled={isSubmitting}
                             className="bg-primary hover:bg-primary/90"
                           >
-                            {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Création...</> : tCommon("create")}
+                            {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t("creating")}</> : tCommon("create")}
                           </Button>
                         </div>
                       </div>
@@ -1457,12 +1571,6 @@ const UsersPage = () => {
                   </Dialog>
                 ) : (
                   <Dialog open={isCreateTeamDialogOpen} onOpenChange={setIsCreateTeamDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-primary hover:bg-primary/90">
-                        <Plus className="w-4 h-4 mr-2" />
-                        {t("createTeam")}
-                      </Button>
-                    </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>{t("createTeam")}</DialogTitle>
@@ -1532,7 +1640,7 @@ const UsersPage = () => {
                             disabled={isSubmitting}
                             className="bg-primary hover:bg-primary/90"
                           >
-                            {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Création...</> : tCommon("create")}
+                            {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t("creating")}</> : tCommon("create")}
                           </Button>
                         </div>
                       </div>
@@ -1609,8 +1717,8 @@ const UsersPage = () => {
                               {rotationPattern.name}
                             </p>
                             <p className="text-xs text-purple-600 mt-1">
-                              Priorité: {rotationConfig?.priority === 'high' ? 'Haute 🔴' : 
-                                        rotationConfig?.priority === 'medium' ? 'Moyenne' : 'Basse'}
+                              {t("priority")}: {rotationConfig?.priority === 'high' ? t("priorityHigh") :
+                                        rotationConfig?.priority === 'medium' ? t("priorityMedium") : t("priorityLow")}
                             </p>
                           </div>
                         )}
@@ -1618,7 +1726,18 @@ const UsersPage = () => {
                         <div className="flex items-center justify-between mt-3 pt-3 border-t">
                           <div className="flex items-center gap-2">
                             {user.team && (
-                              <Badge variant="outline" className="text-xs">
+                              <Badge
+                                variant="outline"
+                                className="text-xs border"
+                                style={{
+                                  backgroundColor: user.team.color ? `${user.team.color}15` : undefined,
+                                  borderColor: user.team.color ? `${user.team.color}40` : undefined,
+                                  color: user.team.color || undefined,
+                                }}
+                              >
+                                {user.team.color && (
+                                  <span className="w-2 h-2 rounded-full mr-1 inline-block" style={{ backgroundColor: user.team.color }}></span>
+                                )}
                                 {user.team.name}
                               </Badge>
                             )}
@@ -1690,9 +1809,9 @@ const UsersPage = () => {
                       <TableHead>{t("location")}</TableHead>
                       <TableHead>{t("team")}</TableHead>
                       <TableHead>{t("role")}</TableHead>
-                      <TableHead>Travail</TableHead>
-                      <TableHead>Rotation</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>{t("work")}</TableHead>
+                      <TableHead>{t("rotation")}</TableHead>
+                      <TableHead>{t("status")}</TableHead>
                       <TableHead className="text-right">{tCommon("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1732,7 +1851,18 @@ const UsersPage = () => {
                           </TableCell>
                           <TableCell>
                             {user.team && (
-                              <Badge variant="outline" className="text-xs">
+                              <Badge
+                                variant="outline"
+                                className="text-xs border"
+                                style={{
+                                  backgroundColor: user.team.color ? `${user.team.color}15` : undefined,
+                                  borderColor: user.team.color ? `${user.team.color}40` : undefined,
+                                  color: user.team.color || undefined,
+                                }}
+                              >
+                                {user.team.color && (
+                                  <span className="w-2 h-2 rounded-full mr-1 inline-block" style={{ backgroundColor: user.team.color }}></span>
+                                )}
                                 {user.team.name}
                               </Badge>
                             )}
@@ -1916,7 +2046,7 @@ const UsersPage = () => {
                           })
                         ) : (
                           <p className="text-xs text-slate-500 italic text-center py-2">
-                            Aucun membre
+                            {t("noMembersInTeam")}
                           </p>
                         )}
                       </div>
@@ -2239,13 +2369,13 @@ const UsersPage = () => {
                 <div>
                   <Label>{t("patternName")}</Label>
                   <Input
-                    placeholder="ex: Rotation Madlen"
+                    placeholder={t("patternNamePlaceholder")}
                     value={newPattern.name}
                     onChange={(e) => setNewPattern({ ...newPattern, name: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label>Durée du cycle (semaines)</Label>
+                  <Label>{t("cycleDuration")}</Label>
                   <Select
                     value={newPattern.cycleLength.toString()}
                     onValueChange={(value) => adjustCycleLength(parseInt(value))}
@@ -2256,7 +2386,7 @@ const UsersPage = () => {
                     <SelectContent>
                       {[1, 2, 3, 4, 5, 6].map(n => (
                         <SelectItem key={n} value={n.toString()}>
-                          {n} semaine{n > 1 ? 's' : ''}
+                          {t("weekCount", { count: n })}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -2265,9 +2395,9 @@ const UsersPage = () => {
               </div>
 
               <div>
-                <Label>Description (optionnel)</Label>
+                <Label>{t("descriptionOptional")}</Label>
                 <Input
-                  placeholder="Description du pattern..."
+                  placeholder={t("patternDescriptionPlaceholder")}
                   value={newPattern.description}
                   onChange={(e) => setNewPattern({ ...newPattern, description: e.target.value })}
                 />
@@ -2275,7 +2405,7 @@ const UsersPage = () => {
 
               {/* Sélection de l'utilisateur pour voir ses shifts */}
               <div>
-                <Label>Basé sur les shifts de l'utilisateur</Label>
+                <Label>{t("basedOnUserShifts")}</Label>
                 <Select
                   onValueChange={(userId) => {
                     const user = users.find(u => u.id === userId);
@@ -2312,18 +2442,17 @@ const UsersPage = () => {
               {/* Configuration des semaines avec les vrais shifts et prise en compte disponibilités */}
               {newPattern.userShifts && newPattern.userShifts.length > 0 ? (
                 <div>
-                  <Label>Configuration des semaines</Label>
+                  <Label>{t("weekConfiguration")}</Label>
                   <Alert className="mb-3 border-blue-200 bg-blue-50">
                     <Info className="h-4 w-4 text-blue-600" />
                     <AlertDescription className="text-blue-800 text-sm">
-                      Sélectionnez les shifts pour chaque jour de chaque semaine du cycle.
-                      Les jours indisponibles de l'utilisateur sont grisés.
+                      {t("weekConfigurationHint")}
                     </AlertDescription>
                   </Alert>
                   
                   {newPattern.weeks.map((week, weekIndex) => (
                     <div key={weekIndex} className="mt-3 p-3 border rounded-lg">
-                      <h4 className="font-medium mb-2">Semaine {weekIndex + 1}</h4>
+                      <h4 className="font-medium mb-2">{t("weekNumber", { week: weekIndex + 1 })}</h4>
                       <div className="grid grid-cols-7 gap-2">
                         {days.map((day) => {
                           // Vérifier la disponibilité de l'utilisateur pour ce jour
@@ -2358,20 +2487,20 @@ const UsersPage = () => {
                                 }`}>
                                   <SelectValue>
                                     {!isDayAvailable ? (
-                                      <span className="text-slate-400">Indispo</span>
+                                      <span className="text-slate-400">{t("unavailableShort")}</span>
                                     ) : week[day]?.[0] ? (
                                       <span className="truncate">
                                         {shifts.find(s => s.id === week[day][0])?.name || 'Shift'}
                                       </span>
                                     ) : (
-                                      <span className="text-slate-400">Libre</span>
+                                      <span className="text-slate-400">{t("free")}</span>
                                     )}
                                   </SelectValue>
                                 </SelectTrigger>
                                 {isDayAvailable && (
                                   <SelectContent>
                                     <SelectItem value="none">
-                                      <span className="text-slate-400">Libre</span>
+                                      <span className="text-slate-400">{t("free")}</span>
                                     </SelectItem>
                                       {(newPattern.userShifts || []).map(shiftId => {
                                         const shift = shifts.find((s: any) => s.id === shiftId);
@@ -2407,7 +2536,7 @@ const UsersPage = () => {
                 <Alert className="border-orange-200 bg-orange-50">
                   <AlertCircle className="h-4 w-4 text-orange-600" />
                   <AlertDescription className="text-orange-800">
-                    Sélectionnez d'abord un utilisateur pour voir ses shifts disponibles
+                    {t("selectUserFirst")}
                   </AlertDescription>
                 </Alert>
               )}
@@ -2433,7 +2562,7 @@ const UsersPage = () => {
                   className="bg-[#00ff7b] text-black hover:bg-secondary/90"
                   onClick={async () => {
                     if (!newPattern.name) {
-                      showError('Veuillez donner un nom au pattern');
+                      showError(t('patternNameRequired'));
                       return;
                     }
 

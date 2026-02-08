@@ -1,7 +1,7 @@
 // lib/hooks/useShiftAssignments.ts
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuthFetch } from './useAuthFetch';
+import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
 export interface ShiftAssignment {
   id: string;
@@ -79,6 +79,7 @@ interface UseShiftAssignmentsOptions {
 
 export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [stats, setStats] = useState<ShiftAssignmentStats>({
     accepted: 0,
@@ -227,9 +228,11 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
   }, [fetchAssignments, fetchStats]);
 
   useEffect(() => {
-    fetchAssignments();
-    fetchStats();
-  }, [fetchAssignments, fetchStats]);
+    if (isReady) {
+      fetchAssignments();
+      fetchStats();
+    }
+  }, [isReady, fetchAssignments, fetchStats]);
 
   return {
     assignments,

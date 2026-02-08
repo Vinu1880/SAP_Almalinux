@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from '@/i18n/routing';
 import { useTranslations } from 'next-intl';
 import Image from 'next/image';
-import { ArrowRight, Shield, AlertCircle, Sparkles } from 'lucide-react';
+import { ArrowRight, Shield, AlertCircle, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
@@ -89,9 +89,6 @@ export default function HomePage() {
             <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">
               {t('appTitle')}
             </h2>
-            <p className="text-xl text-blue-100 leading-relaxed max-w-md">
-              {t('intelligentManagement')}
-            </p>
           </div>
 
           {/* Decorative line */}
@@ -121,7 +118,6 @@ export default function HomePage() {
               </div>
             </div>
             <h1 className="text-3xl font-bold text-slate-800 mb-2">{t('appTitle')}</h1>
-            <p className="text-slate-600">{t('intelligentManagement')}</p>
           </div>
 
           <Card className="shadow-2xl border-0 bg-white/90 backdrop-blur-xl relative overflow-hidden">
@@ -131,7 +127,7 @@ export default function HomePage() {
             <CardHeader className="text-center pb-6 pt-8">
               <div className="flex justify-center mb-4">
                 <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg">
-                  <Sparkles className="w-8 h-8 text-white" />
+                  <LogIn className="w-8 h-8 text-white" />
                 </div>
               </div>
               <CardTitle className="text-3xl font-bold text-slate-800 mb-3">
@@ -177,7 +173,7 @@ export default function HomePage() {
                   <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm text-blue-900 font-medium mb-1">
-                      Connexion sécurisée
+                      {t('secureConnection')}
                     </p>
                     <p className="text-xs text-blue-700">
                       {t('securedBy')}
@@ -189,18 +185,12 @@ export default function HomePage() {
               {/* Footer */}
               <div className="text-center pt-4 space-y-2">
                 <p className="text-xs text-slate-500">
-                  © 2025 Shift Manager. Tous droits réservés.
+                  {t('copyright')}
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Additional info */}
-          <div className="text-center mt-6">
-            <p className="text-sm text-slate-600">
-              Besoin d'aide ? <a href="mailto:support@shiftmanager.com" className="text-blue-600 hover:text-blue-700 font-medium underline">Contactez le support</a>
-            </p>
-          </div>
         </div>
       </div>
     </div>

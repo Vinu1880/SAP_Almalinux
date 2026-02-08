@@ -9,8 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Globe } from 'lucide-react';
-
 const languages = {
   fr: { name: 'Français', flag: '🇫🇷' },
   de: { name: 'Deutsch', flag: '🇩🇪' },
@@ -26,11 +24,13 @@ export default function LanguageSwitcher() {
     router.replace(pathname, { locale: newLocale as 'fr' | 'de' | 'en' });
   };
 
+  const current = languages[locale as keyof typeof languages];
+
   return (
     <Select value={locale} onValueChange={handleChange}>
-      <SelectTrigger className="w-auto border-0 bg-transparent hover:bg-secondary/20 focus:ring-0">
-        <Globe className="w-4 h-4 mr-2" />
-        <SelectValue />
+      <SelectTrigger className="w-auto border-0 bg-transparent hover:bg-secondary/20 focus:ring-0 gap-1.5">
+        <span className="text-base">{current?.flag}</span>
+        <span className="text-sm">{current?.name}</span>
       </SelectTrigger>
       <SelectContent>
         {Object.entries(languages).map(([code, { name, flag }]) => (

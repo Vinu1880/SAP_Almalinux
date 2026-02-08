@@ -84,6 +84,9 @@ COPY --from=builder /app/messages ./messages
 COPY --from=builder /app/i18n ./i18n
 RUN chown -R nextjs:nodejs /app/node_modules
 
+# Créer le dossier backups avec les bonnes permissions
+RUN mkdir -p /app/backups && chown nextjs:nodejs /app/backups
+
 # Changer vers l'utilisateur non-root
 USER nextjs
 

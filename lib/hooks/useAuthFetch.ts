@@ -14,10 +14,12 @@ export function useAuthFetch() {
     async (url: string, options: RequestInit = {}): Promise<Response> => {
       const token = await getAccessToken();
 
-      const headers = new Headers(options.headers);
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
+      if (!token) {
+        throw new Error('No authentication token available');
       }
+
+      const headers = new Headers(options.headers);
+      headers.set('Authorization', `Bearer ${token}`);
 
       return fetch(url, {
         ...options,
@@ -28,4 +30,13 @@ export function useAuthFetch() {
   );
 
   return authFetch;
+}
+
+/**
+ * Returns true when the user is authenticated and MSAL is ready.
+ * Use this to guard initial data fetches in hooks.
+ */
+export function useAuthReady(): boolean {
+  const { isAuthenticated, isLoading } = useAuth();
+  return isAuthenticated && !isLoading;
 }

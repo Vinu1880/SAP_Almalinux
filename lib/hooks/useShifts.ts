@@ -1,7 +1,7 @@
 // lib/hooks/useShifts.ts
 
 import { useState, useEffect } from 'react';
-import { useAuthFetch } from './useAuthFetch';
+import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
 export interface Shift {
   id: string;
@@ -27,6 +27,7 @@ export interface Shift {
 
 export function useShifts() {
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,8 +94,10 @@ export function useShifts() {
   };
 
   useEffect(() => {
-    fetchShifts();
-  }, []);
+    if (isReady) {
+      fetchShifts();
+    }
+  }, [isReady]);
 
   return {
     shifts,

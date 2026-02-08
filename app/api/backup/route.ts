@@ -6,6 +6,51 @@ import { requireAuth } from '@/lib/auth';
 import fs from 'fs';
 import path from 'path';
 
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const backupsDir = path.join(process.cwd(), 'backups');
+    if (!fs.existsSync(backupsDir)) {
+      return NextResponse.json([]);
+    }
+
+    const files = fs.readdirSync(backupsDir)
+      .filter(f => f.startsWith('backup_') && f.endsWith('.json') && f !== 'backup_latest.json')
+      .sort((a, b) => b.localeCompare(a));
+
+    const backups = files.map(fileName => {
+      const filePath = path.join(backupsDir, fileName);
+      const stats = fs.statSync(filePath);
+      let counts = '';
+      try {
+        const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        if (content.counts) {
+          const c = content.counts;
+          counts = `${c.users || 0} users, ${c.shifts || 0} shifts, ${c.teams || 0} teams`;
+        }
+      } catch {}
+
+      const sizeKB = (stats.size / 1024).toFixed(1);
+      return {
+        fileName,
+        date: stats.mtime.toISOString().split('T')[0] + ' ' + stats.mtime.toTimeString().substring(0, 8),
+        size: `${sizeKB} KB`,
+        counts
+      };
+    });
+
+    return NextResponse.json(backups);
+  } catch (error) {
+    console.error('❌ Erreur listing backups:', error);
+    return NextResponse.json(
+      { error: 'Erreur lors du listing des sauvegardes' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

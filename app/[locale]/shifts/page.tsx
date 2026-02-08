@@ -159,7 +159,7 @@ const ShiftsPage = () => {
 
   const handleCreateShift = async () => {
     if (!newShift.name || !newShift.teamId || !newShift.startTime || !newShift.endTime) {
-      alert('Veuillez remplir tous les champs obligatoires');
+      alert(t('fillAllRequired'));
       return;
     }
 
@@ -185,7 +185,7 @@ const ShiftsPage = () => {
       });
     } catch (error) {
       console.error('Erreur lors de la création:', error);
-      alert('Erreur lors de la création du shift');
+      alert(t('shiftCreateError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -193,7 +193,7 @@ const ShiftsPage = () => {
 
   const handleCreatePikett = async () => {
     if (!newPikett.name || !newPikett.teamId) {
-      alert('Veuillez remplir le nom et sélectionner une équipe');
+      alert(t('fillNameAndTeam'));
       return;
     }
 
@@ -227,7 +227,7 @@ const ShiftsPage = () => {
       });
     } catch (error) {
       console.error('Erreur lors de la création du pikett:', error);
-      alert('Erreur lors de la création du pikett');
+      alert(t('pikettCreateError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -254,7 +254,7 @@ const ShiftsPage = () => {
       setSelectedPikett(null);
     } catch (error) {
       console.error('Erreur lors de la modification du pikett:', error);
-      alert('Erreur lors de la modification du pikett');
+      alert(t('pikettEditError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -269,7 +269,7 @@ const ShiftsPage = () => {
       setDeletePikettId(null);
     } catch (error) {
       console.error('Erreur lors de la suppression du pikett:', error);
-      alert('Erreur lors de la suppression du pikett');
+      alert(t('pikettDeleteError'));
     }
   };
 
@@ -295,7 +295,7 @@ const ShiftsPage = () => {
       setSelectedShift(null);
     } catch (error) {
       console.error('Erreur lors de la modification:', error);
-      alert('Erreur lors de la modification du shift');
+      alert(t('shiftEditError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -310,14 +310,14 @@ const ShiftsPage = () => {
       setDeleteShiftId(null);
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
-      alert('Erreur lors de la suppression du shift');
+      alert(t('shiftDeleteError'));
     }
   };
 
   const handleDuplicateShift = async (shift: any) => {
     try {
       await createShift({
-        name: `${shift.name} (Copie)`,
+        name: `${shift.name} ${t('copy')}`,
         description: shift.description,
         startTime: shift.startTime,
         endTime: shift.endTime,
@@ -328,7 +328,7 @@ const ShiftsPage = () => {
       });
     } catch (error) {
       console.error('Erreur lors de la duplication:', error);
-      alert('Erreur lors de la duplication du shift');
+      alert(t('shiftDuplicateError'));
     }
   };
 
@@ -511,7 +511,7 @@ const ShiftsPage = () => {
               ))
             ) : (
               <p className="text-sm text-slate-500 text-center py-4">
-                Aucun membre assigné à ce shift
+                {t("noMemberAssigned")}
               </p>
             )}
           </div>
@@ -544,7 +544,7 @@ const ShiftsPage = () => {
                           </p>
                           {isExcluded && (
                             <Badge variant="destructive" className="text-xs">
-                              Exclu
+                              {t("excluded")}
                             </Badge>
                           )}
                         </div>
@@ -564,7 +564,7 @@ const ShiftsPage = () => {
               })
             ) : (
               <p className="text-sm text-slate-500 text-center py-4">
-                Tous les utilisateurs sont déjà assignés
+                {t("allUsersAssigned")}
               </p>
             )}
           </div>
@@ -811,7 +811,7 @@ const ShiftsPage = () => {
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Erreur lors du chargement des données.
+              {t("loadError")}
             </AlertDescription>
           </Alert>
         </div>
@@ -830,11 +830,6 @@ const ShiftsPage = () => {
             <h1 className="text-3xl font-bold text-slate-800">
               {viewType === 'shifts' ? t("title") : t("pikettManagement")}
             </h1>
-            <p className="text-slate-600 mt-1">
-              {viewType === 'shifts'
-                ? t("subtitle")
-                : t("pikettSubtitle")}
-            </p>
           </div>
         </div>
           <div className="flex items-center space-x-3">
@@ -891,7 +886,7 @@ const ShiftsPage = () => {
                     <div>
                       <Label>{tCommon("description")}</Label>
                       <Textarea
-                        placeholder="Description du pikett..."
+                        placeholder={t("pikettDescPlaceholder")}
                         value={newPikett.description}
                         onChange={(e) => setNewPikett({...newPikett, description: e.target.value})}
                       />
@@ -1350,13 +1345,13 @@ const ShiftsPage = () => {
                     <SelectItem value="ACTIVE">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span>Actifs</span>
+                        <span>{tCommon("active")}</span>
                       </div>
                     </SelectItem>
                     <SelectItem value="INACTIVE">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-slate-400"></div>
-                        <span>Inactifs</span>
+                        <span>{tCommon("inactive")}</span>
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -1403,7 +1398,7 @@ const ShiftsPage = () => {
                   className="bg-primary hover:bg-primary/90"
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Créer un Shift
+                  {t("createShiftButton")}
                 </Button>
               </CardContent>
             </Card>
@@ -1422,17 +1417,17 @@ const ShiftsPage = () => {
                   <Shield className="w-8 h-8 text-red-400" />
                 </div>
                 <h3 className="text-lg font-medium text-slate-800 mb-2">
-                  Aucun pikett configuré
+                  {t("noPikettConfigured")}
                 </h3>
                 <p className="text-slate-600 mb-6 max-w-md">
-                  Configurez les astreintes pour vos équipes.
+                  {t("configurePiketts")}
                 </p>
                 <Button 
                   onClick={() => setIsCreatePikettDialogOpen(true)}
                   className="bg-red-600 hover:bg-red-700"
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Créer un Pikett
+                  {t("createPikettButton")}
                 </Button>
               </CardContent>
             </Card>
@@ -1525,7 +1520,7 @@ const ShiftsPage = () => {
                 className="bg-red-600 hover:bg-red-700"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Supprimer
+                {tCommon("delete")}
               </Button>
             </div>
           </DialogContent>
