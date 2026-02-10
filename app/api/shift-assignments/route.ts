@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer toutes les assignations de shifts avec filtres
 export async function GET(request: NextRequest) {
@@ -101,26 +102,42 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating shift assignments:', assignments.length);
 
-    // Créer toutes les assignations en utilisant createMany
-    const result = await prisma.shiftAssignment.createMany({
-      data: assignments.map((a: any) => ({
-        date: new Date(a.date),
-        shiftId: a.shiftId,
-        userId: a.userId,
-        status: a.status || 'PENDING',
-        reason: a.reason || null
-      })),
-      skipDuplicates: true // Évite les doublons grâce à l'unique constraint
-    });
+    // Créer les assignations en utilisant upsert (skipDuplicates non supporté sur MSSQL)
+    let createdCount = 0;
+    for (const a of assignments) {
+      try {
+        await prisma.shiftAssignment.upsert({
+          where: {
+            date_shiftId_userId: {
+              date: new Date(a.date),
+              shiftId: a.shiftId,
+              userId: a.userId
+            }
+          },
+          update: {},
+          create: {
+            date: new Date(a.date),
+            shiftId: a.shiftId,
+            userId: a.userId,
+            status: a.status || 'PENDING',
+            reason: a.reason || null
+          }
+        });
+        createdCount++;
+      } catch (e: any) {
+        if (e.code === 'P2002') continue;
+        throw e;
+      }
+    }
 
-    console.log(`Created ${result.count} shift assignments`);
+    console.log(`Created ${createdCount} shift assignments`);
 
     // Log audit
     await prisma.auditLog.create({
       data: {
         action: 'CREATE_BULK',
         entity: 'SHIFT_ASSIGNMENT',
-        data: { count: result.count, assignments }
+        data: toJsonString({ count: createdCount, assignments })
       }
     });
 
@@ -153,7 +170,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      count: result.count,
+      count: createdCount,
       assignments: createdAssignments
     }, { status: 201 });
   } catch (error) {

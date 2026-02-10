@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 export async function PUT(
   request: NextRequest,
@@ -23,9 +24,9 @@ export async function PUT(
     if (body.color !== undefined) updateData.color = body.color;
     if (body.status !== undefined) updateData.status = body.status;
     if (body.is24_7 !== undefined) updateData.is24_7 = body.is24_7;
-    if (body.includedUserIds !== undefined) updateData.includedUserIds = body.includedUserIds;
-    if (body.excludedUserIds !== undefined) updateData.excludedUserIds = body.excludedUserIds;
-    if (body.daysOfWeek !== undefined) updateData.daysOfWeek = body.daysOfWeek;
+    if (body.includedUserIds !== undefined) updateData.includedUserIds = toJsonString(body.includedUserIds);
+    if (body.excludedUserIds !== undefined) updateData.excludedUserIds = toJsonString(body.excludedUserIds);
+    if (body.daysOfWeek !== undefined) updateData.daysOfWeek = toJsonString(body.daysOfWeek);
     
     const pikett = await prisma.pikett.update({
       where: { id },

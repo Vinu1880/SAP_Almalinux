@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer tous les utilisateurs
 export async function GET(request: NextRequest) {
@@ -101,22 +102,22 @@ export async function POST(request: NextRequest) {
       userData.teamId = body.teamId;
     }
     
-    // STOCKAGE DIRECT du rotationConfig comme JSON
+    // STOCKAGE DIRECT du rotationConfig comme JSON (stringifié pour MSSQL)
     if (body.rotationConfig && body.rotationConfig.patternId) {
-      userData.rotationConfig = {
+      userData.rotationConfig = toJsonString({
         patternId: body.rotationConfig.patternId,
         priority: body.rotationConfig.priority || 'medium',
         allowedShiftTypes: body.rotationConfig.allowedShiftTypes || []
-      };
-      console.log('Storing rotationConfig as JSON:', userData.rotationConfig);
+      });
+      console.log('Storing rotationConfig as JSON string:', userData.rotationConfig);
     } else {
       userData.rotationConfig = null;
       console.log('No rotation config to store');
     }
-    
-    // Ajouter availability si présent
+
+    // Ajouter availability si présent (stringifié pour MSSQL)
     if (body.availability) {
-      userData.availability = body.availability;
+      userData.availability = toJsonString(body.availability);
     }
     
     console.log('Final userData to create:', JSON.stringify(userData, null, 2));
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE',
         entity: 'USER',
         entityId: user.id,
-        data: user
+        data: toJsonString(user)
       }
     });
     

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import  prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer tous les shifts
 export async function GET(request: NextRequest) {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
       include: {
         team: true,
         _count: {
-          select: { 
+          select: {
             assignments: true
           }
         }
@@ -23,8 +24,16 @@ export async function GET(request: NextRequest) {
         name: 'asc'
       }
     });
-    
-    return NextResponse.json(shifts);
+
+    // Parse string fields back to arrays/objects for frontend
+    const normalizedShifts = shifts.map(shift => ({
+      ...shift,
+      daysOfWeek: fromJsonString(shift.daysOfWeek),
+      includedUserIds: fromJsonString(shift.includedUserIds),
+      excludedUserIds: fromJsonString(shift.excludedUserIds),
+    }));
+
+    return NextResponse.json(normalizedShifts);
   } catch (error) {
     console.error('Error fetching shifts:', error);
     return NextResponse.json(
@@ -54,8 +63,8 @@ export async function POST(request: NextRequest) {
         status: body.status || 'ACTIVE',
         color: body.color || '#3b82f6',
         senderMailbox: body.senderMailbox,
-        includedUserIds: body.includedUserIds || [],
-        excludedUserIds: body.excludedUserIds || []
+        includedUserIds: toJsonString(body.includedUserIds || []),
+        excludedUserIds: toJsonString(body.excludedUserIds || [])
       },
       include: {
         team: true
@@ -68,7 +77,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE',
         entity: 'SHIFT',
         entityId: shift.id,
-        data: shift as any
+        data: toJsonString(shift)
       }
     });
     

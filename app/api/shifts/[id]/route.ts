@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer un shift par ID
 export async function GET(
@@ -65,9 +66,9 @@ export async function PUT(
     if (body.status !== undefined) updateData.status = body.status;
     if (body.color !== undefined) updateData.color = body.color;
     if (body.senderMailbox !== undefined) updateData.senderMailbox = body.senderMailbox;
-    if (body.includedUserIds !== undefined) updateData.includedUserIds = body.includedUserIds;
-    if (body.excludedUserIds !== undefined) updateData.excludedUserIds = body.excludedUserIds;
-    if (body.daysOfWeek !== undefined) updateData.daysOfWeek = body.daysOfWeek;
+    if (body.includedUserIds !== undefined) updateData.includedUserIds = toJsonString(body.includedUserIds);
+    if (body.excludedUserIds !== undefined) updateData.excludedUserIds = toJsonString(body.excludedUserIds);
+    if (body.daysOfWeek !== undefined) updateData.daysOfWeek = toJsonString(body.daysOfWeek);
     
     const shift = await prisma.shift.update({
       where: { id },
@@ -83,10 +84,10 @@ export async function PUT(
         action: 'UPDATE',
         entity: 'SHIFT',
         entityId: shift.id,
-        data: { 
-          before: body, 
-          after: shift 
-        } as any
+        data: toJsonString({
+          before: body,
+          after: shift
+        })
       }
     });
     
@@ -122,7 +123,7 @@ export async function DELETE(
         action: 'DELETE',
         entity: 'SHIFT',
         entityId: id,
-        data: shift as any
+        data: toJsonString(shift)
       }
     });
     

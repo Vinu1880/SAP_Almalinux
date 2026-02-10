@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from '@/lib/auth';
+import { toJsonString } from '@/lib/json-helpers';
 
 // PUT - Mettre à jour le statut d'une assignation (accepter/refuser)
 export async function PUT(
@@ -35,7 +36,7 @@ export async function PUT(
         entity: "ASSIGNMENT",
         entityId: assignment.id,
         userId: assignment.userId,
-        data: { status, reason },
+        data: toJsonString({ status, reason }),
       },
     });
 

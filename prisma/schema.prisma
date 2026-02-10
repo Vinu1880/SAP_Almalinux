@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlserver"
   url      = env("DATABASE_URL")
 }
 
@@ -19,21 +19,21 @@ model User {
   location      String?
   role          String?
   workPercent   Int         @default(100)
-  status        UserStatus  @default(ACTIVE)
+  status        String      @default("ACTIVE") // ACTIVE, INACTIVE
   notes         String?
   piketts       Pikett[]
-  // CHAMPS pour la rotation et disponibilité
-  rotationConfig Json?      // Stocke la configuration de rotation directement
-  availability   Json?      // Stocke les disponibilités hebdomadaires
-  
+  // CHAMPS pour la rotation et disponibilité (stockés comme JSON sérialisé)
+  rotationConfig String?    // Stocke la configuration de rotation directement
+  availability   String?    // Stocke les disponibilités hebdomadaires
+
   teamId        String?
-  team          Team?       @relation("TeamMembers", fields: [teamId], references: [id])
+  team          Team?       @relation("TeamMembers", fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   leadingTeam   Team?       @relation("TeamLead")
-  
+
   assignments   ShiftAssignment[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
-  
+
   @@index([email])
   @@index([teamId])
 }
@@ -44,8 +44,8 @@ model RotationPattern {
   name        String
   description String?
   cycleLength Int
-  weeks       Json     // Stocke les patterns de semaine
-  userShifts  Json?    // IDs des shifts associés à ce pattern
+  weeks       String   // Stocke les patterns de semaine (JSON sérialisé)
+  userShifts  String?  // IDs des shifts associés à ce pattern (JSON sérialisé)
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -58,16 +58,16 @@ model Team {
   name        String
   description String?
   color       String   @default("#3b82f6")
-  
+
   leadId      String?  @unique
-  lead        User?    @relation("TeamLead", fields: [leadId], references: [id])
+  lead        User?    @relation("TeamLead", fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   members     User[]   @relation("TeamMembers")
   shifts      Shift[]
   piketts     Pikett[]
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@index([name])
 }
 
@@ -76,27 +76,27 @@ model Pikett {
   name            String
   description     String?
   startWeek       String   // Format: "2025-W03"
-  daysOfWeek     Int[]    @default([1, 2, 3, 4, 5]) // Lun=1, Mar=2, etc. Dim=0
+  daysOfWeek      String   @default("[1,2,3,4,5]") // JSON sérialisé - Lun=1, Mar=2, etc. Dim=0
   endWeek         String?  // Si null, pikett permanent
   color           String   @default("#dc2626")
-  status          Status   @default(ACTIVE)
+  status          String   @default("ACTIVE") // ACTIVE, INACTIVE, ARCHIVED
   is24_7          Boolean  @default(true)
-  
+
   // Relations
   teamId          String
-  team            Team     @relation(fields: [teamId], references: [id])
-  
+  team            Team     @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   // Relation optionnelle avec User (pour la relation inverse)
   userId          String?
-  user            User?    @relation(fields: [userId], references: [id])
-  
-  // Listes d'IDs pour inclusion/exclusion
-  includedUserIds String[]
-  excludedUserIds String[]
-  
+  user            User?    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // Listes d'IDs pour inclusion/exclusion (JSON sérialisé)
+  includedUserIds String   @default("[]")
+  excludedUserIds String   @default("[]")
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  
+
   @@index([teamId])
   @@index([status])
   @@index([startWeek])
@@ -109,49 +109,49 @@ model Shift {
   description    String?
   startTime      String   // Format HH:MM
   endTime        String   // Format HH:MM
-  daysOfWeek     Int[]    @default([1, 2, 3, 4, 5]) // Lun=1, Mar=2, etc. Dim=0
+  daysOfWeek     String   @default("[1,2,3,4,5]") // JSON sérialisé - Lun=1, Mar=2, etc. Dim=0
   membersRequired Int     @default(1)
-  priority       Priority @default(MEDIUM)
-  status         Status   @default(ACTIVE)
+  priority       String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status         String   @default("ACTIVE") // ACTIVE, INACTIVE, ARCHIVED
   color          String   @default("#3b82f6")
   senderMailbox  String   @default("") // Shared mailbox pour l'envoi des invitations
 
-  // Listes d'IDs pour inclusion/exclusion
-  includedUserIds String[]
-  excludedUserIds String[]
+  // Listes d'IDs pour inclusion/exclusion (JSON sérialisé)
+  includedUserIds String  @default("[]")
+  excludedUserIds String  @default("[]")
 
   teamId         String
-  team           Team     @relation(fields: [teamId], references: [id])
-  
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   assignments    ShiftAssignment[]
   usageCount     Int      @default(0)
   lastUsedAt     DateTime?
-  
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  
+
   @@index([teamId])
   @@index([status])
 }
 
 model ShiftAssignment {
-  id              String           @id @default(cuid())
+  id              String   @id @default(cuid())
   date            DateTime
-  status          AssignmentStatus @default(PENDING)
+  status          String   @default("PENDING") // PENDING, ACCEPTED, REFUSED, CANCELLED
   reason          String?
   respondedAt     DateTime?
-  outlookEventId  String?          // ID de l'événement Outlook pour synchronisation
-  resent          Boolean          @default(false) // Indique si c'est un resend
-  resentAt        DateTime?        // Date du resend
+  outlookEventId  String?  // ID de l'événement Outlook pour synchronisation
+  resent          Boolean  @default(false) // Indique si c'est un resend
+  resentAt        DateTime?// Date du resend
 
   shiftId         String
-  shift           Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  shift           Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   userId          String
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([date, shiftId, userId])
   @@index([userId])
@@ -171,10 +171,10 @@ model OutOfOfficeEvent {
   outlookId    String?  @unique
   calendarName String?
   syncedAt     DateTime @default(now())
-  
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  
+
   @@index([userEmail])
   @@index([startDate, endDate])
 }
@@ -185,9 +185,9 @@ model AuditLog {
   entity    String
   entityId  String?
   userId    String?
-  data      Json?
+  data      String?  // JSON sérialisé
   createdAt DateTime @default(now())
-  
+
   @@index([entity])
   @@index([userId])
   @@index([createdAt])
@@ -197,44 +197,12 @@ model Holiday {
   id          String   @id @default(cuid())
   name        String
   date        DateTime
-  cantons     String[] // ['BE', 'ZH', 'VD', 'ALL']
-  type        HolidayType
+  cantons     String   @default("[]") // JSON sérialisé - ['BE', 'ZH', 'VD', 'ALL']
+  type        String   // FEDERAL, CANTONAL, CUSTOM
   recurring   Boolean  @default(false)
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("holidays")
-}
-
-// Enums
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-}
-
-enum Status {
-  ACTIVE
-  INACTIVE
-  ARCHIVED
-}
-
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-enum AssignmentStatus {
-  PENDING
-  ACCEPTED
-  REFUSED
-  CANCELLED
-}
-
-enum HolidayType {
-  FEDERAL
-  CANTONAL
-  CUSTOM
 }

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString } from '@/lib/json-helpers';
 import fs from 'fs';
 import path from 'path';
 
@@ -85,7 +86,8 @@ export async function POST(request: NextRequest) {
             name: pattern.name,
             description: pattern.description,
             cycleLength: pattern.cycleLength,
-            weeks: pattern.weeks,
+            weeks: toJsonString(pattern.weeks),
+            userShifts: toJsonString(pattern.userShifts || []),
             createdAt: new Date(pattern.createdAt),
             updatedAt: new Date(pattern.updatedAt)
           }))
@@ -110,13 +112,13 @@ export async function POST(request: NextRequest) {
             firstName: user.firstName,
             lastName: user.lastName,
             phone: user.phone,
-            location: user.location || null,  // Ajout du champ location
+            location: user.location || null,
             role: user.role,
             workPercent: user.workPercent,
             status: user.status,
             notes: user.notes,
-            rotationConfig: user.rotationConfig || null,
-            availability: user.availability || null,
+            rotationConfig: toJsonString(user.rotationConfig) || null,
+            availability: toJsonString(user.availability) || null,
             teamId: user.teamId,
             createdAt: new Date(user.createdAt),
             updatedAt: new Date(user.updatedAt)
@@ -144,14 +146,14 @@ export async function POST(request: NextRequest) {
               description: shift.description,
               startTime: shift.startTime,
               endTime: shift.endTime,
-              daysOfWeek: shift.daysOfWeek,
+              daysOfWeek: toJsonString(shift.daysOfWeek),
               membersRequired: shift.membersRequired,
               priority: shift.priority,
               status: shift.status,
               color: shift.color,
               senderMailbox: shift.senderMailbox || '',
-              includedUserIds: shift.includedUserIds,
-              excludedUserIds: shift.excludedUserIds,
+              includedUserIds: toJsonString(shift.includedUserIds),
+              excludedUserIds: toJsonString(shift.excludedUserIds),
               teamId: shift.teamId,
               usageCount: shift.usageCount,
               lastUsedAt: shift.lastUsedAt ? new Date(shift.lastUsedAt) : null,
@@ -180,15 +182,15 @@ export async function POST(request: NextRequest) {
               name: pikett.name,
               description: pikett.description,
               startWeek: pikett.startWeek,
-              daysOfWeek: pikett.daysOfWeek,
+              daysOfWeek: toJsonString(pikett.daysOfWeek),
               endWeek: pikett.endWeek,
               color: pikett.color,
               status: pikett.status,
               is24_7: pikett.is24_7,
               teamId: pikett.teamId,
               userId: pikett.userId,
-              includedUserIds: pikett.includedUserIds,
-              excludedUserIds: pikett.excludedUserIds,
+              includedUserIds: toJsonString(pikett.includedUserIds),
+              excludedUserIds: toJsonString(pikett.excludedUserIds),
               createdAt: new Date(pikett.createdAt),
               updatedAt: new Date(pikett.updatedAt)
             }))
@@ -273,7 +275,7 @@ export async function POST(request: NextRequest) {
               entity: log.entity,
               entityId: log.entityId,
               userId: log.userId,
-              data: log.data,
+              data: toJsonString(log.data),
               createdAt: new Date(log.createdAt)
             }))
           });

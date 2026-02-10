@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { fromJsonString } from '@/lib/json-helpers';
 import fs from 'fs';
 import path from 'path';
 
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
   try {
     console.log('📦 Création de la sauvegarde...');
     
-    const data = {
+    const rawData = {
       teams: await prisma.team.findMany(),
       users: await prisma.user.findMany(),
       shifts: await prisma.shift.findMany(),
@@ -67,6 +68,39 @@ export async function POST(request: NextRequest) {
       shiftAssignments: await prisma.shiftAssignment.findMany(),
       outOfOfficeEvents: await prisma.outOfOfficeEvent.findMany(),
       auditLogs: await prisma.auditLog.findMany(),
+    };
+
+    // Parse string fields back to objects so the backup JSON is clean
+    const data = {
+      teams: rawData.teams,
+      users: rawData.users.map(u => ({
+        ...u,
+        rotationConfig: fromJsonString(u.rotationConfig),
+        availability: fromJsonString(u.availability),
+      })),
+      shifts: rawData.shifts.map(s => ({
+        ...s,
+        daysOfWeek: fromJsonString(s.daysOfWeek),
+        includedUserIds: fromJsonString(s.includedUserIds),
+        excludedUserIds: fromJsonString(s.excludedUserIds),
+      })),
+      piketts: rawData.piketts.map(p => ({
+        ...p,
+        daysOfWeek: fromJsonString(p.daysOfWeek),
+        includedUserIds: fromJsonString(p.includedUserIds),
+        excludedUserIds: fromJsonString(p.excludedUserIds),
+      })),
+      rotationPatterns: rawData.rotationPatterns.map(rp => ({
+        ...rp,
+        weeks: fromJsonString(rp.weeks),
+        userShifts: fromJsonString(rp.userShifts),
+      })),
+      shiftAssignments: rawData.shiftAssignments,
+      outOfOfficeEvents: rawData.outOfOfficeEvents,
+      auditLogs: rawData.auditLogs.map(al => ({
+        ...al,
+        data: fromJsonString(al.data),
+      })),
     };
     
     // Vérifier les rotations des utilisateurs

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // POST - Importer les jours fériés standards
 export async function POST(request: NextRequest) {
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
           data: {
             name: holidayData.name,
             date: new Date(holidayData.date),
-            cantons: holidayData.cantons,
+            cantons: toJsonString(holidayData.cantons),
             type: holidayData.type as 'FEDERAL' | 'CANTONAL',
             recurring: holidayData.recurring
           }

@@ -5,6 +5,13 @@ import path from 'path';
 
 const prisma = new PrismaClient();
 
+// Safe JSON stringify - handles already-stringified values (for MSSQL compatibility)
+function toJsonString(val: any): string | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'string') return val;
+  return JSON.stringify(val);
+}
+
 async function restore(fileName?: string) {
   try {
     // Déterminer le fichier à restaurer
@@ -38,9 +45,6 @@ async function restore(fileName?: string) {
       console.log(`   Contient :`, backup.counts);
     }
     
-    // Désactiver les contraintes de clés étrangères temporairement
-    await prisma.$executeRaw`SET CONSTRAINTS ALL DEFERRED`;
-    
     console.log('🗑️  Nettoyage de la base de données...');
     
     // Nettoyer la base dans le bon ordre (inverse des dépendances)
@@ -71,7 +75,14 @@ async function restore(fileName?: string) {
     if (data.rotationPatterns && data.rotationPatterns.length > 0) {
       console.log(`   - Restauration de ${data.rotationPatterns.length} patterns de rotation...`);
       for (const pattern of data.rotationPatterns) {
-        await prisma.rotationPattern.create({ data: pattern });
+        const { ...patternData } = pattern;
+        await prisma.rotationPattern.create({
+          data: {
+            ...patternData,
+            weeks: toJsonString(patternData.weeks),
+            userShifts: toJsonString(patternData.userShifts || []),
+          }
+        });
       }
     }
     
@@ -81,7 +92,13 @@ async function restore(fileName?: string) {
       for (const user of data.users) {
         const { team, leadingTeam, assignments, piketts, azureId, ...userData } = user;
         // Supprimer azureId qui n'existe plus dans le schéma
-        await prisma.user.create({ data: userData });
+        await prisma.user.create({
+          data: {
+            ...userData,
+            rotationConfig: toJsonString(userData.rotationConfig) || null,
+            availability: toJsonString(userData.availability) || null,
+          }
+        });
       }
     }
     
@@ -90,7 +107,14 @@ async function restore(fileName?: string) {
       console.log(`   - Restauration de ${data.shifts.length} shifts...`);
       for (const shift of data.shifts) {
         const { team, assignments, ...shiftData } = shift;
-        await prisma.shift.create({ data: shiftData });
+        await prisma.shift.create({
+          data: {
+            ...shiftData,
+            daysOfWeek: toJsonString(shiftData.daysOfWeek),
+            includedUserIds: toJsonString(shiftData.includedUserIds),
+            excludedUserIds: toJsonString(shiftData.excludedUserIds),
+          }
+        });
       }
     }
     
@@ -99,7 +123,14 @@ async function restore(fileName?: string) {
       console.log(`   - Restauration de ${data.piketts.length} piketts...`);
       for (const pikett of data.piketts) {
         const { team, user, ...pikettData } = pikett;
-        await prisma.pikett.create({ data: pikettData });
+        await prisma.pikett.create({
+          data: {
+            ...pikettData,
+            daysOfWeek: toJsonString(pikettData.daysOfWeek),
+            includedUserIds: toJsonString(pikettData.includedUserIds),
+            excludedUserIds: toJsonString(pikettData.excludedUserIds),
+          }
+        });
       }
     }
     
@@ -122,9 +153,10 @@ async function restore(fileName?: string) {
     if (data.auditLogs && data.auditLogs.length > 0) {
       console.log(`   - Restauration de ${data.auditLogs.length} logs d'audit...`);
       for (const log of data.auditLogs) {
-        await prisma.auditLog.create({ 
+        await prisma.auditLog.create({
           data: {
             ...log,
+            data: toJsonString(log.data),
             createdAt: new Date(log.createdAt)
           }
         });

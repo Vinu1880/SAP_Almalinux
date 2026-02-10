@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer un pattern spécifique
 export async function GET(
@@ -25,7 +26,12 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(pattern);
+    // Parse string fields back to objects for frontend
+    return NextResponse.json({
+      ...pattern,
+      weeks: fromJsonString(pattern.weeks),
+      userShifts: fromJsonString(pattern.userShifts),
+    });
   } catch (error) {
     console.error('Error fetching rotation pattern:', error);
     return NextResponse.json(
@@ -53,8 +59,8 @@ export async function PUT(
         name: body.name,
         description: body.description || null,
         cycleLength: body.cycleLength,
-        weeks: body.weeks,
-        userShifts: body.userShifts || []
+        weeks: toJsonString(body.weeks),
+        userShifts: toJsonString(body.userShifts || [])
       }
     });
 

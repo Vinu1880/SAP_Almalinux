@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer les jours fériés
 export async function GET(request: NextRequest) {
@@ -30,21 +31,29 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'asc' }
     });
 
+    // Parse cantons from string to array for each holiday
+    const normalizedHolidays = holidays.map(h => ({
+      ...h,
+      cantons: fromJsonString(h.cantons) || []
+    }));
+
     console.log(`=== HOLIDAYS FETCHED ===`);
     console.log(`Year filter: ${year || 'none'}`);
     console.log(`Canton filter: ${canton || 'none'}`);
-    console.log(`Total holidays found: ${holidays.length}`);
-    holidays.forEach(h => {
-      console.log(`- ${h.name} (${new Date(h.date).toISOString().split('T')[0]}) - Cantons: ${h.cantons.join(', ')}`);
+    console.log(`Total holidays found: ${normalizedHolidays.length}`);
+    normalizedHolidays.forEach(h => {
+      const cantonsArr = Array.isArray(h.cantons) ? h.cantons : [];
+      console.log(`- ${h.name} (${new Date(h.date).toISOString().split('T')[0]}) - Cantons: ${cantonsArr.join(', ')}`);
     });
     console.log(`========================`);
 
     // Filtrer par canton si spécifié
-    let filteredHolidays = holidays;
+    let filteredHolidays = normalizedHolidays;
     if (canton && canton !== 'ALL') {
-      filteredHolidays = holidays.filter((holiday: any) => 
-        holiday.cantons.includes('ALL') || holiday.cantons.includes(canton)
-      );
+      filteredHolidays = normalizedHolidays.filter((holiday: any) => {
+        const cantonsArr = Array.isArray(holiday.cantons) ? holiday.cantons : [];
+        return cantonsArr.includes('ALL') || cantonsArr.includes(canton);
+      });
       console.log(`After canton filter (${canton}): ${filteredHolidays.length} holidays`);
     }
 
@@ -81,7 +90,7 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         date: new Date(date),
-        cantons,
+        cantons: toJsonString(cantons),
         type,
         recurring: recurring || false,
         description: description || null

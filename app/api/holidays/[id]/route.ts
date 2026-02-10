@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // PUT - Mettre à jour un jour férié
 export async function PUT(
@@ -22,14 +23,18 @@ export async function PUT(
       data: {
         ...(name !== undefined && { name }),
         ...(date !== undefined && { date: new Date(date) }),
-        ...(cantons !== undefined && { cantons }),
+        ...(cantons !== undefined && { cantons: toJsonString(cantons) }),
         ...(type !== undefined && { type }),
         ...(recurring !== undefined && { recurring }),
         ...(description !== undefined && { description })
       }
     });
 
-    return NextResponse.json(holiday);
+    // Parse cantons back to array for response
+    return NextResponse.json({
+      ...holiday,
+      cantons: fromJsonString(holiday.cantons)
+    });
   } catch (error) {
     console.error('Error updating holiday:', error);
     return NextResponse.json(

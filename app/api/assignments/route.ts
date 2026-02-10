@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // Helper function to map location to canton code
 function getUserCantonFromLocation(location: string): string {
@@ -58,8 +59,11 @@ async function validateAssignmentAgainstHolidays(
 
     // Check if any holiday applies to this user
     for (const holiday of holidays) {
+      // Parse cantons from string if needed (MSSQL stores as String)
+      const holidayCantons: string[] = fromJsonString(holiday.cantons) || [];
+
       // Check if holiday applies to all cantons
-      if (holiday.cantons.includes('ALL')) {
+      if (holidayCantons.includes('ALL')) {
         return {
           valid: false,
           reason: `Non-working day in all cantons`,
@@ -80,7 +84,7 @@ async function validateAssignmentAgainstHolidays(
       }
 
       // Check if user's canton matches holiday canton
-      if (holiday.cantons.includes(userCanton)) {
+      if (holidayCantons.includes(userCanton)) {
         return {
           valid: false,
           reason: `Non-working day in ${userCanton}`,
@@ -225,7 +229,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE',
         entity: 'ASSIGNMENT',
         entityId: shiftId,
-        data: { count: successfulAssignments.length }
+        data: toJsonString({ count: successfulAssignments.length })
       }
     });
     
@@ -284,8 +288,19 @@ export async function GET(request: NextRequest) {
         date: 'asc'
       }
     });
-    
-    return NextResponse.json(assignments);
+
+    // Parse string fields in included shift data
+    const normalizedAssignments = assignments.map(a => ({
+      ...a,
+      shift: {
+        ...a.shift,
+        daysOfWeek: fromJsonString(a.shift.daysOfWeek),
+        includedUserIds: fromJsonString(a.shift.includedUserIds),
+        excludedUserIds: fromJsonString(a.shift.excludedUserIds),
+      }
+    }));
+
+    return NextResponse.json(normalizedAssignments);
   } catch (error) {
     console.error('Error fetching assignments:', error);
     return NextResponse.json(

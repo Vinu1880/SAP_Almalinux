@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer un utilisateur spécifique
 export async function GET(
@@ -111,24 +112,24 @@ export async function PUT(
       }
     }
     
-    // STOCKAGE DIRECT du rotationConfig comme JSON
+    // STOCKAGE DIRECT du rotationConfig comme JSON (stringifié pour MSSQL)
     if (body.rotationConfig !== undefined) {
       if (body.rotationConfig && body.rotationConfig.patternId) {
-        updateData.rotationConfig = {
+        updateData.rotationConfig = toJsonString({
           patternId: body.rotationConfig.patternId,
           priority: body.rotationConfig.priority || 'medium',
           allowedShiftTypes: body.rotationConfig.allowedShiftTypes || []
-        };
+        });
         console.log('Updating rotationConfig to:', updateData.rotationConfig);
       } else {
         updateData.rotationConfig = null;
         console.log('Removing rotation config');
       }
     }
-    
-    // Stocker availability comme JSON
+
+    // Stocker availability comme JSON (stringifié pour MSSQL)
     if (body.availability !== undefined) {
-      updateData.availability = body.availability;
+      updateData.availability = toJsonString(body.availability);
     }
     
     console.log('Final updateData:', JSON.stringify(updateData, null, 2));
@@ -154,7 +155,7 @@ export async function PUT(
         action: 'UPDATE',
         entity: 'USER',
         entityId: user.id,
-        data: { before: body, after: user }
+        data: toJsonString({ before: body, after: user })
       }
     });
     
@@ -209,6 +210,9 @@ export async function DELETE(
       });
     }
     
+    // Supprimer les assignations de l'utilisateur (cascade manuelle pour MSSQL)
+    await prisma.shiftAssignment.deleteMany({ where: { userId: id } });
+
     // Supprimer l'utilisateur
     const user = await prisma.user.delete({
       where: { id }
@@ -220,7 +224,7 @@ export async function DELETE(
         action: 'DELETE',
         entity: 'USER',
         entityId: id,
-        data: user
+        data: toJsonString(user)
       }
     });
     
