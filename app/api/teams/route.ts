@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer toutes les équipes
 export async function GET(request: NextRequest) {
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE',
         entity: 'TEAM',
         entityId: team.id,
-        data: team
+        data: toJsonString(team)
       }
     });
     

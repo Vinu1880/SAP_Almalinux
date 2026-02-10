@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer une assignation spécifique
 export async function GET(
@@ -101,7 +102,7 @@ export async function PUT(
         action: 'UPDATE',
         entity: 'SHIFT_ASSIGNMENT',
         entityId: assignment.id,
-        data: { before: body, after: assignment }
+        data: toJsonString({ before: body, after: assignment })
       }
     });
 
@@ -175,7 +176,7 @@ export async function DELETE(
         action: 'DELETE',
         entity: 'SHIFT_ASSIGNMENT',
         entityId: id,
-        data: assignment
+        data: toJsonString(assignment)
       }
     });
 

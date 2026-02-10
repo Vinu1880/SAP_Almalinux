@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { toJsonString } from '@/lib/json-helpers';
 
 // GET - Récupérer une équipe par ID
 export async function GET(
@@ -147,7 +148,7 @@ export async function PUT(
         action: 'UPDATE',
         entity: 'TEAM',
         entityId: team.id,
-        data: { before: body, after: team }
+        data: toJsonString({ before: body, after: team })
       }
     });
 
@@ -207,7 +208,7 @@ export async function DELETE(
         action: 'DELETE',
         entity: 'TEAM',
         entityId: id,
-        data: team
+        data: toJsonString(team)
       }
     });
     

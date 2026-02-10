@@ -24,16 +24,12 @@ export async function POST(request: NextRequest) {
     const nextDate = new Date(targetDate);
     nextDate.setDate(nextDate.getDate() + 1);
 
-    // Convertir en string ISO (format YYYY-MM-DD)
-    const prevDateStr = prevDate.toISOString().split('T')[0];
-    const nextDateStr = nextDate.toISOString().split('T')[0];
-
     // Chercher des assignations pour cet utilisateur la veille ou le lendemain
     const consecutiveAssignments = await prisma.shiftAssignment.findMany({
       where: {
         userId: userId,
         date: {
-          in: [prevDateStr, nextDateStr]
+          in: [prevDate, nextDate]
         },
         status: {
           not: 'CANCELLED'

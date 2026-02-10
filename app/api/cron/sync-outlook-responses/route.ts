@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { toJsonString } from '@/lib/json-helpers';
 
 // Fonction pour obtenir un access token valide
 async function getAccessToken(): Promise<string> {
@@ -243,13 +244,13 @@ export async function POST(request: NextRequest) {
               entity: 'SHIFT_ASSIGNMENT',
               entityId: id,
               userId: user.id,
-              data: {
+              data: toJsonString({
                 source: 'outlook-sync',
                 oldStatus: assignment.status,
                 newStatus: newStatus,
                 outlookResponse: responseStatus,
                 outlookEventDeleted: newStatus === 'REFUSED'
-              }
+              })
             }
           });
 
@@ -322,8 +323,7 @@ export async function GET(request: NextRequest) {
         entity: 'SHIFT_ASSIGNMENT',
         action: 'UPDATE',
         data: {
-          path: ['source'],
-          equals: 'outlook-sync'
+          contains: 'outlook-sync'
         }
       },
       orderBy: {
