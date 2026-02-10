@@ -52,6 +52,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Import des hooks
+import { useAuth } from '@/contexts/AuthContext';
 import { useShifts } from '@/lib/hooks/useShifts';
 import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
@@ -186,7 +187,8 @@ useEffect(() => {
     dbCount: number;
   } | null>(null);
 
-  const ACCESS_TOKEN = 'EwBIBMl6BAAUBKgm8k1UswUNwklmy2v7U/S+1fEAAfE5qWiSGl/A5nPJ6UXeHCM9bdpbXNpJmGtsQy9Dbyo4+sdANdypRmLIbrInKvJ3kH5EGToAdTFBtYFj4wpQcQGL3t0aZuHTGD++eeYn4NyOlAVLVTrmxDq6X+tiDdqYeic3lrCFfKaR2NHZdDqKJPWoJBhcPa/Im7epNnlS0t12FB5a1ddBQ61fu/oc9G5mjt8H7KUqaQcct2kUTthKCHr1zvsMR3LOZ5lV13GgDDSbSfHz2o0klqaRUGOe+VtUiIDLoSOfq9HWXQbWNOV6TehuByp+d9BQah8kCkKGTkMBaSpqXYHZMeAsGk7+UasQ4BNCn1jXfSAMC9qREdMcWX0QZgAAEB2BZeFaW0ocBfQB7O6IhggQA4vBqghYKsl58/TY/fCaPJRPWx9Rr7jNNPXsQsyFMu3rvmRxi0i+HDqO92w1rt8qL/l68b54PI8pIeWGBBrwF8H8tGqHXmZrZUQfP3DUMZpqR5HjQtx3B312NHQlWR7p85G0eEIt64jz9JGPOTDQUNjdiVZOTQf1Ns6lqrgUvUkQieko8/EgU0r2mdPXRFs2xy+/GJE1f9kN7VAWX9P2prQJ+06Ym+5sb+uK6RwgYNyGFptJfTKycschehlZN53XxZc1nUDP8Mx1ryR9hOW/Z1yyLdY4bWlGZnhqsDjkQOmC2oQmQyvzEINx8R1FZsANT7seu9wh6/4BuuVC/Wf27zxXrUyqpiySCyX5xQB345sGNpygRw9UHhlL6o0BkZJRXCbWMrJ+HbieQ/4Hxdya5DSYxUDthR/pOxlOfY+3/5ea/dH+knmlVxOVEpHbz9TMS6n0aAjRYLEa8pKfpxN7UlBOos+XV216zfo1XLnJHLwjRXHWHKl00Yt0Yv4vIxgSaCnxKxpNfFrrP9lMwsHhmrD6GuosKzPIGApG1JbJTEsXdNs+K8/R+65vpeB0GtpTskfla509OIPIaUMA4t54UZ3/3zWY4LxLQjL2FwecaiOzt2E2Q4qnYCqlWBj7BY+7ZyR8oTGXOrah75mXgHOocRdmvFsvpzMs8BgKY6oxilYhy7M1DQAp2mwk3A+ToqIBdOM967dcvlnOxc840BBVQMvCw/KAd7SxWp+Z5Qsc4xAiQqovXloQ6UhbmF7t1xCrwmgsAtDmhp4FHfWXnEloPtQ5u0LM5lVN4ShB2DCu9RZxVkJeBIh71pcQbJDVwiHiAD8X/a5ul9yBwjDsEJe4Z9ZbaNTu0dEevHNv6U8MhqWhPkJqp0l6l6+MRYidV2ghKrYvhzPKBpCT0nnusZF5/cGZcmwsT5U4C0TdUnqmVneA8jsh+kPczA6vcVprTVarHtUp53MzkBeElnM7QPxLz0GHmy5pjRPA9Tr/95LgA+dP6/p4h4uKxYF9BtOyhA4EBILRNkAIhxYcjXi3mVo/3apBAw==';
+  // Auth
+  const { getAccessToken } = useAuth();
 
   // Hooks
   const { shifts, loading: shiftsLoading } = useShifts();
@@ -580,6 +582,12 @@ const getUserCantonFromLocation = (location: string): string => {
     console.log('📅 Période:', startDate, 'à', endDate);
 
     try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        console.error('❌ Pas de token d\'authentification disponible');
+        return [];
+      }
+
       const startDateTime = new Date(startDate + 'T00:00:00').toISOString();
       const endDateTime = new Date(endDate + 'T23:59:59').toISOString();
 
@@ -587,7 +595,7 @@ const getUserCantonFromLocation = (location: string): string => {
 
       const calendarsResponse = await fetch('https://graph.microsoft.com/v1.0/me/calendars', {
         headers: {
-          'Authorization': `Bearer ${ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -611,7 +619,7 @@ const getUserCantonFromLocation = (location: string): string => {
 
           const eventsResponse = await fetch(eventsUrl, {
             headers: {
-              'Authorization': `Bearer ${ACCESS_TOKEN}`,
+              'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
               'Prefer': 'outlook.timezone="Europe/Zurich"'
             }
@@ -1445,8 +1453,9 @@ const processShiftAssignments = async () => {
         shiftName: string;
       }> = [];
 
-      if (!ACCESS_TOKEN || ACCESS_TOKEN.length <= 10) {
-        alert('❌ Access token manquant ou invalide.\nVeuillez renouveler votre access token.');
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        alert('❌ Access token manquant ou invalide.\nVeuillez vous reconnecter.');
         return;
       }
 
@@ -1520,7 +1529,7 @@ const processShiftAssignments = async () => {
               const outlookResponse = await fetch('https://graph.microsoft.com/v1.0/me/events', {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${ACCESS_TOKEN}`,
+                  'Authorization': `Bearer ${accessToken}`,
                   'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(event)
