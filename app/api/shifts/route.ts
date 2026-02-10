@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         priority: body.priority || 'MEDIUM',
         status: body.status || 'ACTIVE',
         color: body.color || '#3b82f6',
+        senderMailbox: body.senderMailbox,
         includedUserIds: body.includedUserIds || [],
         excludedUserIds: body.excludedUserIds || []
       },

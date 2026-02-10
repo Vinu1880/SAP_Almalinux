@@ -77,17 +77,19 @@ export const loginRequest: PopupRequest = {
     'User.Read',
     'Calendars.Read',
     'Calendars.ReadWrite',
+    'Calendars.ReadWrite.Shared',
   ],
 };
 
 /**
- * Scopes pour l’acquisition silencieuse de token
+ * Scopes pour l'acquisition silencieuse de token
  */
 export const tokenRequest = {
   scopes: [
     'User.Read',
     'Calendars.Read',
     'Calendars.ReadWrite',
+    'Calendars.ReadWrite.Shared',
   ],
 };
 

@@ -19,6 +19,9 @@ export interface Shift {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   status: 'ACTIVE' | 'INACTIVE';
   color: string;
+  senderMailbox: string;
+  includedUserIds: string[];
+  excludedUserIds: string[];
   usageCount: number;
   lastUsedAt: Date | null;
   createdAt: Date;

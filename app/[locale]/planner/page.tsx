@@ -1526,7 +1526,12 @@ const processShiftAssignments = async () => {
                 ]
               };
 
-              const outlookResponse = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+              const mailbox = assignment.shift.senderMailbox || 'me';
+              const graphUrl = mailbox === 'me'
+                ? 'https://graph.microsoft.com/v1.0/me/events'
+                : `https://graph.microsoft.com/v1.0/users/${mailbox}/events`;
+
+              const outlookResponse = await fetch(graphUrl, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${accessToken}`,

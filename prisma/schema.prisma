@@ -114,11 +114,12 @@ model Shift {
   priority       Priority @default(MEDIUM)
   status         Status   @default(ACTIVE)
   color          String   @default("#3b82f6")
-  
+  senderMailbox  String   @default("") // Shared mailbox pour l'envoi des invitations
+
   // Listes d'IDs pour inclusion/exclusion
   includedUserIds String[]
   excludedUserIds String[]
-  
+
   teamId         String
   team           Team     @relation(fields: [teamId], references: [id])
   

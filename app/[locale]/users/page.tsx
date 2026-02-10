@@ -1227,8 +1227,7 @@ const UsersPage = () => {
     });
 
   const filteredTeams = teams.filter(team => {
-    const matchesSearch = team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (team.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+    const matchesSearch = team.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
 
@@ -1582,15 +1581,6 @@ const UsersPage = () => {
                             placeholder="ex: IT Support"
                             value={newTeam.name}
                             onChange={(e) => setNewTeam({...newTeam, name: e.target.value})}
-                          />
-                        </div>
-                        
-                        <div>
-                          <Label>{tCommon("description")}</Label>
-                          <Textarea
-                            placeholder={t("teamDescriptionPlaceholder")}
-                            value={newTeam.description}
-                            onChange={(e) => setNewTeam({...newTeam, description: e.target.value})}
                           />
                         </div>
                         
@@ -1972,9 +1962,6 @@ const UsersPage = () => {
                           <CardTitle className="text-lg font-bold text-slate-800">
                             {team.name}
                           </CardTitle>
-                          {team.description && (
-                            <p className="text-xs text-slate-600 mt-0.5">{team.description}</p>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -2272,14 +2259,6 @@ const UsersPage = () => {
                   <Input
                     value={selectedTeam.name}
                     onChange={(e) => setSelectedTeam({...selectedTeam, name: e.target.value})}
-                  />
-                </div>
-                
-                <div>
-                  <Label>{tCommon("description")}</Label>
-                  <Textarea
-                    value={selectedTeam.description}
-                    onChange={(e) => setSelectedTeam({...selectedTeam, description: e.target.value})}
                   />
                 </div>
                 

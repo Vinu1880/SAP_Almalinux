@@ -32,7 +32,8 @@ import {
   Shield,
   Info,
   AlertTriangle,
-  Building2
+  Building2,
+  Mail
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,7 +41,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -123,10 +123,10 @@ const ShiftsPage = () => {
 
   const [newShift, setNewShift] = useState<any>({
     name: '',
-    description: '',
     startTime: '',
     endTime: '',
     teamId: '',
+    senderMailbox: '',
     includedUserIds: [] as string[],
     excludedUserIds: [] as string[],
     color: '#3b82f6',
@@ -136,7 +136,6 @@ const ShiftsPage = () => {
   const [newPikett, setNewPikett] = useState({
     id: '',
     name: '',
-    description: '',
     teamId: '',
     includedUserIds: [] as string[],
     excludedUserIds: [] as string[],
@@ -158,7 +157,7 @@ const ShiftsPage = () => {
   };
 
   const handleCreateShift = async () => {
-    if (!newShift.name || !newShift.teamId || !newShift.startTime || !newShift.endTime) {
+    if (!newShift.name || !newShift.teamId || !newShift.startTime || !newShift.endTime || !newShift.senderMailbox) {
       alert(t('fillAllRequired'));
       return;
     }
@@ -175,10 +174,10 @@ const ShiftsPage = () => {
       setIsCreateDialogOpen(false);
       setNewShift({
         name: '',
-        description: '',
         startTime: '',
         endTime: '',
         teamId: '',
+        senderMailbox: '',
         includedUserIds: [],
         excludedUserIds: [],
         color: '#3b82f6'
@@ -201,7 +200,6 @@ const ShiftsPage = () => {
     try {
       await createPikett({
         name: newPikett.name,
-        description: newPikett.description,
         teamId: newPikett.teamId,
         includedUserIds: newPikett.includedUserIds,
         excludedUserIds: newPikett.excludedUserIds,
@@ -216,7 +214,6 @@ const ShiftsPage = () => {
       setNewPikett({
         id: '',
         name: '',
-        description: '',
         teamId: '',
         includedUserIds: [],
         excludedUserIds: [],
@@ -240,7 +237,6 @@ const ShiftsPage = () => {
     try {
       await updatePikettHook(selectedPikett.id, {
         name: selectedPikett.name,
-        description: selectedPikett.description,
         teamId: selectedPikett.teamId,
         includedUserIds: selectedPikett.includedUserIds,
         excludedUserIds: selectedPikett.excludedUserIds,
@@ -280,7 +276,6 @@ const ShiftsPage = () => {
     try {
       await updateShift(selectedShift.id, {
         name: selectedShift.name,
-        description: selectedShift.description,
         startTime: selectedShift.startTime,
         endTime: selectedShift.endTime,
         teamId: selectedShift.teamId,
@@ -288,6 +283,7 @@ const ShiftsPage = () => {
         priority: 'MEDIUM',
         status: selectedShift.status,
         color: selectedShift.color,
+        senderMailbox: selectedShift.senderMailbox,
         daysOfWeek: selectedShift.daysOfWeek
       });
       
@@ -318,13 +314,13 @@ const ShiftsPage = () => {
     try {
       await createShift({
         name: `${shift.name} ${t('copy')}`,
-        description: shift.description,
         startTime: shift.startTime,
         endTime: shift.endTime,
         teamId: shift.teamId,
         membersRequired: 1,
         priority: 'MEDIUM',
         color: shift.color,
+        senderMailbox: shift.senderMailbox,
       });
     } catch (error) {
       console.error('Erreur lors de la duplication:', error);
@@ -333,8 +329,7 @@ const ShiftsPage = () => {
   };
 
   const filteredShifts = shifts.filter(shift => {
-    const matchesSearch = shift.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (shift.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+    const matchesSearch = shift.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTeam = filterTeam === 'all' || shift.teamId === filterTeam;
     const matchesStatus = filterStatus === 'all' || shift.status === filterStatus;
     
@@ -342,8 +337,7 @@ const ShiftsPage = () => {
   });
 
   const filteredPiketts = piketts.filter(pikett => {
-    const matchesSearch = pikett.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (pikett.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+    const matchesSearch = pikett.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTeam = filterTeam === 'all' || pikett.teamId === filterTeam;
     const matchesStatus = filterStatus === 'all' || pikett.status === filterStatus;
     
@@ -586,7 +580,6 @@ const ShiftsPage = () => {
               <CardTitle className="text-lg font-semibold text-slate-800">
                 {shift.name}
               </CardTitle>
-              <p className="text-sm text-slate-600 mt-1">{shift.description}</p>
             </div>
           </div>
         </div>
@@ -618,6 +611,13 @@ const ShiftsPage = () => {
             </div>
           </div>
         </div>
+
+        {shift.senderMailbox && (
+          <div className="flex items-center space-x-2">
+            <Mail className="w-4 h-4 text-slate-500" />
+            <p className="text-xs text-slate-500 truncate">{shift.senderMailbox}</p>
+          </div>
+        )}
 
         <div className="flex items-center space-x-2">
           {getStatusBadge(shift.status)}
@@ -687,7 +687,6 @@ const ShiftsPage = () => {
                 <CardTitle className="text-lg font-semibold text-slate-800">
                   {pikett.name}
                 </CardTitle>
-                <p className="text-sm text-slate-600 mt-1">{pikett.description}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -754,13 +753,6 @@ const ShiftsPage = () => {
             {getStatusBadge(pikett.status)}
           </div>
 
-          <Alert className="border-orange-200 bg-orange-50">
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-            <AlertDescription className="text-orange-800 text-xs">
-              {t("onCallService")} {pikett.is24_7 ? t("24_7") : t("accordingToSchedule")}.
-              {t("datesAndRotationsManagedInPlanner")}
-            </AlertDescription>
-          </Alert>
 
           <div className="flex items-center space-x-2 pt-3 border-t">
             <Button
@@ -884,18 +876,9 @@ const ShiftsPage = () => {
                     </div>
                     
                     <div>
-                      <Label>{tCommon("description")}</Label>
-                      <Textarea
-                        placeholder={t("pikettDescPlaceholder")}
-                        value={newPikett.description}
-                        onChange={(e) => setNewPikett({...newPikett, description: e.target.value})}
-                      />
-                    </div>
-                    
-                    <div>
                       <Label>{tCommon("team")} *</Label>
-                      <Select 
-                        value={newPikett.teamId} 
+                      <Select
+                        value={newPikett.teamId}
                         onValueChange={(value) => setNewPikett({...newPikett, teamId: value})}
                       >
                         <SelectTrigger>
@@ -970,15 +953,6 @@ const ShiftsPage = () => {
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <Label>{tCommon("description")}</Label>
-                        <Textarea
-                          placeholder={t("shiftDescriptionPlaceholder")}
-                          value={newShift.description}
-                          onChange={(e) => setNewShift({...newShift, description: e.target.value})}
-                        />
-                      </div>
-                      
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>{t("startTime")}</Label>
@@ -1012,6 +986,18 @@ const ShiftsPage = () => {
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>{t("senderMailbox")} *</Label>
+                        <Input
+                          type="email"
+                          placeholder="dispatcher@bnc.ch"
+                          value={newShift.senderMailbox}
+                          onChange={(e) => setNewShift({...newShift, senderMailbox: e.target.value})}
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">{t("senderMailboxDesc")}</p>
                       </div>
 
                       <DaysOfWeekSelector
@@ -1053,7 +1039,7 @@ const ShiftsPage = () => {
                       </Button>
                       <Button
                         onClick={handleCreateShift}
-                        disabled={isSubmitting || !newShift.name || !newShift.teamId || !newShift.startTime || !newShift.endTime}
+                        disabled={isSubmitting || !newShift.name || !newShift.teamId || !newShift.startTime || !newShift.endTime || !newShift.senderMailbox}
                         className="bg-primary hover:bg-primary/90"
                       >
                         {isSubmitting ? (
@@ -1087,17 +1073,9 @@ const ShiftsPage = () => {
                 </div>
                 
                 <div>
-                  <Label>{tCommon("description")}</Label>
-                  <Textarea
-                    value={selectedPikett.description || ''}
-                    onChange={(e) => setSelectedPikett({...selectedPikett, description: e.target.value})}
-                  />
-                </div>
-                
-                <div>
                   <Label>{tCommon("team")}</Label>
-                  <Select 
-                    value={selectedPikett.teamId} 
+                  <Select
+                    value={selectedPikett.teamId}
                     onValueChange={(value) => setSelectedPikett({...selectedPikett, teamId: value})}
                   >
                     <SelectTrigger>
@@ -1170,14 +1148,6 @@ const ShiftsPage = () => {
                     />
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label>{tCommon("description")}</Label>
-                    <Textarea
-                      value={selectedShift.description || ''}
-                      onChange={(e) => setSelectedShift({...selectedShift, description: e.target.value})}
-                    />
-                  </div>
-                  
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t("startTime")}</Label>
@@ -1199,8 +1169,8 @@ const ShiftsPage = () => {
                   
                   <div className="space-y-2">
                     <Label>{tCommon("team")}</Label>
-                    <Select 
-                      value={selectedShift.teamId} 
+                    <Select
+                      value={selectedShift.teamId}
                       onValueChange={(value) => setSelectedShift({...selectedShift, teamId: value})}
                     >
                       <SelectTrigger>
@@ -1214,6 +1184,18 @@ const ShiftsPage = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{t("senderMailbox")} *</Label>
+                    <Input
+                      type="email"
+                      placeholder="dispatcher@bnc.ch"
+                      value={selectedShift.senderMailbox || ''}
+                      onChange={(e) => setSelectedShift({...selectedShift, senderMailbox: e.target.value})}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">{t("senderMailboxDesc")}</p>
                   </div>
 
                   <DaysOfWeekSelector

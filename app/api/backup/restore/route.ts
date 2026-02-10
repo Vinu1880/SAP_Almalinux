@@ -149,6 +149,7 @@ export async function POST(request: NextRequest) {
               priority: shift.priority,
               status: shift.status,
               color: shift.color,
+              senderMailbox: shift.senderMailbox || '',
               includedUserIds: shift.includedUserIds,
               excludedUserIds: shift.excludedUserIds,
               teamId: shift.teamId,
