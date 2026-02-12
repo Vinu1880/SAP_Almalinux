@@ -205,6 +205,7 @@ const UsersPage = () => {
     return `${arrow} ${labels[sortBy]}`;
   };
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedTeam, setSelectedTeam] = useState<any>(null);
   const [workType, setWorkType] = useState<'full' | 'partial'>('full');
@@ -992,15 +993,16 @@ const UsersPage = () => {
   };
 
   const handleCreateUser = async () => {
-    if (!newUser.firstName || !newUser.lastName || !newUser.email) {
-      showError(t('fillAllRequired'));
+    const errors: Record<string, boolean> = {};
+    if (!newUser.firstName) errors.userFirstName = true;
+    if (!newUser.lastName) errors.userLastName = true;
+    if (!newUser.email) errors.userEmail = true;
+    else if (!isValidEmail(newUser.email)) errors.userEmail = true;
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
     }
-
-    if (!isValidEmail(newUser.email)) {
-      showError(t('invalidEmail'));
-      return;
-    }
+    setValidationErrors({});
 
     setIsSubmitting(true);
     try {
@@ -1055,15 +1057,16 @@ const UsersPage = () => {
   const handleUpdateUser = async () => {
     if (!selectedUser) return;
 
-    if (!selectedUser.firstName || !selectedUser.lastName || !selectedUser.email) {
-      showError(t('fillAllRequired'));
+    const errors: Record<string, boolean> = {};
+    if (!selectedUser.firstName) errors.editUserFirstName = true;
+    if (!selectedUser.lastName) errors.editUserLastName = true;
+    if (!selectedUser.email) errors.editUserEmail = true;
+    else if (!isValidEmail(selectedUser.email)) errors.editUserEmail = true;
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
     }
-
-    if (!isValidEmail(selectedUser.email)) {
-      showError(t('invalidEmail'));
-      return;
-    }
+    setValidationErrors({});
 
     setIsSubmitting(true);
     try {
@@ -1123,10 +1126,13 @@ const UsersPage = () => {
   };
 
   const handleCreateTeam = async () => {
-    if (!newTeam.name) {
-      showError(t('nameRequired'));
+    const errors: Record<string, boolean> = {};
+    if (!newTeam.name) errors.teamName = true;
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
     }
+    setValidationErrors({});
 
     setIsSubmitting(true);
     try {
@@ -1149,6 +1155,14 @@ const UsersPage = () => {
 
   const handleUpdateTeam = async () => {
     if (!selectedTeam) return;
+
+    const errors: Record<string, boolean> = {};
+    if (!selectedTeam.name) errors.editTeamName = true;
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors({});
 
     setIsSubmitting(true);
     try {
@@ -1449,7 +1463,7 @@ const UsersPage = () => {
                 )}
                 
                 {viewMode === 'users' ? (
-                  <Dialog open={isCreateUserDialogOpen} onOpenChange={setIsCreateUserDialogOpen}>
+                  <Dialog open={isCreateUserDialogOpen} onOpenChange={(open) => { setIsCreateUserDialogOpen(open); if (!open) setValidationErrors({}); }}>
                     <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>{t("createUser")}</DialogTitle>
@@ -1457,27 +1471,30 @@ const UsersPage = () => {
                       <div className="space-y-4 py-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label>{t("firstName")} *</Label>
+                            <Label>{t("firstName")}</Label>
                             <Input
                               value={newUser.firstName}
-                              onChange={(e) => setNewUser({...newUser, firstName: e.target.value})}
+                              onChange={(e) => { setNewUser({...newUser, firstName: e.target.value}); setValidationErrors(prev => ({...prev, userFirstName: false})); }}
+                              className={validationErrors.userFirstName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                             />
                           </div>
                           <div>
-                            <Label>{t("lastName")} *</Label>
+                            <Label>{t("lastName")}</Label>
                             <Input
                               value={newUser.lastName}
-                              onChange={(e) => setNewUser({...newUser, lastName: e.target.value})}
+                              onChange={(e) => { setNewUser({...newUser, lastName: e.target.value}); setValidationErrors(prev => ({...prev, userLastName: false})); }}
+                              className={validationErrors.userLastName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                             />
                           </div>
                         </div>
-                        
+
                         <div>
-                          <Label>Email *</Label>
+                          <Label>Email</Label>
                           <Input
                             type="email"
                             value={newUser.email}
-                            onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                            onChange={(e) => { setNewUser({...newUser, email: e.target.value}); setValidationErrors(prev => ({...prev, userEmail: false})); }}
+                            className={validationErrors.userEmail ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                           />
                         </div>
 
@@ -1561,18 +1578,19 @@ const UsersPage = () => {
                     </DialogContent>
                   </Dialog>
                 ) : (
-                  <Dialog open={isCreateTeamDialogOpen} onOpenChange={setIsCreateTeamDialogOpen}>
+                  <Dialog open={isCreateTeamDialogOpen} onOpenChange={(open) => { setIsCreateTeamDialogOpen(open); if (!open) setValidationErrors({}); }}>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>{t("createTeam")}</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
                         <div>
-                          <Label>{t("teamName")} *</Label>
+                          <Label>{t("teamName")}</Label>
                           <Input
                             placeholder="ex: IT Support"
                             value={newTeam.name}
-                            onChange={(e) => setNewTeam({...newTeam, name: e.target.value})}
+                            onChange={(e) => { setNewTeam({...newTeam, name: e.target.value}); setValidationErrors(prev => ({...prev, teamName: false})); }}
+                            className={validationErrors.teamName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                           />
                         </div>
                         
@@ -2075,7 +2093,7 @@ const UsersPage = () => {
         )}
 
         {/* Edit user dialog */}
-        <Dialog open={isEditUserDialogOpen} onOpenChange={setIsEditUserDialogOpen}>
+        <Dialog open={isEditUserDialogOpen} onOpenChange={(open) => { setIsEditUserDialogOpen(open); if (!open) setValidationErrors({}); }}>
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t("editUser")}</DialogTitle>
@@ -2083,27 +2101,30 @@ const UsersPage = () => {
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>{t("firstName")} *</Label>
+                  <Label>{t("firstName")}</Label>
                   <Input
                     value={selectedUser?.firstName || ''}
-                    onChange={(e) => setSelectedUser({...selectedUser, firstName: e.target.value})}
+                    onChange={(e) => { setSelectedUser({...selectedUser, firstName: e.target.value}); setValidationErrors(prev => ({...prev, editUserFirstName: false})); }}
+                    className={validationErrors.editUserFirstName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                   />
                 </div>
                 <div>
-                  <Label>{t("lastName")} *</Label>
+                  <Label>{t("lastName")}</Label>
                   <Input
                     value={selectedUser?.lastName || ''}
-                    onChange={(e) => setSelectedUser({...selectedUser, lastName: e.target.value})}
+                    onChange={(e) => { setSelectedUser({...selectedUser, lastName: e.target.value}); setValidationErrors(prev => ({...prev, editUserLastName: false})); }}
+                    className={validationErrors.editUserLastName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                   />
                 </div>
               </div>
-              
+
               <div>
-                <Label>Email *</Label>
+                <Label>Email</Label>
                 <Input
                   type="email"
                   value={selectedUser?.email || ''}
-                  onChange={(e) => setSelectedUser({...selectedUser, email: e.target.value})}
+                  onChange={(e) => { setSelectedUser({...selectedUser, email: e.target.value}); setValidationErrors(prev => ({...prev, editUserEmail: false})); }}
+                  className={validationErrors.editUserEmail ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                 />
               </div>
 
@@ -2240,17 +2261,18 @@ const UsersPage = () => {
 
         {/* Edit team dialog */}
         {selectedTeam && (
-          <Dialog open={isEditTeamDialogOpen} onOpenChange={setIsEditTeamDialogOpen}>
+          <Dialog open={isEditTeamDialogOpen} onOpenChange={(open) => { setIsEditTeamDialogOpen(open); if (!open) setValidationErrors({}); }}>
             <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{t("editTeam")}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div>
-                  <Label>{t("teamName")} *</Label>
+                  <Label>{t("teamName")}</Label>
                   <Input
                     value={selectedTeam.name}
-                    onChange={(e) => setSelectedTeam({...selectedTeam, name: e.target.value})}
+                    onChange={(e) => { setSelectedTeam({...selectedTeam, name: e.target.value}); setValidationErrors(prev => ({...prev, editTeamName: false})); }}
+                    className={validationErrors.editTeamName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                   />
                 </div>
                 

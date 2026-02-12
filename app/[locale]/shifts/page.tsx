@@ -82,6 +82,7 @@ const ShiftsPage = () => {
   const [selectedShift, setSelectedShift] = useState<any>(null);
   const [selectedPikett, setSelectedPikett] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
   const [deleteShiftId, setDeleteShiftId] = useState<string | null>(null);
   const [isDeleteShiftDialogOpen, setIsDeleteShiftDialogOpen] = useState(false);
   const [deletePikettId, setDeletePikettId] = useState<string | null>(null);
@@ -157,10 +158,17 @@ const ShiftsPage = () => {
   };
 
   const handleCreateShift = async () => {
-    if (!newShift.name || !newShift.teamId || !newShift.startTime || !newShift.endTime || !newShift.senderMailbox) {
-      alert(t('fillAllRequired'));
+    const errors: Record<string, boolean> = {};
+    if (!newShift.name) errors.shiftName = true;
+    if (!newShift.teamId) errors.shiftTeam = true;
+    if (!newShift.startTime) errors.shiftStart = true;
+    if (!newShift.endTime) errors.shiftEnd = true;
+    if (!newShift.senderMailbox) errors.shiftMailbox = true;
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
     }
+    setValidationErrors({});
 
     setIsSubmitting(true);
     try {
@@ -180,7 +188,8 @@ const ShiftsPage = () => {
         senderMailbox: '',
         includedUserIds: [],
         excludedUserIds: [],
-        color: '#3b82f6'
+        color: '#3b82f6',
+        daysOfWeek: [1, 2, 3, 4, 5]
       });
     } catch (error) {
       console.error('Erreur lors de la création:', error);
@@ -191,10 +200,14 @@ const ShiftsPage = () => {
   };
 
   const handleCreatePikett = async () => {
-    if (!newPikett.name || !newPikett.teamId) {
-      alert(t('fillNameAndTeam'));
+    const errors: Record<string, boolean> = {};
+    if (!newPikett.name) errors.pikettName = true;
+    if (!newPikett.teamId) errors.pikettTeam = true;
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
     }
+    setValidationErrors({});
 
     setIsSubmitting(true);
     try {
@@ -232,6 +245,15 @@ const ShiftsPage = () => {
 
   const handleEditPikett = async () => {
     if (!selectedPikett) return;
+
+    const errors: Record<string, boolean> = {};
+    if (!selectedPikett.name) errors.editPikettName = true;
+    if (!selectedPikett.teamId) errors.editPikettTeam = true;
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors({});
 
     setIsSubmitting(true);
     try {
@@ -271,6 +293,18 @@ const ShiftsPage = () => {
 
   const handleEditShift = async () => {
     if (!selectedShift) return;
+
+    const errors: Record<string, boolean> = {};
+    if (!selectedShift.name) errors.editShiftName = true;
+    if (!selectedShift.teamId) errors.editShiftTeam = true;
+    if (!selectedShift.startTime) errors.editShiftStart = true;
+    if (!selectedShift.endTime) errors.editShiftEnd = true;
+    if (!selectedShift.senderMailbox) errors.editShiftMailbox = true;
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors({});
 
     setIsSubmitting(true);
     try {
@@ -847,7 +881,7 @@ const ShiftsPage = () => {
             </div>
             
             {viewType === 'piketts' ? (
-              <Dialog open={isCreatePikettDialogOpen} onOpenChange={setIsCreatePikettDialogOpen}>
+              <Dialog open={isCreatePikettDialogOpen} onOpenChange={(open) => { setIsCreatePikettDialogOpen(open); if (!open) setValidationErrors({}); }}>
                 <DialogTrigger asChild>
                   <Button className="bg-red-600 hover:bg-red-700">
                     <Plus className="w-4 h-4 mr-2" />
@@ -860,21 +894,22 @@ const ShiftsPage = () => {
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div>
-                      <Label>{t("pikettName")} *</Label>
+                      <Label>{t("pikettName")}</Label>
                       <Input
                         placeholder={t("pikettNamePlaceholder")}
                         value={newPikett.name}
-                        onChange={(e) => setNewPikett({...newPikett, name: e.target.value})}
+                        onChange={(e) => { setNewPikett({...newPikett, name: e.target.value}); setValidationErrors(prev => ({...prev, pikettName: false})); }}
+                        className={validationErrors.pikettName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                       />
                     </div>
-                    
+
                     <div>
-                      <Label>{tCommon("team")} *</Label>
+                      <Label>{tCommon("team")}</Label>
                       <Select
                         value={newPikett.teamId}
-                        onValueChange={(value) => setNewPikett({...newPikett, teamId: value})}
+                        onValueChange={(value) => { setNewPikett({...newPikett, teamId: value}); setValidationErrors(prev => ({...prev, pikettTeam: false})); }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={validationErrors.pikettTeam ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}>
                           <SelectValue placeholder={t("selectTeam")} />
                         </SelectTrigger>
                         <SelectContent>
@@ -923,7 +958,7 @@ const ShiftsPage = () => {
                 </DialogContent>
               </Dialog>
             ) : (
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <Dialog open={isCreateDialogOpen} onOpenChange={(open) => { setIsCreateDialogOpen(open); if (!open) setValidationErrors({}); }}>
                 <DialogTrigger asChild>
                   <Button className="bg-primary hover:bg-primary/90">
                     <Plus className="w-4 h-4 mr-2" />
@@ -942,7 +977,8 @@ const ShiftsPage = () => {
                         <Input
                           placeholder={t("shiftNamePlaceholder")}
                           value={newShift.name}
-                          onChange={(e) => setNewShift({...newShift, name: e.target.value})}
+                          onChange={(e) => { setNewShift({...newShift, name: e.target.value}); setValidationErrors(prev => ({...prev, shiftName: false})); }}
+                          className={validationErrors.shiftName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                         />
                       </div>
 
@@ -952,7 +988,8 @@ const ShiftsPage = () => {
                           <Input
                             type="time"
                             value={newShift.startTime}
-                            onChange={(e) => setNewShift({...newShift, startTime: e.target.value})}
+                            onChange={(e) => { setNewShift({...newShift, startTime: e.target.value}); setValidationErrors(prev => ({...prev, shiftStart: false})); }}
+                            className={validationErrors.shiftStart ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                           />
                         </div>
                         <div className="space-y-2">
@@ -960,15 +997,16 @@ const ShiftsPage = () => {
                           <Input
                             type="time"
                             value={newShift.endTime}
-                            onChange={(e) => setNewShift({...newShift, endTime: e.target.value})}
+                            onChange={(e) => { setNewShift({...newShift, endTime: e.target.value}); setValidationErrors(prev => ({...prev, shiftEnd: false})); }}
+                            className={validationErrors.shiftEnd ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                           />
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label>{tCommon("team")}</Label>
-                        <Select value={newShift.teamId} onValueChange={(value) => setNewShift({...newShift, teamId: value})}>
-                          <SelectTrigger>
+                        <Select value={newShift.teamId} onValueChange={(value) => { setNewShift({...newShift, teamId: value}); setValidationErrors(prev => ({...prev, shiftTeam: false})); }}>
+                          <SelectTrigger className={validationErrors.shiftTeam ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}>
                             <SelectValue placeholder={t("selectTeam")} />
                           </SelectTrigger>
                           <SelectContent>
@@ -982,13 +1020,13 @@ const ShiftsPage = () => {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>{t("senderMailbox")} *</Label>
+                        <Label>{t("senderMailbox")}</Label>
                         <Input
                           type="email"
                           placeholder="dispatcher@bnc.ch"
                           value={newShift.senderMailbox}
-                          onChange={(e) => setNewShift({...newShift, senderMailbox: e.target.value})}
-                          required
+                          onChange={(e) => { setNewShift({...newShift, senderMailbox: e.target.value}); setValidationErrors(prev => ({...prev, shiftMailbox: false})); }}
+                          className={validationErrors.shiftMailbox ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                         />
                         <p className="text-xs text-muted-foreground">{t("senderMailboxDesc")}</p>
                       </div>
@@ -1032,7 +1070,7 @@ const ShiftsPage = () => {
                       </Button>
                       <Button
                         onClick={handleCreateShift}
-                        disabled={isSubmitting || !newShift.name || !newShift.teamId || !newShift.startTime || !newShift.endTime || !newShift.senderMailbox}
+                        disabled={isSubmitting}
                         className="bg-primary hover:bg-primary/90"
                       >
                         {isSubmitting ? (
@@ -1051,7 +1089,7 @@ const ShiftsPage = () => {
 
         {/* Dialog de modification de pikett */}
         {selectedPikett && (
-          <Dialog open={isEditPikettDialogOpen} onOpenChange={setIsEditPikettDialogOpen}>
+          <Dialog open={isEditPikettDialogOpen} onOpenChange={(open) => { setIsEditPikettDialogOpen(open); if (!open) setValidationErrors({}); }}>
             <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{t("editPikett")}</DialogTitle>
@@ -1061,17 +1099,18 @@ const ShiftsPage = () => {
                   <Label>{t("pikettName")}</Label>
                   <Input
                     value={selectedPikett.name}
-                    onChange={(e) => setSelectedPikett({...selectedPikett, name: e.target.value})}
+                    onChange={(e) => { setSelectedPikett({...selectedPikett, name: e.target.value}); setValidationErrors(prev => ({...prev, editPikettName: false})); }}
+                    className={validationErrors.editPikettName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                   />
                 </div>
-                
+
                 <div>
                   <Label>{tCommon("team")}</Label>
                   <Select
                     value={selectedPikett.teamId}
-                    onValueChange={(value) => setSelectedPikett({...selectedPikett, teamId: value})}
+                    onValueChange={(value) => { setSelectedPikett({...selectedPikett, teamId: value}); setValidationErrors(prev => ({...prev, editPikettTeam: false})); }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={validationErrors.editPikettTeam ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1126,7 +1165,7 @@ const ShiftsPage = () => {
 
         {/* Dialog de modification de shift */}
         {selectedShift && (
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if (!open) setValidationErrors({}); }}>
             <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{t("editShift")}</DialogTitle>
@@ -1137,17 +1176,19 @@ const ShiftsPage = () => {
                     <Label>{t("shiftName")}</Label>
                     <Input
                       value={selectedShift.name}
-                      onChange={(e) => setSelectedShift({...selectedShift, name: e.target.value})}
+                      onChange={(e) => { setSelectedShift({...selectedShift, name: e.target.value}); setValidationErrors(prev => ({...prev, editShiftName: false})); }}
+                      className={validationErrors.editShiftName ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t("startTime")}</Label>
                       <Input
                         type="time"
                         value={selectedShift.startTime}
-                        onChange={(e) => setSelectedShift({...selectedShift, startTime: e.target.value})}
+                        onChange={(e) => { setSelectedShift({...selectedShift, startTime: e.target.value}); setValidationErrors(prev => ({...prev, editShiftStart: false})); }}
+                        className={validationErrors.editShiftStart ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1155,18 +1196,19 @@ const ShiftsPage = () => {
                       <Input
                         type="time"
                         value={selectedShift.endTime}
-                        onChange={(e) => setSelectedShift({...selectedShift, endTime: e.target.value})}
+                        onChange={(e) => { setSelectedShift({...selectedShift, endTime: e.target.value}); setValidationErrors(prev => ({...prev, editShiftEnd: false})); }}
+                        className={validationErrors.editShiftEnd ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>{tCommon("team")}</Label>
                     <Select
                       value={selectedShift.teamId}
-                      onValueChange={(value) => setSelectedShift({...selectedShift, teamId: value})}
+                      onValueChange={(value) => { setSelectedShift({...selectedShift, teamId: value}); setValidationErrors(prev => ({...prev, editShiftTeam: false})); }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={validationErrors.editShiftTeam ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1180,13 +1222,13 @@ const ShiftsPage = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>{t("senderMailbox")} *</Label>
+                    <Label>{t("senderMailbox")}</Label>
                     <Input
                       type="email"
                       placeholder="dispatcher@bnc.ch"
                       value={selectedShift.senderMailbox || ''}
-                      onChange={(e) => setSelectedShift({...selectedShift, senderMailbox: e.target.value})}
-                      required
+                      onChange={(e) => { setSelectedShift({...selectedShift, senderMailbox: e.target.value}); setValidationErrors(prev => ({...prev, editShiftMailbox: false})); }}
+                      className={validationErrors.editShiftMailbox ? 'border-red-400 ring-2 ring-red-100 shadow-[0_0_8px_rgba(239,68,68,0.15)]' : ''}
                     />
                     <p className="text-xs text-muted-foreground">{t("senderMailboxDesc")}</p>
                   </div>
