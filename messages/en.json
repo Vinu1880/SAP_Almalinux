@@ -39,7 +39,8 @@
     "active": "Active",
     "inactive": "Inactive",
     "select": "Select",
-    "selectDate": "Select a date"
+    "selectDate": "Select a date",
+    "dataLoadError": "Unable to load data. Please check that the database is running and try refreshing the page."
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -221,7 +222,7 @@
     "shiftEditError": "Error editing shift",
     "shiftDeleteError": "Error deleting shift",
     "shiftDuplicateError": "Error duplicating shift",
-    "loadError": "Error loading data.",
+    "loadError": "Some data could not be loaded. Check that the database is running and try refreshing the page.",
     "createShiftButton": "Create a Shift",
     "noPikettConfigured": "No pikett configured",
     "configurePiketts": "Configure on-call duties for your teams.",
@@ -342,7 +343,16 @@
     "selectUserFirst": "Select a user first to see their available shifts",
     "patternNameRequired": "Please provide a pattern name",
     "patternNamePlaceholder": "e.g.: Rotation Madlen",
-    "creating": "Creating..."
+    "creating": "Creating...",
+    "fillAllRequired": "Please fill in all required fields",
+    "invalidEmail": "Please enter a valid email address (e.g. name@example.com)",
+    "createUserError": "Error creating user",
+    "updateUserError": "Error updating user",
+    "deleteUserError": "Error deleting user",
+    "nameRequired": "Name is required",
+    "createTeamError": "Error creating team",
+    "updateTeamError": "Error updating team",
+    "deleteTeamError": "Error deleting team"
   },
   "settings": {
     "title": "Settings",

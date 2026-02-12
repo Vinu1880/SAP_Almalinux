@@ -36,7 +36,7 @@ export function useHolidays(year?: number) {
       setHolidays(data);
       
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export function useHolidays(year?: number) {
       
       return newHoliday;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la création');
+      setError(err instanceof Error ? err.message : 'Failed to create holiday');
       throw err;
     }
   }, []);
@@ -78,7 +78,7 @@ export function useHolidays(year?: number) {
       
       return updatedHoliday;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
+      setError(err instanceof Error ? err.message : 'Failed to update holiday');
       throw err;
     }
   }, []);
@@ -94,7 +94,7 @@ export function useHolidays(year?: number) {
       setHolidays(prev => prev.filter(h => h.id !== id));
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la suppression');
+      setError(err instanceof Error ? err.message : 'Failed to delete holiday');
       throw err;
     }
   }, []);
@@ -113,7 +113,7 @@ export function useHolidays(year?: number) {
       setHolidays(prev => [...prev, ...importedHolidays]);
       return importedHolidays;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de l\'import');
+      setError(err instanceof Error ? err.message : 'Failed to import holidays');
       throw err;
     }
   }, []);

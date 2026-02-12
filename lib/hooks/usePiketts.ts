@@ -35,7 +35,7 @@ export function usePiketts() {
       setPiketts(data);
       
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export function usePiketts() {
       
       return newPikett;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la création');
+      setError(err instanceof Error ? err.message : 'Failed to create pikett');
       throw err;
     }
   }, []);
@@ -77,7 +77,7 @@ export function usePiketts() {
       
       return updatedPikett;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
+      setError(err instanceof Error ? err.message : 'Failed to update pikett');
       throw err;
     }
   }, []);
@@ -93,7 +93,7 @@ export function usePiketts() {
       setPiketts(prev => prev.filter(p => p.id !== id));
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la suppression');
+      setError(err instanceof Error ? err.message : 'Failed to delete pikett');
       throw err;
     }
   }, []);

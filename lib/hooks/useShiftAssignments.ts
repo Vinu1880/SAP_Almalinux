@@ -98,7 +98,7 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
     setError(null);
 
     try {
-      // Construire les paramètres de requête
+      // Build query parameters
       const params = new URLSearchParams();
       if (options.dateFilter) params.append('dateFilter', options.dateFilter);
       if (options.teamId) params.append('teamId', options.teamId);
@@ -157,7 +157,7 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
 
       const result = await response.json();
 
-      // Rafraîchir les données après création
+      // Refresh data after creation
       await fetchAssignments();
       await fetchStats();
 
@@ -186,12 +186,12 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
 
       const updated = await response.json();
 
-      // Mettre à jour localement
+      // Update locally
       setAssignments(prev =>
         prev.map(a => a.id === id ? updated : a)
       );
 
-      // Rafraîchir les stats
+      // Refresh stats
       await fetchStats();
 
       return updated;
@@ -212,10 +212,10 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
         throw new Error(errorData.error || 'Failed to delete assignment');
       }
 
-      // Retirer localement
+      // Remove locally
       setAssignments(prev => prev.filter(a => a.id !== id));
 
-      // Rafraîchir les stats
+      // Refresh stats
       await fetchStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');

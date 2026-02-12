@@ -993,12 +993,12 @@ const UsersPage = () => {
 
   const handleCreateUser = async () => {
     if (!newUser.firstName || !newUser.lastName || !newUser.email) {
-      showError('Please fill in all required fields');
+      showError(t('fillAllRequired'));
       return;
     }
 
     if (!isValidEmail(newUser.email)) {
-      showError('Please enter a valid email address (e.g. name@example.com)');
+      showError(t('invalidEmail'));
       return;
     }
 
@@ -1045,7 +1045,7 @@ const UsersPage = () => {
       } else if (error.message) {
         showError(error.message);
       } else {
-        showError('Error creating user');
+        showError(t('createUserError'));
       }
     } finally {
       setIsSubmitting(false);
@@ -1056,12 +1056,12 @@ const UsersPage = () => {
     if (!selectedUser) return;
 
     if (!selectedUser.firstName || !selectedUser.lastName || !selectedUser.email) {
-      showError('Please fill in all required fields');
+      showError(t('fillAllRequired'));
       return;
     }
 
     if (!isValidEmail(selectedUser.email)) {
-      showError('Please enter a valid email address (e.g. name@example.com)');
+      showError(t('invalidEmail'));
       return;
     }
 
@@ -1102,7 +1102,7 @@ const UsersPage = () => {
       } else if (error.message) {
         showError(error.message);
       } else {
-        showError('Error updating user');
+        showError(t('updateUserError'));
       }
     } finally {
       setIsSubmitting(false);
@@ -1118,13 +1118,13 @@ const UsersPage = () => {
       setDeleteUserId(null);
     } catch (error) {
       console.error('Error:', error);
-      showError('Error deleting user');
+      showError(t('deleteUserError'));
     }
   };
 
   const handleCreateTeam = async () => {
     if (!newTeam.name) {
-      showError('Name is required');
+      showError(t('nameRequired'));
       return;
     }
 
@@ -1141,7 +1141,7 @@ const UsersPage = () => {
       refetchTeams();
     } catch (error) {
       console.error('Error:', error);
-      showError('Error creating team');
+      showError(t('createTeamError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -1170,7 +1170,7 @@ const UsersPage = () => {
       setSelectedTeam(null);
     } catch (error) {
       console.error('Error:', error);
-      showError('Error updating team');
+      showError(t('updateTeamError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -1186,7 +1186,7 @@ const UsersPage = () => {
       setDeleteTeamId(null);
     } catch (error) {
       console.error('Error:', error);
-      showError('Error deleting team');
+      showError(t('deleteTeamError'));
     }
   };
 

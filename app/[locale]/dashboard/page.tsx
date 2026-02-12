@@ -504,7 +504,7 @@ const DashboardPage = () => {
 
       const createdEvent = await outlookResponse.json();
 
-      // 2. Marquer l'ancienne assignation comme "resent"
+      // 2. Mark the old assignment as "resent"
       const patchResponse = await authFetch(`/api/shift-assignments/${resendingAssignment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -790,27 +790,6 @@ const DashboardPage = () => {
     </Card>
   );
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Navigation />
-        <main className="p-6">
-          <Card className="bg-red-50 border-red-200">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-6 h-6 text-red-600" />
-                <div>
-                  <h3 className="font-semibold text-red-800">{tCommon('error')}</h3>
-                  <p className="text-red-600">{error}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
@@ -828,6 +807,20 @@ const DashboardPage = () => {
                 )}
                 <p className={`text-sm font-medium ${syncMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
                   {syncMessage.text}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Connection/data error banner */}
+        {error && !loading && (
+          <Card className="bg-amber-50 border-amber-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <p className="text-sm font-medium text-amber-800">
+                  {tCommon('dataLoadError')}
                 </p>
               </div>
             </CardContent>
@@ -1295,7 +1288,7 @@ const DashboardPage = () => {
         </Tabs>
       </main>
 
-      {/* Modal de resend */}
+      {/* Resend modal */}
       <Dialog open={!!resendingAssignment} onOpenChange={(open) => {
         if (!open) {
           setResendingAssignment(null);

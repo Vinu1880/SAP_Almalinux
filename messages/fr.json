@@ -39,7 +39,8 @@
     "active": "Actif",
     "inactive": "Inactif",
     "select": "Sélectionner",
-    "selectDate": "Sélectionner une date"
+    "selectDate": "Sélectionner une date",
+    "dataLoadError": "Impossible de charger les données. Vérifiez que la base de données est en cours d'exécution et essayez de rafraîchir la page."
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -221,7 +222,7 @@
     "shiftEditError": "Erreur lors de la modification du shift",
     "shiftDeleteError": "Erreur lors de la suppression du shift",
     "shiftDuplicateError": "Erreur lors de la duplication du shift",
-    "loadError": "Erreur lors du chargement des données.",
+    "loadError": "Certaines données n'ont pas pu être chargées. Vérifiez que la base de données est en cours d'exécution et essayez de rafraîchir la page.",
     "createShiftButton": "Créer un Shift",
     "noPikettConfigured": "Aucun pikett configuré",
     "configurePiketts": "Configurez les astreintes pour vos équipes.",
@@ -342,7 +343,16 @@
     "selectUserFirst": "Sélectionnez d'abord un utilisateur pour voir ses shifts disponibles",
     "patternNameRequired": "Veuillez donner un nom au pattern",
     "patternNamePlaceholder": "ex: Rotation Madlen",
-    "creating": "Création..."
+    "creating": "Création...",
+    "fillAllRequired": "Veuillez remplir tous les champs obligatoires",
+    "invalidEmail": "Veuillez entrer une adresse email valide (ex: nom@exemple.com)",
+    "createUserError": "Erreur lors de la création de l'utilisateur",
+    "updateUserError": "Erreur lors de la mise à jour de l'utilisateur",
+    "deleteUserError": "Erreur lors de la suppression de l'utilisateur",
+    "nameRequired": "Le nom est obligatoire",
+    "createTeamError": "Erreur lors de la création de l'équipe",
+    "updateTeamError": "Erreur lors de la mise à jour de l'équipe",
+    "deleteTeamError": "Erreur lors de la suppression de l'équipe"
   },
   "settings": {
     "title": "Paramètres",

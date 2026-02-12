@@ -39,7 +39,8 @@
     "active": "Aktiv",
     "inactive": "Inaktiv",
     "select": "Auswählen",
-    "selectDate": "Datum auswählen"
+    "selectDate": "Datum auswählen",
+    "dataLoadError": "Daten konnten nicht geladen werden. Bitte überprüfen Sie, ob die Datenbank läuft und versuchen Sie die Seite neu zu laden."
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -221,7 +222,7 @@
     "shiftEditError": "Fehler beim Bearbeiten der Schicht",
     "shiftDeleteError": "Fehler beim Löschen der Schicht",
     "shiftDuplicateError": "Fehler beim Duplizieren der Schicht",
-    "loadError": "Fehler beim Laden der Daten.",
+    "loadError": "Einige Daten konnten nicht geladen werden. Bitte überprüfen Sie, ob die Datenbank läuft und versuchen Sie die Seite neu zu laden.",
     "createShiftButton": "Schicht erstellen",
     "noPikettConfigured": "Kein Pikett konfiguriert",
     "configurePiketts": "Konfigurieren Sie die Bereitschaftsdienste für Ihre Teams.",
@@ -342,7 +343,16 @@
     "selectUserFirst": "Wählen Sie zuerst einen Benutzer, um seine verfügbaren Schichten anzuzeigen",
     "patternNameRequired": "Bitte geben Sie einen Musternamen ein",
     "patternNamePlaceholder": "z.B.: Rotation Madlen",
-    "creating": "Erstellen..."
+    "creating": "Erstellen...",
+    "fillAllRequired": "Bitte füllen Sie alle Pflichtfelder aus",
+    "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein (z.B. name@beispiel.com)",
+    "createUserError": "Fehler beim Erstellen des Benutzers",
+    "updateUserError": "Fehler beim Aktualisieren des Benutzers",
+    "deleteUserError": "Fehler beim Löschen des Benutzers",
+    "nameRequired": "Name ist erforderlich",
+    "createTeamError": "Fehler beim Erstellen des Teams",
+    "updateTeamError": "Fehler beim Aktualisieren des Teams",
+    "deleteTeamError": "Fehler beim Löschen des Teams"
   },
   "settings": {
     "title": "Einstellungen",

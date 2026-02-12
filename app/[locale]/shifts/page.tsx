@@ -795,27 +795,20 @@ const ShiftsPage = () => {
     );
   }
 
-  if (shiftsError || teamsError || usersError) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Navigation />
-        <div className="p-6">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {t("loadError")}
-            </AlertDescription>
-          </Alert>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
-      
+
       <main className="p-6 space-y-6">
+        {/* Connection/data error banner */}
+        {(shiftsError || teamsError || usersError) && !shiftsLoading && !teamsLoading && !usersLoading && (
+          <Alert className="bg-amber-50 border-amber-200">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800">
+              {t("loadError")}
+            </AlertDescription>
+          </Alert>
+        )}
         {/* Header avec toggle */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
           <div>
