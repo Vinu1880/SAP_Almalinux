@@ -9,8 +9,6 @@ services:
       POSTGRES_USER: sa_sap
       POSTGRES_PASSWORD: "Jq1v*lHHU_;sT+X^"
       POSTGRES_DB: shiftautoplanner
-    ports:
-      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -44,7 +42,13 @@ services:
       - NEXT_PUBLIC_AZURE_AD_CLIENT_ID=${NEXT_PUBLIC_AZURE_AD_CLIENT_ID}
       - NEXT_PUBLIC_AZURE_AD_TENANT_ID=${NEXT_PUBLIC_AZURE_AD_TENANT_ID}
       - NEXT_PUBLIC_AZURE_AD_REDIRECT_URI=${NEXT_PUBLIC_AZURE_AD_REDIRECT_URI}
+      - NEXT_PUBLIC_URL=${NEXT_PUBLIC_URL}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID}
       - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET}
+      - AZURE_AD_TENANT_ID=${AZURE_AD_TENANT_ID}
+      - MICROSOFT_GRAPH_REFRESH_TOKEN=${MICROSOFT_GRAPH_REFRESH_TOKEN}
+      - CRON_SECRET=${CRON_SECRET}
+      - BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY}
     volumes:
       - ./backups:/app/backups
     networks:

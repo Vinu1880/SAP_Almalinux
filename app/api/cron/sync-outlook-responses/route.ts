@@ -2,6 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import crypto from 'crypto';
+import { logSecurityEvent } from '@/lib/securityLogger';
 
 // Get a valid access token
 async function getAccessToken(): Promise<string> {
@@ -76,13 +78,28 @@ export async function POST(request: NextRequest) {
   try {
     // Verify authentication
     const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET || 'dev-secret-change-in-production';
+    const cronSecret = process.env.CRON_SECRET;
 
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    if (!cronSecret || cronSecret === 'dev-secret-change-in-production') {
+      console.error('[SYNC] CRON_SECRET is not configured');
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+
+    const expectedValue = `Bearer ${cronSecret}`;
+    if (
+      !authHeader ||
+      authHeader.length !== expectedValue.length ||
+      !crypto.timingSafeEqual(
+        Buffer.from(authHeader, 'utf-8'),
+        Buffer.from(expectedValue, 'utf-8')
+      )
+    ) {
+      logSecurityEvent({
+        type: 'CRON_AUTH_FAILURE',
+        ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || undefined,
+        path: '/api/cron/sync-outlook-responses',
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Retrieve all PENDING assignments with an outlookEventId

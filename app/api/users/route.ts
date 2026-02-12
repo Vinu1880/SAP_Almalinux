@@ -3,11 +3,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, createUserSchema } from '@/lib/validation';
 
 // GET - Fetch all users with team relations
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const users = await prisma.user.findMany({
@@ -63,39 +68,47 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const body = await request.json();
 
+    const validation = validateBody(createUserSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
     const userData: any = {
-      firstName: body.firstName,
-      lastName: body.lastName,
-      email: body.email.toLowerCase(),
-      phone: body.phone || null,
-      role: body.role || null,
-      location: body.location || null,
-      workPercent: body.workPercent || 100,
-      status: body.status || 'ACTIVE',
-      notes: body.notes || null
+      firstName: validation.data.firstName,
+      lastName: validation.data.lastName,
+      email: validation.data.email.toLowerCase(),
+      phone: validation.data.phone || null,
+      role: validation.data.role || null,
+      location: validation.data.location || null,
+      workPercent: validation.data.workPercent || 100,
+      status: validation.data.status || 'ACTIVE',
+      notes: validation.data.notes || null
     };
 
     // Only set teamId if provided and valid
-    if (body.teamId && body.teamId !== 'none') {
-      userData.teamId = body.teamId;
+    if (validation.data.teamId && validation.data.teamId !== 'none') {
+      userData.teamId = validation.data.teamId;
     }
 
     // Store rotation config as JSON
-    if (body.rotationConfig && body.rotationConfig.patternId) {
+    if (validation.data.rotationConfig && validation.data.rotationConfig.patternId) {
       userData.rotationConfig = {
-        patternId: body.rotationConfig.patternId,
-        priority: body.rotationConfig.priority || 'medium',
-        allowedShiftTypes: body.rotationConfig.allowedShiftTypes || []
+        patternId: validation.data.rotationConfig.patternId,
+        priority: validation.data.rotationConfig.priority || 'medium',
+        allowedShiftTypes: validation.data.rotationConfig.allowedShiftTypes || []
       };
     } else {
       userData.rotationConfig = null;
     }
 
-    if (body.availability) {
-      userData.availability = body.availability;
+    if (validation.data.availability) {
+      userData.availability = validation.data.availability;
     }
 
     const user = await prisma.user.create({
@@ -111,6 +124,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE',
         entity: 'USER',
         entityId: user.id,
+        userId: auth.user.id,
         data: user
       }
     });

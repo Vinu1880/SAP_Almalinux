@@ -3,21 +3,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, checkConsecutiveSchema } from '@/lib/validation';
 
 // POST - Check if a user has consecutive shift assignments
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
 
   try {
-    const { userId, date } = await request.json();
-
-    if (!userId || !date) {
-      return NextResponse.json(
-        { error: 'userId and date are required' },
-        { status: 400 }
-      );
+    const body = await request.json();
+    const validation = validateBody(checkConsecutiveSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
+    const { userId, date } = validation.data;
 
     const targetDate = new Date(date);
     const prevDate = new Date(targetDate);

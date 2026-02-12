@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, updateRotationPatternSchema } from '@/lib/validation';
 
 // GET - Retrieve a specific pattern
 export async function GET(
@@ -11,6 +13,9 @@ export async function GET(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const { id } = await params;
@@ -43,9 +48,17 @@ export async function PUT(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const { id } = await params;
     const body = await request.json();
+
+    const validation = validateBody(updateRotationPatternSchema, body);
+    if (validation.success === false) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
 
     const pattern = await prisma.rotationPattern.update({
       where: { id },
@@ -55,6 +68,16 @@ export async function PUT(
         cycleLength: body.cycleLength,
         weeks: body.weeks,
         userShifts: body.userShifts || []
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'UPDATE',
+        entity: 'ROTATION_PATTERN',
+        entityId: pattern.id,
+        userId: auth.user.id,
+        data: pattern
       }
     });
 
@@ -76,11 +99,24 @@ export async function DELETE(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const { id } = await params;
 
     const pattern = await prisma.rotationPattern.delete({
       where: { id }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'DELETE',
+        entity: 'ROTATION_PATTERN',
+        entityId: pattern.id,
+        userId: auth.user.id,
+        data: pattern
+      }
     });
 
     return NextResponse.json(pattern);

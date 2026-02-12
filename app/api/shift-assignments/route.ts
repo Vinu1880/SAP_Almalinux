@@ -3,11 +3,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, createBulkShiftAssignmentsSchema } from '@/lib/validation';
 
 // GET - Retrieve all shift assignments with filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -87,17 +91,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl2 = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl2) return rl2;
 
   try {
     const body = await request.json();
-    const { assignments } = body; // Array of objects {date, shiftId, userId, status}
-
-    if (!assignments || !Array.isArray(assignments)) {
-      return NextResponse.json(
-        { error: 'Invalid assignments data' },
-        { status: 400 }
-      );
+    const validation = validateBody(createBulkShiftAssignmentsSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
+    const { assignments } = validation.data;
 
     // Create all assignments using createMany
     const result = await prisma.shiftAssignment.createMany({
@@ -116,6 +119,7 @@ export async function POST(request: NextRequest) {
       data: {
         action: 'CREATE_BULK',
         entity: 'SHIFT_ASSIGNMENT',
+        userId: auth.user.id,
         data: { count: result.count, assignments }
       }
     });

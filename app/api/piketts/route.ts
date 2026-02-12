@@ -3,11 +3,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, createPikettSchema } from '@/lib/validation';
 
 // GET - Retrieve all piketts with team relations
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const piketts = await prisma.pikett.findMany({
@@ -19,7 +24,7 @@ export async function GET(request: NextRequest) {
         name: 'asc'
       }
     });
-    
+
     return NextResponse.json(piketts);
   } catch (error) {
     console.error('Error fetching piketts:', error);
@@ -35,8 +40,16 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const body = await request.json();
+
+    const validation = validateBody(createPikettSchema, body);
+    if (validation.success === false) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
 
     const pikett = await prisma.pikett.create({
       data: {
@@ -56,7 +69,17 @@ export async function POST(request: NextRequest) {
         team: true
       }
     });
-    
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'CREATE',
+        entity: 'PIKETT',
+        entityId: pikett.id,
+        userId: auth.user.id,
+        data: pikett
+      }
+    });
+
     return NextResponse.json(pikett, { status: 201 });
   } catch (error) {
     console.error('Error creating pikett:', error);

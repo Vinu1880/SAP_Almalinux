@@ -3,11 +3,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, createHolidaySchema } from '@/lib/validation';
 
 // GET - Fetch holidays with optional year and canton filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -52,17 +56,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl2 = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl2) return rl2;
 
   try {
     const body = await request.json();
-    const { name, date, cantons, type, recurring, description } = body;
-
-    if (!name || !date || !cantons || !type) {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, date, cantons, type' },
-        { status: 400 }
-      );
+    const validation = validateBody(createHolidaySchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
+    const { name, date, cantons, type, recurring, description } = validation.data;
 
     const holiday = await prisma.holiday.create({
       data: {
@@ -72,6 +75,17 @@ export async function POST(request: NextRequest) {
         type,
         recurring: recurring || false,
         description: description || null
+      }
+    });
+
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        action: 'CREATE',
+        entity: 'HOLIDAY',
+        entityId: holiday.id,
+        userId: auth.user.id,
+        data: { name, date, cantons, type }
       }
     });
 

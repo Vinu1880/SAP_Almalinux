@@ -22,6 +22,10 @@ export const msalConfig: Configuration = {
   },
 
   system: {
+    tokenRenewalOffsetSeconds: 300,
+    windowHashTimeout: 60000,
+    iframeHashTimeout: 10000,
+    loadFrameTimeout: 10000,
     loggerOptions: {
       loggerCallback: (level, message, containsPii) => {
         if (containsPii) return;

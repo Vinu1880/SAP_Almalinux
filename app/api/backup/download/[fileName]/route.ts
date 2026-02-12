@@ -1,6 +1,10 @@
 // app/api/backup/download/[fileName]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { safePath } from '@/lib/pathSecurity';
+import { verifySHA256 } from '@/lib/backup-crypto';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import fs from 'fs';
 import path from 'path';
 
@@ -12,27 +16,60 @@ export async function GET(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.backup);
+  if (rl) return rl;
+
   try {
     const { fileName } = await params;
     const backupsDir = path.join(process.cwd(), 'backups');
-    const filePath = path.join(backupsDir, fileName);
-    
+
+    const filePath = safePath(backupsDir, fileName);
+    if (!filePath) {
+      return NextResponse.json(
+        { error: 'Invalid file name' },
+        { status: 400 }
+      );
+    }
+
     if (!fs.existsSync(filePath)) {
       return NextResponse.json(
         { error: 'File not found' },
         { status: 404 }
       );
     }
-    
+
     const fileContent = fs.readFileSync(filePath);
-    
+
+    const checksumPath = filePath + '.sha256';
+    if (fs.existsSync(checksumPath)) {
+      const expectedHash = fs.readFileSync(checksumPath, 'utf-8').trim();
+      if (!verifySHA256(fileContent, expectedHash)) {
+        return NextResponse.json(
+          { error: 'Backup integrity check failed. File may be corrupted.' },
+          { status: 500 }
+        );
+      }
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'DOWNLOAD',
+        entity: 'BACKUP',
+        entityId: fileName,
+        userId: auth.user.id,
+        data: { fileName }
+      }
+    });
+
+    const contentType = fileName.endsWith('.enc') ? 'application/octet-stream' : 'application/json';
+
     return new NextResponse(fileContent, {
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${fileName}"`,
       },
     });
-    
+
   } catch (error) {
     console.error('Error:', error);
     return NextResponse.json(

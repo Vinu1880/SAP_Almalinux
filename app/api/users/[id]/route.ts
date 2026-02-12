@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, updateUserSchema } from '@/lib/validation';
 
 // GET - Fetch a specific user by ID
 export async function GET(
@@ -11,6 +13,9 @@ export async function GET(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const { id } = await params;
@@ -70,42 +75,50 @@ export async function PUT(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const { id } = await params;
     const body = await request.json();
 
+    const validation = validateBody(updateUserSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
     const updateData: any = {};
 
-    if (body.firstName !== undefined) updateData.firstName = body.firstName;
-    if (body.lastName !== undefined) updateData.lastName = body.lastName;
-    if (body.email !== undefined) updateData.email = body.email.toLowerCase();
-    if (body.phone !== undefined) updateData.phone = body.phone || null;
-    if (body.location !== undefined) updateData.location = body.location || null;
-    if (body.role !== undefined) updateData.role = body.role || null;
-    if (body.workPercent !== undefined) updateData.workPercent = body.workPercent;
-    if (body.status !== undefined) updateData.status = body.status;
-    if (body.notes !== undefined) updateData.notes = body.notes || null;
+    if (validation.data.firstName !== undefined) updateData.firstName = validation.data.firstName;
+    if (validation.data.lastName !== undefined) updateData.lastName = validation.data.lastName;
+    if (validation.data.email !== undefined) updateData.email = validation.data.email.toLowerCase();
+    if (validation.data.phone !== undefined) updateData.phone = validation.data.phone || null;
+    if (validation.data.location !== undefined) updateData.location = validation.data.location || null;
+    if (validation.data.role !== undefined) updateData.role = validation.data.role || null;
+    if (validation.data.workPercent !== undefined) updateData.workPercent = validation.data.workPercent;
+    if (validation.data.status !== undefined) updateData.status = validation.data.status;
+    if (validation.data.notes !== undefined) updateData.notes = validation.data.notes || null;
 
     // Handle teamId - set to null if 'none' or empty
-    if (body.teamId !== undefined) {
-      updateData.teamId = (!body.teamId || body.teamId === 'none' || body.teamId === '') ? null : body.teamId;
+    if (validation.data.teamId !== undefined) {
+      updateData.teamId = (!validation.data.teamId || validation.data.teamId === 'none' || validation.data.teamId === '') ? null : validation.data.teamId;
     }
 
     // Store rotation config as JSON
-    if (body.rotationConfig !== undefined) {
-      if (body.rotationConfig && body.rotationConfig.patternId) {
+    if (validation.data.rotationConfig !== undefined) {
+      if (validation.data.rotationConfig && validation.data.rotationConfig.patternId) {
         updateData.rotationConfig = {
-          patternId: body.rotationConfig.patternId,
-          priority: body.rotationConfig.priority || 'medium',
-          allowedShiftTypes: body.rotationConfig.allowedShiftTypes || []
+          patternId: validation.data.rotationConfig.patternId,
+          priority: validation.data.rotationConfig.priority || 'medium',
+          allowedShiftTypes: validation.data.rotationConfig.allowedShiftTypes || []
         };
       } else {
         updateData.rotationConfig = null;
       }
     }
 
-    if (body.availability !== undefined) {
-      updateData.availability = body.availability;
+    if (validation.data.availability !== undefined) {
+      updateData.availability = validation.data.availability;
     }
 
     const user = await prisma.user.update({
@@ -122,6 +135,7 @@ export async function PUT(
         action: 'UPDATE',
         entity: 'USER',
         entityId: user.id,
+        userId: auth.user.id,
         data: { before: body, after: user }
       }
     });
@@ -153,6 +167,9 @@ export async function DELETE(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const { id } = await params;
 
@@ -177,6 +194,7 @@ export async function DELETE(
         action: 'DELETE',
         entity: 'USER',
         entityId: id,
+        userId: auth.user.id,
         data: user
       }
     });

@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, updateAssignmentSchema } from '@/lib/validation';
 
 // GET - Retrieve a specific assignment
 export async function GET(
@@ -11,6 +13,8 @@ export async function GET(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const { id } = await params;
@@ -54,10 +58,16 @@ export async function PUT(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl2 = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl2) return rl2;
 
   try {
     const { id } = await params;
     const body = await request.json();
+    const validation = validateBody(updateAssignmentSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
 
     const updateData: any = {};
 
@@ -101,6 +111,7 @@ export async function PUT(
         action: 'UPDATE',
         entity: 'SHIFT_ASSIGNMENT',
         entityId: assignment.id,
+        userId: auth.user.id,
         data: { before: body, after: assignment }
       }
     });
@@ -122,14 +133,20 @@ export async function PATCH(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl3 = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl3) return rl3;
 
   try {
     const { id } = await params;
     const body = await request.json();
+    const validation = validateBody(updateAssignmentSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
 
     const assignment = await prisma.shiftAssignment.update({
       where: { id },
-      data: body,
+      data: validation.data,
       include: {
         user: {
           include: {
@@ -141,6 +158,17 @@ export async function PATCH(
             team: true
           }
         }
+      }
+    });
+
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        action: 'PATCH',
+        entity: 'SHIFT_ASSIGNMENT',
+        entityId: assignment.id,
+        userId: auth.user.id,
+        data: { changes: validation.data }
       }
     });
 
@@ -161,6 +189,8 @@ export async function DELETE(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl4 = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl4) return rl4;
 
   try {
     const { id } = await params;
@@ -175,6 +205,7 @@ export async function DELETE(
         action: 'DELETE',
         entity: 'SHIFT_ASSIGNMENT',
         entityId: id,
+        userId: auth.user.id,
         data: assignment
       }
     });

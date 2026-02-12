@@ -3,22 +3,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, importHolidaysSchema } from '@/lib/validation';
 
 // POST - Import standard holidays
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
 
   try {
     const body = await request.json();
-    const { year, cantons } = body;
-
-    if (!year || !cantons || !Array.isArray(cantons)) {
-      return NextResponse.json(
-        { error: 'Year and cantons array are required' },
-        { status: 400 }
-      );
+    const validation = validateBody(importHolidaysSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
+    const { year, cantons } = validation.data;
 
     const standardHolidays = getStandardSwissHolidays(year, cantons);
     const createdHolidays = [];
@@ -45,6 +46,16 @@ export async function POST(request: NextRequest) {
         createdHolidays.push(holiday);
       }
     }
+
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        action: 'IMPORT',
+        entity: 'HOLIDAY',
+        userId: auth.user.id,
+        data: { year, cantons, importedCount: createdHolidays.length }
+      }
+    });
 
     return NextResponse.json(createdHolidays, { status: 201 });
   } catch (error) {

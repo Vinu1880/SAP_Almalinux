@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, updateTeamSchema } from '@/lib/validation';
 
 // GET - Retrieve a team by ID
 export async function GET(
@@ -11,6 +13,9 @@ export async function GET(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const { id } = await params;
@@ -55,38 +60,46 @@ export async function PUT(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const { id } = await params;
     const body = await request.json();
 
+    const validation = validateBody(updateTeamSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
     // Prepare update data
     const updateData: any = {};
 
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.description !== undefined) updateData.description = body.description || null;
-    if (body.color !== undefined) updateData.color = body.color;
+    if (validation.data.name !== undefined) updateData.name = validation.data.name;
+    if (validation.data.description !== undefined) updateData.description = validation.data.description || null;
+    if (validation.data.color !== undefined) updateData.color = validation.data.color;
 
     // Handle leadId separately - IMPORTANT to fix the lead assignment bug
-    if (body.leadId !== undefined) {
-      if (body.leadId === 'none' || body.leadId === '' || body.leadId === null) {
+    if (validation.data.leadId !== undefined) {
+      if (validation.data.leadId === 'none' || validation.data.leadId === '' || validation.data.leadId === null) {
         updateData.leadId = null;
       } else {
         // Verify that the user exists
         const userExists = await prisma.user.findUnique({
-          where: { id: body.leadId }
+          where: { id: validation.data.leadId }
         });
 
         if (userExists) {
-          updateData.leadId = body.leadId;
+          updateData.leadId = validation.data.leadId;
         } else {
-          console.warn(`User with id ${body.leadId} not found, updating team without lead`);
+          console.warn(`User with id ${validation.data.leadId} not found, updating team without lead`);
           updateData.leadId = null;
         }
       }
     }
 
     // Handle team members if provided
-    if (body.memberIds !== undefined && Array.isArray(body.memberIds)) {
+    if (validation.data.memberIds !== undefined && Array.isArray(validation.data.memberIds)) {
       // Get current members
       const currentMembers = await prisma.user.findMany({
         where: { teamId: id },
@@ -96,11 +109,11 @@ export async function PUT(
 
       // Determine users to remove from the team
       const membersToRemove = currentMemberIds.filter(
-        memberId => !body.memberIds.includes(memberId)
+        memberId => !validation.data.memberIds!.includes(memberId)
       );
 
       // Determine users to add to the team
-      const membersToAdd = body.memberIds.filter(
+      const membersToAdd = validation.data.memberIds!.filter(
         (memberId: string) => !currentMemberIds.includes(memberId)
       );
 
@@ -147,6 +160,7 @@ export async function PUT(
         action: 'UPDATE',
         entity: 'TEAM',
         entityId: team.id,
+        userId: auth.user.id,
         data: { before: body, after: team }
       }
     });
@@ -168,6 +182,9 @@ export async function DELETE(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
 
   try {
     const { id } = await params;
@@ -207,6 +224,7 @@ export async function DELETE(
         action: 'DELETE',
         entity: 'TEAM',
         entityId: id,
+        userId: auth.user.id,
         data: team
       }
     });

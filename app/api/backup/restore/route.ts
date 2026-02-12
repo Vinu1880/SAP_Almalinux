@@ -1,8 +1,11 @@
 // app/api/backup/restore/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { safePath } from '@/lib/pathSecurity';
+import { decryptBackup, verifySHA256 } from '@/lib/backup-crypto';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { logSecurityEvent } from '@/lib/securityLogger';
 import fs from 'fs';
 import path from 'path';
 
@@ -11,14 +14,24 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.restore);
+  if (rl) return rl;
+
   try {
     const body = await request.json();
     let data;
+    let backupSource = 'direct-upload';
 
-    // If a fileName is provided, read from file
     if (body.fileName) {
       const backupsDir = path.join(process.cwd(), 'backups');
-      const filePath = path.join(backupsDir, body.fileName);
+
+      const filePath = safePath(backupsDir, body.fileName);
+      if (!filePath) {
+        return NextResponse.json(
+          { error: 'Invalid file name' },
+          { status: 400 }
+        );
+      }
 
       if (!fs.existsSync(filePath)) {
         return NextResponse.json(
@@ -27,24 +40,79 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const backup = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      const fileContent = fs.readFileSync(filePath);
+
+      // SHA-256 integrity check
+      const checksumPath = filePath + '.sha256';
+      if (fs.existsSync(checksumPath)) {
+        const expectedHash = fs.readFileSync(checksumPath, 'utf-8').trim();
+        if (!verifySHA256(fileContent, expectedHash)) {
+          logSecurityEvent({
+            type: 'BACKUP_INTEGRITY_FAILURE',
+            userEmail: auth.user.mail,
+            details: `fileName=${body.fileName}`,
+          });
+          return NextResponse.json(
+            { error: 'Backup integrity check failed. File may be corrupted or tampered with.' },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Decrypt if encrypted
+      let jsonString: string;
+      if (body.fileName.endsWith('.enc')) {
+        jsonString = decryptBackup(fileContent);
+      } else {
+        jsonString = fileContent.toString('utf-8');
+      }
+
+      const backup = JSON.parse(jsonString);
       data = backup.data || backup;
-    }
-    // Otherwise, use data directly from the body
-    else if (body.data) {
+      backupSource = body.fileName;
+    } else if (body.data) {
       data = body.data;
-    }
-    // Fallback: the body is the data itself
-    else {
+    } else {
       data = body;
     }
 
-    // Verify that prisma is available
+    // Phase 1: Return confirmation preview if not confirmed
+    if (!body.confirmed) {
+      const counts = {
+        teams: data.teams?.length || 0,
+        users: data.users?.length || 0,
+        shifts: data.shifts?.length || 0,
+        piketts: data.piketts?.length || 0,
+        rotationPatterns: data.rotationPatterns?.length || 0,
+        shiftAssignments: data.shiftAssignments?.length || 0,
+        outOfOfficeEvents: data.outOfOfficeEvents?.length || 0,
+        auditLogs: data.auditLogs?.length || 0,
+      };
+
+      return NextResponse.json({
+        requiresConfirmation: true,
+        source: backupSource,
+        counts,
+        warning: 'This will DELETE ALL existing data and replace it with the backup. This action cannot be undone.',
+      });
+    }
+
+    // Phase 2: Execute restore
+    await prisma.auditLog.create({
+      data: {
+        action: 'RESTORE_START',
+        entity: 'BACKUP',
+        entityId: backupSource,
+        userId: auth.user.id,
+        data: { source: backupSource }
+      }
+    });
+
     if (!prisma) {
       throw new Error('Prisma client not initialized');
     }
 
-    // STEP 1: Clean the database (fast transaction)
+    // STEP 1: Clean the database
     await prisma.$transaction(async (tx) => {
       await tx.auditLog.deleteMany();
       await tx.shiftAssignment.deleteMany();
@@ -268,6 +336,23 @@ export async function POST(request: NextRequest) {
         });
       }
     }
+
+    // Log successful restore
+    await prisma.auditLog.create({
+      data: {
+        action: 'RESTORE_COMPLETE',
+        entity: 'BACKUP',
+        entityId: backupSource,
+        userId: auth.user.id,
+        data: { source: backupSource, success: true }
+      }
+    });
+
+    logSecurityEvent({
+      type: 'BACKUP_RESTORED',
+      userEmail: auth.user.mail,
+      details: `source=${backupSource}`,
+    });
 
     return NextResponse.json({
       success: true,

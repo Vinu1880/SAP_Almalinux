@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, createAssignmentsSchema } from '@/lib/validation';
 
 // Helper function to map location to canton code
 function getUserCantonFromLocation(location: string): string {
@@ -101,10 +103,16 @@ async function validateAssignmentAgainstHolidays(
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
 
   try {
     const body = await request.json();
-    const { shiftId, assignments } = body;
+    const validation = validateBody(createAssignmentsSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+    const { shiftId, assignments } = validation.data;
 
     // Verify that the shift exists
     const shift = await prisma.shift.findUnique({
@@ -225,6 +233,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE',
         entity: 'ASSIGNMENT',
         entityId: shiftId,
+        userId: auth.user.id,
         data: { count: successfulAssignments.length }
       }
     });
@@ -248,6 +257,8 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  const rl2 = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl2) return rl2;
 
   try {
     const searchParams = request.nextUrl.searchParams;

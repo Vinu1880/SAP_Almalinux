@@ -1,8 +1,10 @@
 // app/api/backup/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { encryptBackup, computeSHA256 } from '@/lib/backup-crypto';
+import { logSecurityEvent } from '@/lib/securityLogger';
 import fs from 'fs';
 import path from 'path';
 
@@ -11,6 +13,9 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
+
   try {
     const backupsDir = path.join(process.cwd(), 'backups');
     if (!fs.existsSync(backupsDir)) {
@@ -18,27 +23,32 @@ export async function GET(request: NextRequest) {
     }
 
     const files = fs.readdirSync(backupsDir)
-      .filter(f => f.startsWith('backup_') && f.endsWith('.json') && f !== 'backup_latest.json')
+      .filter(f => f.startsWith('backup_') && (f.endsWith('.json') || f.endsWith('.json.enc')) && !f.startsWith('backup_latest') && !f.endsWith('.sha256'))
       .sort((a, b) => b.localeCompare(a));
 
     const backups = files.map(fileName => {
       const filePath = path.join(backupsDir, fileName);
       const stats = fs.statSync(filePath);
       let counts = '';
-      try {
-        const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        if (content.counts) {
-          const c = content.counts;
-          counts = `${c.users || 0} users, ${c.shifts || 0} shifts, ${c.teams || 0} teams`;
-        }
-      } catch {}
 
+      if (fileName.endsWith('.json') && !fileName.endsWith('.enc')) {
+        try {
+          const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          if (content.counts) {
+            const c = content.counts;
+            counts = `${c.users || 0} users, ${c.shifts || 0} shifts, ${c.teams || 0} teams`;
+          }
+        } catch {}
+      }
+
+      const encrypted = fileName.endsWith('.enc');
       const sizeKB = (stats.size / 1024).toFixed(1);
       return {
         fileName,
         date: stats.mtime.toISOString().split('T')[0] + ' ' + stats.mtime.toTimeString().substring(0, 8),
         size: `${sizeKB} KB`,
-        counts
+        counts,
+        encrypted
       };
     });
 
@@ -52,10 +62,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new database backup
+// POST - Create a new database backup (encrypted)
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.backup);
+  if (rl) return rl;
 
   try {
     const data = {
@@ -69,16 +82,12 @@ export async function POST(request: NextRequest) {
       auditLogs: await prisma.auditLog.findMany(),
     };
 
-    // Check user rotation configs
     const usersWithRotation = data.users.filter(u => u.rotationConfig !== null);
 
     const backupsDir = path.join(process.cwd(), 'backups');
     if (!fs.existsSync(backupsDir)) {
       fs.mkdirSync(backupsDir);
     }
-
-    const fileName = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}.json`;
-    const filePath = path.join(backupsDir, fileName);
 
     const backup = {
       version: '1.0.0',
@@ -97,10 +106,35 @@ export async function POST(request: NextRequest) {
       data
     };
 
-    fs.writeFileSync(filePath, JSON.stringify(backup, null, 2));
+    const jsonString = JSON.stringify(backup, null, 2);
+    const encryptedData = encryptBackup(jsonString);
+    const fileName = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}.json.enc`;
+    const filePath = path.join(backupsDir, fileName);
 
-    const latestPath = path.join(backupsDir, 'backup_latest.json');
-    fs.writeFileSync(latestPath, JSON.stringify(backup, null, 2));
+    fs.writeFileSync(filePath, encryptedData);
+
+    const checksum = computeSHA256(encryptedData);
+    fs.writeFileSync(filePath + '.sha256', checksum);
+
+    const latestPath = path.join(backupsDir, 'backup_latest.json.enc');
+    fs.writeFileSync(latestPath, encryptedData);
+    fs.writeFileSync(latestPath + '.sha256', checksum);
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'CREATE',
+        entity: 'BACKUP',
+        entityId: fileName,
+        userId: auth.user.id,
+        data: { fileName, checksum, counts: backup.counts }
+      }
+    });
+
+    logSecurityEvent({
+      type: 'BACKUP_CREATED',
+      userEmail: auth.user.mail,
+      details: `fileName=${fileName}`,
+    });
 
     return NextResponse.json({
       success: true,

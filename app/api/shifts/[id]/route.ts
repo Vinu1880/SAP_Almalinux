@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { validateBody, updateShiftSchema } from '@/lib/validation';
 
 // GET - Retrieve a shift by ID
 export async function GET(
@@ -11,6 +13,9 @@ export async function GET(
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.standard);
+  if (rl) return rl;
 
   try {
     const { id } = await params;
@@ -48,26 +53,34 @@ export async function PUT(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const { id } = await params;
     const body = await request.json();
 
+    const validation = validateBody(updateShiftSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
     // Prepare update data
     const updateData: any = {};
 
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.description !== undefined) updateData.description = body.description || null;
-    if (body.startTime !== undefined) updateData.startTime = body.startTime;
-    if (body.endTime !== undefined) updateData.endTime = body.endTime;
-    if (body.teamId !== undefined) updateData.teamId = body.teamId;
-    if (body.membersRequired !== undefined) updateData.membersRequired = body.membersRequired;
-    if (body.priority !== undefined) updateData.priority = body.priority;
-    if (body.status !== undefined) updateData.status = body.status;
-    if (body.color !== undefined) updateData.color = body.color;
-    if (body.senderMailbox !== undefined) updateData.senderMailbox = body.senderMailbox;
-    if (body.includedUserIds !== undefined) updateData.includedUserIds = body.includedUserIds;
-    if (body.excludedUserIds !== undefined) updateData.excludedUserIds = body.excludedUserIds;
-    if (body.daysOfWeek !== undefined) updateData.daysOfWeek = body.daysOfWeek;
+    if (validation.data.name !== undefined) updateData.name = validation.data.name;
+    if (validation.data.description !== undefined) updateData.description = validation.data.description || null;
+    if (validation.data.startTime !== undefined) updateData.startTime = validation.data.startTime;
+    if (validation.data.endTime !== undefined) updateData.endTime = validation.data.endTime;
+    if (validation.data.teamId !== undefined) updateData.teamId = validation.data.teamId;
+    if (validation.data.membersRequired !== undefined) updateData.membersRequired = validation.data.membersRequired;
+    if (validation.data.priority !== undefined) updateData.priority = validation.data.priority;
+    if (validation.data.status !== undefined) updateData.status = validation.data.status;
+    if (validation.data.color !== undefined) updateData.color = validation.data.color;
+    if (validation.data.senderMailbox !== undefined) updateData.senderMailbox = validation.data.senderMailbox;
+    if (validation.data.includedUserIds !== undefined) updateData.includedUserIds = validation.data.includedUserIds;
+    if (validation.data.excludedUserIds !== undefined) updateData.excludedUserIds = validation.data.excludedUserIds;
+    if (validation.data.daysOfWeek !== undefined) updateData.daysOfWeek = validation.data.daysOfWeek;
 
     const shift = await prisma.shift.update({
       where: { id },
@@ -83,6 +96,7 @@ export async function PUT(
         action: 'UPDATE',
         entity: 'SHIFT',
         entityId: shift.id,
+        userId: auth.user.id,
         data: {
           before: body,
           after: shift
@@ -108,6 +122,9 @@ export async function DELETE(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
   try {
     const { id } = await params;
 
@@ -122,6 +139,7 @@ export async function DELETE(
         action: 'DELETE',
         entity: 'SHIFT',
         entityId: id,
+        userId: auth.user.id,
         data: shift as any
       }
     });
