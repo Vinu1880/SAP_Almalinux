@@ -83,7 +83,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Import des hooks
+// Import hooks
 import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
 
@@ -135,18 +135,18 @@ const fullTimeAvailability: WeekAvailability = {
   sunday: { morning: false, afternoon: false }
 };
 
-// Couleurs disponibles pour les équipes (10 couleurs distinctes)
+// Available colors for teams (10 distinct colors)
 const TEAM_COLORS = [
-  '#ef4444', // Rouge
-  '#3b82f6', // Bleu
-  '#10b981', // Vert
-  '#eab308', // Jaune
-  '#8b5cf6', // Violet
+  '#ef4444', // Red
+  '#3b82f6', // Blue
+  '#10b981', // Green
+  '#eab308', // Yellow
+  '#8b5cf6', // Purple
   '#f97316', // Orange
-  '#92400e', // Brun
+  '#92400e', // Brown
   '#06b6d4', // Turquoise
-  '#ec4899', // Rose
-  '#6b7280', // Gris
+  '#ec4899', // Pink
+  '#6b7280', // Gray
 ];
 
 const SWISS_CANTONS = [
@@ -155,7 +155,7 @@ const SWISS_CANTONS = [
   { value: 'ZH', label: 'Zurich (ZH)' }
 ];
 
-// Ajout du style CSS pour l'animation de rotation
+// CSS style for rotation animation
 const rotationStyle = `
   @keyframes spin-slow {
     from {
@@ -214,7 +214,7 @@ const UsersPage = () => {
   const { patterns: rotationPatterns, addPattern, updatePattern, deletePattern } = useRotationPatterns();
   const { shifts, loading: shiftsLoading } = useShifts();
 
-  // Ajouter le style CSS
+  // Add CSS style
   useEffect(() => {
     const styleElement = document.createElement('style');
     styleElement.textContent = rotationStyle;
@@ -259,7 +259,7 @@ const UsersPage = () => {
     leadId: ''
   });
 
-  // Utilisation des hooks
+  // Using hooks
   const { 
     users, 
     loading: usersLoading, 
@@ -280,22 +280,16 @@ const UsersPage = () => {
     refetch: refetchTeams 
   } = useTeams();
 
-  // FONCTION DE VÉRIFICATION DE ROTATION - Version corrigée
+  // ROTATION VERIFICATION FUNCTION - Fixed version
   const hasValidRotation = (user: any): boolean => {
-    console.log(`Checking rotation for ${user.firstName}:`, {
-      rotationConfig: user.rotationConfig,
-      type: typeof user.rotationConfig,
-      hasPatternId: !!(user.rotationConfig?.patternId)
-    });
-    
-    // Vérifier si l'objet rotationConfig existe et a un patternId valide
+    // Check if the rotationConfig object exists and has a valid patternId
     return !!(user.rotationConfig && 
              typeof user.rotationConfig === 'object' && 
              user.rotationConfig.patternId &&
              user.rotationConfig.patternId !== '');
   };
 
-  // FONCTION DE RÉCUPÉRATION DE LA CONFIG DE ROTATION
+  // FUNCTION TO RETRIEVE ROTATION CONFIG
   const getRotationConfig = (user: any): RotationConfig | null => {
     if (!hasValidRotation(user)) return null;
     
@@ -306,14 +300,14 @@ const UsersPage = () => {
     };
   };
 
-  // Fonctions utilitaires
+  // Utility functions
   const showError = (message: string) => {
     setErrorMessage(message);
     setErrorDialogOpen(true);
   };
 
   const isValidEmail = (email: string): boolean => {
-    // Validation de base pour l'email
+    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
@@ -326,16 +320,16 @@ const UsersPage = () => {
     const workDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
     
     workDays.forEach((day) => {
-      totalSlots += 2; // 2 créneaux par jour (matin + après-midi)
+      totalSlots += 2; // 2 slots per day (morning + afternoon)
       const dayAvail = availability[day as keyof WeekAvailability];
       if (dayAvail?.morning) availableSlots++;
       if (dayAvail?.afternoon) availableSlots++;
     });
     
-    // Si la personne travaille tous les créneaux du lundi au vendredi = 100%
-    if (availableSlots === 10) return 100; // 5 jours × 2 créneaux = 10
-    
-    // Sinon calculer le pourcentage réel
+    // If the person works all slots Monday to Friday = 100%
+    if (availableSlots === 10) return 100; // 5 days x 2 slots = 10
+
+    // Otherwise calculate the actual percentage
     return Math.round((availableSlots / totalSlots) * 100);
   };
 
@@ -383,7 +377,7 @@ const UsersPage = () => {
     );
   };
 
-  // Composant AvailabilityEditor RESTRUCTURÉ
+  // AvailabilityEditor component - RESTRUCTURED
   const AvailabilityEditor = ({ 
     availability, 
     onChange, 
@@ -410,13 +404,13 @@ const UsersPage = () => {
       onChange(newAvailability);
     };
 
-    // Fonction pour vérifier si un jour est disponible (au moins un créneau)
+    // Function to check if a day is available (at least one slot)
     const isDayAvailable = (day: string) => {
       const dayAvail = availability[day as keyof WeekAvailability];
       return dayAvail?.morning || dayAvail?.afternoon;
     };
 
-    // Fonction pour obtenir les shifts de l'utilisateur
+    // Function to get the user's shifts
     const getUserShifts = () => {
       if (!userId) return [];
       const user = users.find(u => u.id === userId);
@@ -437,7 +431,7 @@ const UsersPage = () => {
 
     return (
       <div className="space-y-6">
-        {/* Section Type de contrat */}
+        {/* Contract type section */}
         <div className="space-y-4">
           <div>
             <Label className="text-base font-semibold">{t("contractType")}</Label>
@@ -447,7 +441,7 @@ const UsersPage = () => {
           <RadioGroup value={localWorkType} onValueChange={(value) => {
             onWorkTypeChange(value);
             
-            // Si on passe en temps plein, mettre à jour automatiquement la disponibilité
+            // If switching to full-time, automatically update availability
             if (value === 'full') {
               onChange(fullTimeAvailability);
             }
@@ -504,7 +498,7 @@ const UsersPage = () => {
           )}
         </div>
 
-        {/* Section Rotation automatique - INDÉPENDANTE */}
+        {/* Automatic rotation section - INDEPENDENT */}
         <div className="border-t pt-6">
           <div className="space-y-4">
             <div>
@@ -540,7 +534,7 @@ const UsersPage = () => {
 
             {rotationConfig !== null && rotationConfig !== undefined && (
               <div className="border rounded-lg p-4 space-y-4 bg-gradient-to-r from-purple-50 to-indigo-50">
-                {/* Configuration de la rotation */}
+                {/* Rotation configuration */}
                 <div className="space-y-4">
                   <div>
                     <Label>{t("rotationPattern")}</Label>
@@ -568,7 +562,7 @@ const UsersPage = () => {
                       </SelectContent>
                     </Select>
 
-                    {/* Liste des patterns existants avec suppression */}
+                    {/* List of existing patterns with delete option */}
                     <div className="mt-4 p-3 bg-slate-50 rounded-lg">
                       <p className="text-sm font-medium text-slate-700 mb-2">{t("existingPatterns")}</p>
                       {rotationPatterns.length > 0 ? (
@@ -626,7 +620,7 @@ const UsersPage = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        // Pré-remplir automatiquement avec les shifts de l'utilisateur en modification
+                        // Auto-fill with the user's shifts when editing
                         if (userId && isEditMode) {
                           const userShifts = getUserShifts();
                           setNewPattern({
@@ -672,7 +666,7 @@ const UsersPage = () => {
                     </RadioGroup>
                   </div>
 
-                  {/* Afficher et éditer le pattern actuel si sélectionné */}
+                  {/* Display and edit the current pattern if selected */}
                   {getCurrentPattern() && (() => {
                     const currentPat = getCurrentPattern()!;
                     const userShifts = getUserShifts();
@@ -867,7 +861,7 @@ const UsersPage = () => {
     );
   };
 
-  // Composant pour gérer les membres d'une équipe (similaire à MembersSelector des shifts)
+  // Component to manage team members (similar to MembersSelector from shifts)
   const TeamMembersSelector = ({
     teamId,
     currentMembers,
@@ -877,10 +871,10 @@ const UsersPage = () => {
     currentMembers: string[],
     onMembersChange: (memberIds: string[]) => void
   }) => {
-    // Utilisateurs déjà dans cette équipe
+    // Users already in this team
     const teamUsers = users.filter(u => currentMembers.includes(u.id));
 
-    // {t("availableUsers")} (pas dans cette équipe ET actifs)
+    // Available users (not in this team AND active)
     const availableUsers = users.filter(u =>
       !currentMembers.includes(u.id) &&
       u.status === 'ACTIVE'
@@ -999,12 +993,12 @@ const UsersPage = () => {
 
   const handleCreateUser = async () => {
     if (!newUser.firstName || !newUser.lastName || !newUser.email) {
-      showError('Veuillez remplir tous les champs obligatoires');
+      showError('Please fill in all required fields');
       return;
     }
 
     if (!isValidEmail(newUser.email)) {
-      showError('Veuillez entrer une adresse email valide (ex: nom@example.com)');
+      showError('Please enter a valid email address (e.g. name@example.com)');
       return;
     }
 
@@ -1018,10 +1012,9 @@ const UsersPage = () => {
         status: 'ACTIVE'
       };
 
-      // Ajouter la configuration de rotation si applicable
+      // Add rotation configuration if applicable
       if (newUser.rotationConfig?.patternId) {
         userData.rotationConfig = newUser.rotationConfig;
-        console.log('Frontend: Creating user with rotation config:', userData.rotationConfig);
       } else {
         userData.rotationConfig = null;
       }
@@ -1044,15 +1037,15 @@ const UsersPage = () => {
       });
       setWorkType('full');
     } catch (error: any) {
-      console.error('Erreur lors de la création:', error);
+      console.error('Error during creation:', error);
 
-      // Afficher le message d'erreur spécifique de l'API
+      // Display the specific API error message
       if (error.response?.data?.error) {
         showError(error.response.data.error);
       } else if (error.message) {
         showError(error.message);
       } else {
-        showError('Erreur lors de la création de l\'utilisateur');
+        showError('Error creating user');
       }
     } finally {
       setIsSubmitting(false);
@@ -1063,12 +1056,12 @@ const UsersPage = () => {
     if (!selectedUser) return;
 
     if (!selectedUser.firstName || !selectedUser.lastName || !selectedUser.email) {
-      showError('Veuillez remplir tous les champs obligatoires');
+      showError('Please fill in all required fields');
       return;
     }
 
     if (!isValidEmail(selectedUser.email)) {
-      showError('Veuillez entrer une adresse email valide (ex: nom@example.com)');
+      showError('Please enter a valid email address (e.g. name@example.com)');
       return;
     }
 
@@ -1088,10 +1081,9 @@ const UsersPage = () => {
         availability: selectedUser.availability
       };
 
-      // Ajouter ou supprimer la configuration de rotation
+      // Add or remove rotation configuration
       if (selectedUser.rotationConfig?.patternId) {
         userData.rotationConfig = selectedUser.rotationConfig;
-        console.log('Frontend: Updating user with rotation config:', userData.rotationConfig);
       } else {
         userData.rotationConfig = null;
       }
@@ -1102,15 +1094,15 @@ const UsersPage = () => {
       setSelectedUser(null);
       setEditWorkType('full');
     } catch (error: any) {
-      console.error('Erreur lors de la modification:', error);
+      console.error('Error during update:', error);
 
-      // Afficher le message d'erreur spécifique de l'API
+      // Display the specific API error message
       if (error.response?.data?.error) {
         showError(error.response.data.error);
       } else if (error.message) {
         showError(error.message);
       } else {
-        showError('Erreur lors de la modification de l\'utilisateur');
+        showError('Error updating user');
       }
     } finally {
       setIsSubmitting(false);
@@ -1125,14 +1117,14 @@ const UsersPage = () => {
       setIsDeleteUserDialogOpen(false);
       setDeleteUserId(null);
     } catch (error) {
-      console.error('Erreur:', error);
-      showError('Erreur lors de la suppression de l\'utilisateur');
+      console.error('Error:', error);
+      showError('Error deleting user');
     }
   };
 
   const handleCreateTeam = async () => {
     if (!newTeam.name) {
-      showError('Le nom est obligatoire');
+      showError('Name is required');
       return;
     }
 
@@ -1148,8 +1140,8 @@ const UsersPage = () => {
       });
       refetchTeams();
     } catch (error) {
-      console.error('Erreur:', error);
-      showError('Erreur lors de la création de l\'équipe');
+      console.error('Error:', error);
+      showError('Error creating team');
     } finally {
       setIsSubmitting(false);
     }
@@ -1170,15 +1162,15 @@ const UsersPage = () => {
 
       await updateTeam(selectedTeam.id, updateData);
 
-      // Rafraîchir les utilisateurs pour voir les changements d'équipe
+      // Refresh users to see team changes
       await refetchUsers();
       await refetchTeams();
 
       setIsEditTeamDialogOpen(false);
       setSelectedTeam(null);
     } catch (error) {
-      console.error('Erreur:', error);
-      showError('Erreur lors de la modification de l\'équipe');
+      console.error('Error:', error);
+      showError('Error updating team');
     } finally {
       setIsSubmitting(false);
     }
@@ -1193,12 +1185,12 @@ const UsersPage = () => {
       setIsDeleteTeamDialogOpen(false);
       setDeleteTeamId(null);
     } catch (error) {
-      console.error('Erreur:', error);
-      showError('Erreur lors de la suppression de l\'équipe');
+      console.error('Error:', error);
+      showError('Error deleting team');
     }
   };
 
-  // Filtrage et tri
+  // Filtering and sorting
   const filteredUsers = users
     .filter(user => {
       const matchesSearch = user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1231,16 +1223,16 @@ const UsersPage = () => {
     return matchesSearch;
   });
 
-  // Constantes pour l'éditeur de pattern
+  // Constants for the pattern editor
   const days: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   const dayLabels = {
-    monday: 'Lun',
-    tuesday: 'Mar',
-    wednesday: 'Mer',
-    thursday: 'Jeu',
-    friday: 'Ven',
-    saturday: 'Sam',
-    sunday: 'Dim'
+    monday: 'Mon',
+    tuesday: 'Tue',
+    wednesday: 'Wed',
+    thursday: 'Thu',
+    friday: 'Fri',
+    saturday: 'Sat',
+    sunday: 'Sun'
   };
 
   if (usersLoading || teamsLoading || shiftsLoading) {
@@ -1307,7 +1299,7 @@ const UsersPage = () => {
           )}
         </div>
 
-        {/* Barre de filtres et actions */}
+        {/* Filter bar and actions */}
         <Card className="bg-white border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
@@ -1642,7 +1634,7 @@ const UsersPage = () => {
           </CardContent>
         </Card>
 
-        {/* Vue Utilisateurs */}
+        {/* Users view */}
         {viewMode === 'users' && (
           <>
             {userViewType === 'grid' ? (
@@ -1654,7 +1646,7 @@ const UsersPage = () => {
                   
                   return (
                     <Card key={user.id} className="bg-white border-0 shadow-sm hover:shadow-md transition-all relative">
-                      {/* INDICATEUR DE ROTATION TRÈS VISIBLE */}
+                      {/* HIGHLY VISIBLE ROTATION INDICATOR */}
                       {hasRotation && (
                         <div className="absolute -top-2 -right-2 z-10">
                           <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full p-2 shadow-lg">
@@ -1938,7 +1930,7 @@ const UsersPage = () => {
           </>
         )}
 
-        {/* Vue Équipes */}
+        {/* Teams view */}
         {viewMode === 'teams' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {filteredTeams.map((team) => {
@@ -1992,7 +1984,7 @@ const UsersPage = () => {
                         <Crown className="w-4 h-4 text-amber-600" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-slate-800 truncate">
-                            Chef: {lead.firstName} {lead.lastName}
+                            Lead: {lead.firstName} {lead.lastName}
                           </p>
                         </div>
                       </div>
@@ -2082,7 +2074,7 @@ const UsersPage = () => {
           </div>
         )}
 
-        {/* Dialog de modification d'utilisateur */}
+        {/* Edit user dialog */}
         <Dialog open={isEditUserDialogOpen} onOpenChange={setIsEditUserDialogOpen}>
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -2179,7 +2171,7 @@ const UsersPage = () => {
                   onWorkTypeChange={(type: string) => {
                     setEditWorkType(type as 'full' | 'partial');
                     
-                    // Si on passe en temps plein, réinitialiser la disponibilité
+                    // If switching to full-time, reset availability
                     if (type === 'full') {
                       setSelectedUser({
                         ...selectedUser,
@@ -2246,7 +2238,7 @@ const UsersPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog de modification d'équipe */}
+        {/* Edit team dialog */}
         {selectedTeam && (
           <Dialog open={isEditTeamDialogOpen} onOpenChange={setIsEditTeamDialogOpen}>
             <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -2301,7 +2293,7 @@ const UsersPage = () => {
                   </Select>
                 </div>
 
-                {/* Gestion des membres de l'équipe */}
+                {/* Team members management */}
                 <div className="border-t pt-4">
                   <Label className="text-base font-semibold mb-3 block">{t("teamMembers")}</Label>
                   <TeamMembersSelector
@@ -2335,7 +2327,7 @@ const UsersPage = () => {
           </Dialog>
         )}
 
-        {/* Dialog création de pattern */}
+        {/* Create pattern dialog */}
         <Dialog open={isCreatePatternOpen} onOpenChange={setIsCreatePatternOpen}>
           <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -2382,14 +2374,14 @@ const UsersPage = () => {
                 />
               </div>
 
-              {/* Sélection de l'utilisateur pour voir ses shifts */}
+              {/* User selection to view their shifts */}
               <div>
                 <Label>{t("basedOnUserShifts")}</Label>
                 <Select
                   onValueChange={(userId) => {
                     const user = users.find(u => u.id === userId);
                     if (user) {
-                      // Trouver les shifts assignés à cet utilisateur
+                      // Find shifts assigned to this user
                       const userShifts = shifts.filter((shift: any) => {
                         const userInTeam = user.teamId === shift.teamId;
                         const userIncluded = shift.includedUserIds?.includes(userId);
@@ -2397,7 +2389,7 @@ const UsersPage = () => {
                         return (userInTeam && !userExcluded) || userIncluded;
                       });
                       
-                      // Mettre à jour le pattern avec les shifts de l'utilisateur
+                      // Update the pattern with the user's shifts
                       setNewPattern({
                         ...newPattern,
                         userShifts: userShifts.map((s: any) => s.id)
@@ -2418,7 +2410,7 @@ const UsersPage = () => {
                 </Select>
               </div>
 
-              {/* Configuration des semaines avec les vrais shifts et prise en compte disponibilités */}
+              {/* Week configuration with actual shifts and availability taken into account */}
               {newPattern.userShifts && newPattern.userShifts.length > 0 ? (
                 <div>
                   <Label>{t("weekConfiguration")}</Label>
@@ -2434,7 +2426,7 @@ const UsersPage = () => {
                       <h4 className="font-medium mb-2">{t("weekNumber", { week: weekIndex + 1 })}</h4>
                       <div className="grid grid-cols-7 gap-2">
                         {days.map((day) => {
-                          // Vérifier la disponibilité de l'utilisateur pour ce jour
+                          // Check user availability for this day
                           const selectedUserId = newPattern.name.includes('Pattern') ? 
                             users.find(u => newPattern.name.includes(u.firstName) && newPattern.name.includes(u.lastName))?.id : 
                             null;
@@ -2546,10 +2538,10 @@ const UsersPage = () => {
                     }
 
                     if (newPattern.id) {
-                      // Mode modification
+                      // Edit mode
                       await updatePattern({...newPattern, userShifts: newPattern.userShifts || []} as any);
                     } else {
-                      // Mode création
+                      // Create mode
                       const newId = Date.now().toString();
                       const patternToAdd = { ...newPattern, id: newId, userShifts: newPattern.userShifts || [] };
                       await addPattern(patternToAdd as any);
@@ -2577,7 +2569,7 @@ const UsersPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog de confirmation de suppression de pattern */}
+        {/* Pattern deletion confirmation dialog */}
         <Dialog open={isDeletePatternDialogOpen} onOpenChange={setIsDeletePatternDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -2629,7 +2621,7 @@ const UsersPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog de confirmation de suppression d'utilisateur */}
+        {/* User deletion confirmation dialog */}
         <Dialog open={isDeleteUserDialogOpen} onOpenChange={setIsDeleteUserDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -2675,7 +2667,7 @@ const UsersPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog de confirmation de suppression d'équipe */}
+        {/* Team deletion confirmation dialog */}
         <Dialog open={isDeleteTeamDialogOpen} onOpenChange={setIsDeleteTeamDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -2721,13 +2713,13 @@ const UsersPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog d'erreur personnalisé */}
+        {/* Custom error dialog */}
         <Dialog open={errorDialogOpen} onOpenChange={setErrorDialogOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-red-600" />
-                Erreur
+                Error
               </DialogTitle>
             </DialogHeader>
             <div className="py-4">

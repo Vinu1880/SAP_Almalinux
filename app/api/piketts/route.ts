@@ -3,7 +3,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -19,16 +18,8 @@ export async function GET(request: NextRequest) {
         name: 'asc'
       }
     });
-
-    // Parse string fields back to arrays for frontend
-    const normalizedPiketts = piketts.map(pikett => ({
-      ...pikett,
-      daysOfWeek: fromJsonString(pikett.daysOfWeek),
-      includedUserIds: fromJsonString(pikett.includedUserIds),
-      excludedUserIds: fromJsonString(pikett.excludedUserIds),
-    }));
-
-    return NextResponse.json(normalizedPiketts);
+    
+    return NextResponse.json(piketts);
   } catch (error) {
     console.error('Error fetching piketts:', error);
     return NextResponse.json(
@@ -55,9 +46,9 @@ export async function POST(request: NextRequest) {
         color: body.color || '#dc2626',
         status: body.status || 'ACTIVE',
         is24_7: body.is24_7 !== undefined ? body.is24_7 : true,
-        includedUserIds: toJsonString(body.includedUserIds || []),
-        excludedUserIds: toJsonString(body.excludedUserIds || []),
-        daysOfWeek: toJsonString(body.daysOfWeek || [0, 1, 2, 3, 4, 5, 6])
+        includedUserIds: body.includedUserIds || [],
+        excludedUserIds: body.excludedUserIds || [],
+        daysOfWeek: body.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]
       },
       include: {
         team: true

@@ -2,9 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from '@/lib/auth';
-import { toJsonString } from '@/lib/json-helpers';
 
-// PUT - Mettre à jour le statut d'une assignation (accepter/refuser)
+// PUT - Update the status of an assignment (accept/refuse)
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -36,7 +35,7 @@ export async function PUT(
         entity: "ASSIGNMENT",
         entityId: assignment.id,
         userId: assignment.userId,
-        data: toJsonString({ status, reason }),
+        data: { status, reason },
       },
     });
 
@@ -50,7 +49,7 @@ export async function PUT(
   }
 }
 
-// DELETE - Annuler une assignation
+// DELETE - Cancel an assignment
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }

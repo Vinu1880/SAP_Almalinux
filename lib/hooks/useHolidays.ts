@@ -119,92 +119,54 @@ export function useHolidays(year?: number) {
   }, []);
 
 
+// Check if a user is on holiday for a given date based on their canton
 const isUserOnHoliday = useCallback((userLocation: string, date: string): boolean => {
-  console.log(`\n=== isUserOnHoliday CHECK ===`);
-  console.log(`User location: "${userLocation}"`);
-  console.log(`Date to check: ${date}`);
-  console.log(`Total holidays in memory: ${holidays.length}`);
-
-  // Trouver les jours fériés pour cette date
+  // Find holidays matching the given date
   const dateHolidays = holidays.filter(h => {
-    // Extract just the date part without timezone conversion
-    // h.date can be either "2025-10-15" or "2025-10-15T00:00:00.000Z"
-    // We want to compare just "2025-10-15" with the input date
     let holidayDate = h.date;
     if (typeof holidayDate === 'string') {
-      holidayDate = holidayDate.split('T')[0]; // Extract YYYY-MM-DD part
+      holidayDate = holidayDate.split('T')[0];
     } else {
-      // If it's a Date object, convert carefully
       holidayDate = new Date(holidayDate).toISOString().split('T')[0];
     }
-    const match = holidayDate === date;
-    if (match) {
-      console.log(`  Found holiday: ${h.name} (${holidayDate}) for cantons: ${h.cantons.join(', ')}`);
-    }
-    return match;
+    return holidayDate === date;
   });
 
-  console.log(`Holidays found for ${date}: ${dateHolidays.length}`);
-  
   if (dateHolidays.length === 0) {
-    console.log(`✅ No holidays for this date - User CAN work`);
-    console.log(`=============================\n`);
     return false;
   }
 
-  // Vérifier si l'utilisateur est concerné
+  // Check if any holiday applies to this user's canton
   const isOnHoliday = dateHolidays.some(holiday => {
-    console.log(`  Checking holiday: ${holiday.name}`);
-    console.log(`    Holiday cantons: ${holiday.cantons.join(', ')}`);
-    
-    // Si c'est un jour férié pour tous les cantons
+    // Holiday applies to all cantons
     if (holiday.cantons.includes('ALL')) {
-      console.log(`    ✅ Holiday is for ALL cantons`);
       return true;
     }
-    
-    // Si l'utilisateur n'a pas de canton
+
+    // User has no location - only federal holidays apply
     if (!userLocation || userLocation === '') {
-      console.log(`    ⚠️ User has no location`);
-      if (holiday.type === 'FEDERAL') {
-        console.log(`    ✅ Holiday is FEDERAL - applies to user`);
-        return true;
-      }
-      console.log(`    ❌ Holiday is not FEDERAL - does not apply`);
-      return false;
+      return holiday.type === 'FEDERAL';
     }
-    
-    // Normaliser le canton de l'utilisateur
+
+    // Check if user's canton matches
     const userCanton = getUserCantonFromLocation(userLocation);
-    console.log(`    User canton normalized: "${userCanton}"`);
-    
-    // Vérifier si le canton correspond
-    const matches = holiday.cantons.includes(userCanton);
-    console.log(`    ${matches ? '✅' : '❌'} Canton ${userCanton} ${matches ? 'IS' : 'IS NOT'} in holiday cantons`);
-    
-    return matches;
+    return holiday.cantons.includes(userCanton);
   });
-  
-  console.log(`FINAL RESULT: User ${isOnHoliday ? 'CANNOT' : 'CAN'} work on ${date}`);
-  console.log(`=============================\n`);
-  
+
   return isOnHoliday;
 }, [holidays]);
 
+  // Map user location to canton code (VD, BE, ZH), defaults to BE
   const getUserCantonFromLocation = (location: string): string => {
-  // Les utilisateurs ont maintenant directement le code canton (VD, BE, ZH)
-  // Si la valeur est vide ou null, retourner BE par défaut
   if (!location || typeof location !== 'string') {
     return 'BE';
   }
-  
-  // Si c'est déjà un code canton valide, le retourner directement EN MAJUSCULES
+
   const upperLocation = location.toUpperCase();
   if (['VD', 'BE', 'ZH'].includes(upperLocation)) {
     return upperLocation;
   }
-  
-  // Sinon retourner BE par défaut
+
   return 'BE';
 };
 

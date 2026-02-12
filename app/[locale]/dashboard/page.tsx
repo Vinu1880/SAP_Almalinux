@@ -71,31 +71,31 @@ const DashboardPage = () => {
   const [selectedNewUser, setSelectedNewUser] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
 
-  // Nouveaux filtres
+  // Additional filters
   const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedShift, setSelectedShift] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('');
 
-  // Pagination
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Fonction pour réinitialiser tous les filtres
+  // Function to reset all filters
   const resetFilters = () => {
     setSelectedUser('all');
     setSelectedShift('all');
     setSelectedStatus('all');
     setSelectedDate('');
-    setCurrentPage(1); // Reset à la première page
+    setCurrentPage(1); // Reset to first page
   };
 
-  // Reset la page à 1 quand les filtres changent
+  // Reset page to 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
   }, [selectedUser, selectedShift, selectedStatus, selectedDate, dateFilter, selectedTeam]);
 
-  // Récupérer les données avec le hook
+  // Fetch data with hook
   const {
     assignments,
     stats,
@@ -122,13 +122,13 @@ const DashboardPage = () => {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [outOfOfficeEvents, setOutOfOfficeEvents] = useState<any[]>([]);
 
-  // Fonction pour récupérer les événements Out of Office pour une date spécifique
+  // Function to fetch Out of Office events for a specific date
   const fetchOutOfOfficeForDate = async (date: string): Promise<any[]> => {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) return [];
 
-      // Récupérer les événements pour le jour précédent, le jour même et le jour suivant
+      // Fetch events for the previous day, the current day, and the next day
       const targetDate = new Date(date);
       const prevDay = new Date(targetDate);
       prevDay.setDate(prevDay.getDate() - 1);
@@ -196,7 +196,7 @@ const DashboardPage = () => {
     }
   };
 
-  // Fonction pour vérifier si un utilisateur est disponible (pas OOF)
+  // Function to check if a user is available (not OOF)
   const isUserAvailable = (user: any, date: string, oofEvents: any[], shift?: any) => {
     const userEmail = user.email.toLowerCase();
 
@@ -246,7 +246,7 @@ const DashboardPage = () => {
     };
   };
 
-  // Fonction pour vérifier si un utilisateur travaille un jour donné
+  // Function to check if a user works on a given day
   const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string): boolean => {
     if (!user.availability) return true;
 
@@ -270,14 +270,14 @@ const DashboardPage = () => {
     return dayAvailability.morning === true || dayAvailability.afternoon === true;
   };
 
-  // Fonction pour vérifier toutes les contraintes d'un utilisateur
+  // Function to check all constraints for a user
   const checkUserAvailability = async (
     user: any,
     shift: any,
     date: string,
     currentAssignmentId?: string
   ): Promise<{ available: boolean; reason?: string }> => {
-    // Vérifier les jours fériés
+    // Check public holidays
     const canton = user.location || 'BE';
     if (isUserOnHoliday(date, canton)) {
       const holidayForDate = holidays.find(h => {
@@ -290,12 +290,12 @@ const DashboardPage = () => {
       };
     }
 
-    // Vérifier si l'utilisateur travaille ce jour
+    // Check if user works this day
     if (!isUserWorkingOnDay(user, date, shift?.startTime)) {
       return { available: false, reason: t('reasonNotWorkingToday') };
     }
 
-    // Vérifier Out of Office
+    // Check Out of Office
     if (outOfOfficeEvents.length > 0) {
       const availability = isUserAvailable(user, date, outOfOfficeEvents, shift);
       if (!availability.available) {
@@ -303,7 +303,7 @@ const DashboardPage = () => {
       }
     }
 
-    // Vérifier les shifts consécutifs
+    // Check consecutive shifts
     try {
       const response = await authFetch('/api/shift-assignments/check-consecutive', {
         method: 'POST',
@@ -325,33 +325,33 @@ const DashboardPage = () => {
     return { available: true };
   };
 
-  // Fonction pour obtenir les utilisateurs éligibles pour un shift
+  // Function to get eligible users for a shift
   const getEligibleUsersForShift = (shift: any, excludeUserId?: string): any[] => {
     if (!users) return [];
 
     const activeUsers = users.filter(u => u.status === 'ACTIVE' || u.status === 'active');
 
-    // Utilisateurs de l'équipe (sauf ceux exclus du shift et l'utilisateur actuel)
+    // Team users (except those excluded from the shift and the current user)
     const teamUsers = activeUsers.filter(u =>
       u.teamId === shift.team?.id &&
       !(shift.excludedUserIds || []).includes(u.id) &&
       u.id !== excludeUserId
     );
 
-    // Utilisateurs inclus spécifiquement (sauf l'utilisateur actuel)
+    // Specifically included users (except the current user)
     const includedUsers = activeUsers.filter(u =>
       (shift.includedUserIds || []).includes(u.id) &&
       u.id !== excludeUserId
     );
 
-    // Combiner et dédupliquer
+    // Combine and deduplicate
     const allEligible = [...teamUsers, ...includedUsers];
     const uniqueEligible = Array.from(new Map(allEligible.map(u => [u.id, u])).values());
 
     return uniqueEligible;
   };
 
-  // Effect pour calculer la disponibilité des utilisateurs quand on ouvre la modal
+  // Effect to calculate user availability when the modal opens
   React.useEffect(() => {
     if (!resendingAssignment) {
       setUsersAvailability({ available: [], alreadyAssigned: [], unavailable: [] });
@@ -363,7 +363,7 @@ const DashboardPage = () => {
       setCheckingAvailability(true);
 
       try {
-        // Récupérer les événements Out of Office pour cette date
+        // Fetch Out of Office events for this date
         const oofEvents = await fetchOutOfOfficeForDate(resendingAssignment.date);
         setOutOfOfficeEvents(oofEvents);
 
@@ -372,7 +372,7 @@ const DashboardPage = () => {
           resendingAssignment.userId
         );
 
-        // Vérifier quels utilisateurs sont déjà assignés ce jour-là
+        // Check which users are already assigned that day
         const assignedToday = assignments.filter(
           a => a.date === resendingAssignment.date && a.id !== resendingAssignment.id
         );
@@ -382,7 +382,7 @@ const DashboardPage = () => {
         const unavailable: Array<{ user: any; reason: string }> = [];
 
         for (const user of eligibleUsers) {
-          // Vérifier si déjà assigné ce jour
+          // Check if already assigned today
           const hasOtherShift = assignedToday.some(a => a.userId === user.id);
 
           if (hasOtherShift) {
@@ -390,7 +390,7 @@ const DashboardPage = () => {
             continue;
           }
 
-          // Vérifier les autres contraintes
+          // Check other constraints
           const availability = await checkUserAvailability(
             user,
             resendingAssignment.shift,
@@ -416,7 +416,7 @@ const DashboardPage = () => {
     calculateAvailability();
   }, [resendingAssignment, assignments, users]);
 
-  // Fonction pour renvoyer l'invitation à un nouvel utilisateur
+  // Function to resend the invitation to a new user
   const handleResend = async () => {
     if (!resendingAssignment || !selectedNewUser) return;
 
@@ -429,7 +429,7 @@ const DashboardPage = () => {
       const accessToken = await getAccessToken();
       if (!accessToken) throw new Error(t('tokenError'));
 
-      // 1. Créer l'événement Outlook
+      // 1. Create the Outlook event
       const shift = resendingAssignment.shift;
       const date = new Date(resendingAssignment.date);
 
@@ -453,10 +453,10 @@ const DashboardPage = () => {
           content: `
             <h2>${shift.name}</h2>
             <p><strong>Date:</strong> ${date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-            <p><strong>Horaire:</strong> ${shift.startTime} - ${shift.endTime}</p>
+            <p><strong>Schedule:</strong> ${shift.startTime} - ${shift.endTime}</p>
             ${shift.description ? `<p><strong>Description:</strong> ${shift.description}</p>` : ''}
             <hr>
-            <p><em>Invitation envoyée depuis le dashboard</em></p>
+            <p><em>Invitation sent from the dashboard</em></p>
           `
         },
         start: {
@@ -487,7 +487,7 @@ const DashboardPage = () => {
         categories: ['Shift', shift.name]
       };
 
-      // Envoyer à Outlook
+      // Send to Outlook
       const outlookResponse = await fetch('https://graph.microsoft.com/v1.0/me/events', {
         method: 'POST',
         headers: {
@@ -518,7 +518,7 @@ const DashboardPage = () => {
         throw new Error(t('updateError'));
       }
 
-      // 3. Créer la nouvelle assignation dans la DB
+      // 3. Create the new assignment in the DB
       const createResponse = await authFetch('/api/shift-assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -537,7 +537,7 @@ const DashboardPage = () => {
         throw new Error(t('createError'));
       }
 
-      // 4. Supprimer l'ancien événement Outlook si il existe
+      // 4. Delete the old Outlook event if it exists
       if (resendingAssignment.outlookEventId) {
         try {
           await fetch(`https://graph.microsoft.com/v1.0/me/events/${resendingAssignment.outlookEventId}`, {
@@ -548,11 +548,11 @@ const DashboardPage = () => {
             }
           });
         } catch (deleteError) {
-          console.error('Erreur lors de la suppression de l\'ancien événement:', deleteError);
+          console.error('Error deleting old event:', deleteError);
         }
       }
 
-      // Rafraîchir les données
+      // Refresh data
       await refresh();
 
       setSyncMessage({
@@ -561,12 +561,12 @@ const DashboardPage = () => {
       });
       setTimeout(() => setSyncMessage(null), 5000);
 
-      // Fermer la modal
+      // Close the modal
       setResendingAssignment(null);
       setSelectedNewUser(null);
 
     } catch (error) {
-      console.error('Erreur lors du resend:', error);
+      console.error('Error during resend:', error);
       setSyncMessage({
         type: 'error',
         text: error instanceof Error ? error.message : t('resendError')
@@ -577,7 +577,7 @@ const DashboardPage = () => {
     }
   };
 
-  // Fonction pour synchroniser avec Outlook
+  // Function to sync with Outlook
   const syncOutlook = async () => {
     setSyncing(true);
     setSyncMessage(null);
@@ -597,16 +597,16 @@ const DashboardPage = () => {
 
       const result = await response.json();
 
-      // Rafraîchir les données du dashboard
+      // Refresh dashboard data
       await refresh();
 
-      // Afficher le message de succès
+      // Display success message
       setSyncMessage({
         type: 'success',
         text: t('syncSuccess', { count: result.updated })
       });
 
-      // Masquer le message après 5 secondes
+      // Hide message after 5 seconds
       setTimeout(() => setSyncMessage(null), 5000);
     } catch (err) {
       console.error('Error syncing with Outlook:', err);
@@ -615,14 +615,14 @@ const DashboardPage = () => {
         text: t('syncError')
       });
 
-      // Masquer le message d'erreur après 5 secondes
+      // Hide error message after 5 seconds
       setTimeout(() => setSyncMessage(null), 5000);
     } finally {
       setSyncing(false);
     }
   };
 
-  // Calculer les statistiques par utilisateur avec toutes les infos
+  // Calculate user statistics with all details
   const userStatsWithDetails = useMemo(() => {
     if (!userStats || !users) return [];
 
@@ -635,32 +635,32 @@ const DashboardPage = () => {
         user,
         assignments: userAssignments
       };
-    }).filter(stat => stat.user); // Filtrer les utilisateurs non trouvés
+    }).filter(stat => stat.user); // Filter out users not found
   }, [userStats, users, assignments]);
 
-  // Filtrer les assignations selon tous les filtres
+  // Filter assignments based on all filters
   const filteredAssignments = useMemo(() => {
     let filtered = [...assignments];
 
-    // Filtre par utilisateur
+    // Filter by user
     if (selectedUser !== 'all') {
       filtered = filtered.filter(a => a.userId === selectedUser);
     }
 
-    // Filtre par shift
+    // Filter by shift
     if (selectedShift !== 'all') {
       filtered = filtered.filter(a => a.shift?.id === selectedShift);
     }
 
-    // Filtre par statut
+    // Filter by status
     if (selectedStatus !== 'all') {
       filtered = filtered.filter(a => a.status === selectedStatus);
     }
 
-    // Filtre par date - normaliser les dates pour comparaison
+    // Filter by date - normalize dates for comparison
     if (selectedDate) {
       filtered = filtered.filter(a => {
-        // Normaliser la date de l'assignment au format YYYY-MM-DD
+        // Normalize the assignment date to YYYY-MM-DD format
         const assignmentDate = new Date(a.date).toISOString().split('T')[0];
         return assignmentDate === selectedDate;
       });
@@ -669,19 +669,19 @@ const DashboardPage = () => {
     return filtered;
   }, [assignments, selectedUser, selectedShift, selectedStatus, selectedDate]);
 
-  // Calculer le total de pages
+  // Calculate total pages
   const totalPages = useMemo(() => {
     return Math.ceil(filteredAssignments.length / itemsPerPage);
   }, [filteredAssignments.length]);
 
-  // Assignations paginées
+  // Paginated assignments
   const paginatedAssignments = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredAssignments.slice(startIndex, endIndex);
   }, [filteredAssignments, currentPage]);
 
-  // Pour compatibilité avec le reste du code
+  // For compatibility with the rest of the code
   const recentAssignments = paginatedAssignments;
 
   const getStatusBadge = (status: string) => {
@@ -712,7 +712,7 @@ const DashboardPage = () => {
 
   const handleExport = () => {
     if (selectedView === 'shifts') {
-      // Export des shifts récents
+      // Export recent shifts
       const csvContent = [
         [t('user'), t('team'), t('shift'), t('schedule'), t('date'), t('status')].join(';'),
         ...assignments.map(assignment => [
@@ -735,7 +735,7 @@ const DashboardPage = () => {
       link.click();
       document.body.removeChild(link);
     } else {
-      // Export des statistiques par utilisateur
+      // Export user statistics
       const csvContent = [
         [t('user'), t('team'), t('totalShifts'), t('accepted'), t('pending'), t('refused'), t('cancelled'), t('acceptanceRate')].join(';'),
         ...userStatsWithDetails.map(userStat => {
@@ -816,7 +816,7 @@ const DashboardPage = () => {
       <Navigation />
 
       <main className="p-6 space-y-6">
-        {/* Message de synchronisation */}
+        {/* Sync message */}
         {syncMessage && (
           <Card className={`border-0 ${syncMessage.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
             <CardContent className="p-4">
@@ -869,7 +869,7 @@ const DashboardPage = () => {
           </div>
         </div>
 
-        {/* Filtre par équipe */}
+        {/* Filter by team */}
         <Card className="bg-white border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center gap-4">
@@ -947,7 +947,7 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* Tabs pour vues différentes */}
+        {/* Tabs for different views */}
         <Tabs value={selectedView} onValueChange={(v) => setSelectedView(v as any)} className="space-y-4">
           <TabsList>
             <TabsTrigger value="shifts" className="flex items-center gap-2">
@@ -960,7 +960,7 @@ const DashboardPage = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Vue Shifts Récents */}
+          {/* Recent Shifts View */}
           <TabsContent value="shifts">
             <Card className="bg-white border-0 shadow-sm">
               <CardHeader>
@@ -973,10 +973,10 @@ const DashboardPage = () => {
                   </p>
                 </div>
 
-                {/* Filtres */}
+                {/* Filters */}
                 <div className="mt-4 pt-4 border-t">
                   <div className="grid grid-cols-5 gap-4">
-                    {/* Filtre par utilisateur */}
+                    {/* Filter by user */}
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-medium text-slate-600">{t('userFilter')}</label>
                       <Select value={selectedUser} onValueChange={setSelectedUser}>
@@ -994,7 +994,7 @@ const DashboardPage = () => {
                       </Select>
                     </div>
 
-                    {/* Filtre par shift */}
+                    {/* Filter by shift */}
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-medium text-slate-600">{t('shiftFilter')}</label>
                       <Select value={selectedShift} onValueChange={setSelectedShift}>
@@ -1012,7 +1012,7 @@ const DashboardPage = () => {
                       </Select>
                     </div>
 
-                    {/* Filtre par date */}
+                    {/* Filter by date */}
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-medium text-slate-600">{tCommon('date')}</label>
                       <Input
@@ -1023,7 +1023,7 @@ const DashboardPage = () => {
                       />
                     </div>
 
-                    {/* Filtre par statut */}
+                    {/* Filter by status */}
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-medium text-slate-600">{t('statusFilter')}</label>
                       <Select value={selectedStatus} onValueChange={setSelectedStatus}>
@@ -1040,7 +1040,7 @@ const DashboardPage = () => {
                       </Select>
                     </div>
 
-                    {/* Bouton réinitialiser - aligné avec Actions */}
+                    {/* Reset button - aligned with Actions */}
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-medium text-slate-600 invisible">Actions</label>
                       <Button
@@ -1091,10 +1091,6 @@ const DashboardPage = () => {
                         </thead>
                         <tbody>
                           {recentAssignments.map((assignment) => {
-                            // Debug: vérifier si le champ resent existe
-                            if (assignment.resent) {
-                              console.log('Assignment resent found:', assignment.id, assignment.shift.name, assignment.resent, assignment.resentAt);
-                            }
                             return (
                             <tr key={assignment.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                               <td className="py-4 px-2">
@@ -1218,7 +1214,7 @@ const DashboardPage = () => {
             </Card>
           </TabsContent>
 
-          {/* Vue Par Utilisateur */}
+          {/* Per User View */}
           <TabsContent value="users">
             <Card className="bg-white border-0 shadow-sm">
               <CardHeader>
@@ -1325,7 +1321,7 @@ const DashboardPage = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Aucun utilisateur éligible */}
+                {/* No eligible users */}
                 {usersAvailability.available.length === 0 &&
                  usersAvailability.alreadyAssigned.length === 0 &&
                  usersAvailability.unavailable.length === 0 && (
@@ -1335,7 +1331,7 @@ const DashboardPage = () => {
                   </div>
                 )}
 
-                {/* Utilisateurs disponibles */}
+                {/* Available users */}
                 {usersAvailability.available.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2">
@@ -1379,7 +1375,7 @@ const DashboardPage = () => {
                   </div>
                 )}
 
-                {/* Utilisateurs déjà assignés aujourd'hui */}
+                {/* Users already assigned today */}
                 {usersAvailability.alreadyAssigned.length > 0 && (
                   <div>
                     <div className="border-t pt-3">
@@ -1435,7 +1431,7 @@ const DashboardPage = () => {
                   </div>
                 )}
 
-                {/* Utilisateurs avec contraintes */}
+                {/* Users with constraints */}
                 {usersAvailability.unavailable.length > 0 && (
                   <div>
                     <div className="border-t pt-3">

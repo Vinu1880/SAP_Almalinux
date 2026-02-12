@@ -3,9 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
-// POST - Importer les jours fériés standards
+// POST - Import standard holidays
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -25,7 +24,7 @@ export async function POST(request: NextRequest) {
     const createdHolidays = [];
 
     for (const holidayData of standardHolidays) {
-      // Vérifier si le jour férié existe déjà
+      // Check if the holiday already exists
       const existingHoliday = await prisma.holiday.findFirst({
         where: {
           name: holidayData.name,
@@ -38,7 +37,7 @@ export async function POST(request: NextRequest) {
           data: {
             name: holidayData.name,
             date: new Date(holidayData.date),
-            cantons: toJsonString(holidayData.cantons),
+            cantons: holidayData.cantons,
             type: holidayData.type as 'FEDERAL' | 'CANTONAL',
             recurring: holidayData.recurring
           }
@@ -57,11 +56,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Fonction pour générer les jours fériés standards suisses
+// Generate standard Swiss holidays
 function getStandardSwissHolidays(year: number, cantons: string[]) {
   const holidays = [];
 
-  // Jours fériés fédéraux (pour tous)
+  // Federal holidays (for all cantons)
   const federalHolidays = [
     { name: 'Nouvel An', date: `${year}-01-01`, type: 'FEDERAL' },
     { name: 'Fête nationale suisse', date: `${year}-08-01`, type: 'FEDERAL' },
@@ -77,7 +76,7 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
     });
   });
 
-  // Jours fériés spécifiques aux cantons
+  // Canton-specific holidays
   if (cantons.includes('BE') || cantons.includes('ALL')) {
     holidays.push(
       {
@@ -142,21 +141,21 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
     );
   }
 
-  // Calcul de Pâques et jours associés
+  // Easter calculation and related holidays
   const easter = calculateEaster(year);
   const goodFriday = new Date(easter);
   goodFriday.setDate(easter.getDate() - 2);
-  
+
   const easterMonday = new Date(easter);
   easterMonday.setDate(easter.getDate() + 1);
-  
+
   const ascension = new Date(easter);
   ascension.setDate(easter.getDate() + 39);
-  
+
   const pentecostMonday = new Date(easter);
   pentecostMonday.setDate(easter.getDate() + 50);
 
-  // Vendredi Saint (la plupart des cantons)
+  // Good Friday (most cantons)
   const goodFridayCantons = cantons.filter(c => ['BE', 'ZH', 'VD'].includes(c));
   if (goodFridayCantons.length > 0 || cantons.includes('ALL')) {
     holidays.push({
@@ -168,7 +167,7 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
     });
   }
 
-  // Lundi de Pâques (Vaud principalement)
+  // Easter Monday (primarily Vaud)
   if (cantons.includes('VD') || cantons.includes('ALL')) {
     holidays.push({
       name: 'Lundi de Pâques',
@@ -179,7 +178,7 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
     });
   }
 
-  // Ascension (la plupart des cantons)
+  // Ascension (most cantons)
   const ascensionCantons = cantons.filter(c => ['BE', 'ZH', 'VD'].includes(c));
   if (ascensionCantons.length > 0 || cantons.includes('ALL')) {
     holidays.push({
@@ -191,7 +190,7 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
     });
   }
 
-  // Lundi de Pentecôte (Berne et Vaud principalement)
+  // Whit Monday (primarily Bern and Vaud)
   const pentecostCantons = cantons.filter(c => ['BE', 'VD'].includes(c));
   if (pentecostCantons.length > 0 || cantons.includes('ALL')) {
     holidays.push({
@@ -206,7 +205,7 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
   return holidays;
 }
 
-// Calcul de la date de Pâques (algorithme de Gauss)
+// Easter date calculation (Gauss algorithm)
 function calculateEaster(year: number): Date {
   const a = year % 19;
   const b = Math.floor(year / 100);
@@ -222,11 +221,11 @@ function calculateEaster(year: number): Date {
   const m = Math.floor((a + 11 * h + 22 * l) / 451);
   const month = Math.floor((h + l - 7 * m + 114) / 31);
   const day = ((h + l - 7 * m + 114) % 31) + 1;
-  
+
   return new Date(year, month - 1, day);
 }
 
-// Calcul de la Fête-Dieu (60 jours après Pâques)
+// Corpus Christi date calculation (60 days after Easter)
 function getCorpusChristiDate(year: number): string {
   const easter = calculateEaster(year);
   const corpusChristi = new Date(easter);

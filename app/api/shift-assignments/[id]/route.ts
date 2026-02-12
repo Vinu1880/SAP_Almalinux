@@ -3,9 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString } from '@/lib/json-helpers';
 
-// GET - Récupérer une assignation spécifique
+// GET - Retrieve a specific assignment
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -48,7 +47,7 @@ export async function GET(
   }
 }
 
-// PUT - Mettre à jour une assignation (généralement le status)
+// PUT - Update an assignment (typically the status)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -65,7 +64,7 @@ export async function PUT(
     if (body.status !== undefined) {
       updateData.status = body.status;
 
-      // Si le status change vers ACCEPTED ou REFUSED, enregistrer la date de réponse
+      // If the status changes to ACCEPTED or REFUSED, record the response date
       if (body.status === 'ACCEPTED' || body.status === 'REFUSED') {
         updateData.respondedAt = new Date();
       }
@@ -96,13 +95,13 @@ export async function PUT(
       }
     });
 
-    // Log audit
+    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'UPDATE',
         entity: 'SHIFT_ASSIGNMENT',
         entityId: assignment.id,
-        data: toJsonString({ before: body, after: assignment })
+        data: { before: body, after: assignment }
       }
     });
 
@@ -116,7 +115,7 @@ export async function PUT(
   }
 }
 
-// PATCH - Mettre à jour partiellement une assignation (ex: outlookEventId)
+// PATCH - Partially update an assignment (e.g., outlookEventId)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -155,7 +154,7 @@ export async function PATCH(
   }
 }
 
-// DELETE - Supprimer une assignation
+// DELETE - Delete an assignment
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -170,13 +169,13 @@ export async function DELETE(
       where: { id }
     });
 
-    // Log audit
+    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'DELETE',
         entity: 'SHIFT_ASSIGNMENT',
         entityId: id,
-        data: toJsonString(assignment)
+        data: assignment
       }
     });
 

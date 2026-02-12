@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   /**
-   * Initialisation MSAL + traitement du retour OAuth
+   * MSAL initialization + OAuth redirect handling
    */
   useEffect(() => {
     const init = async () => {
@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         } catch (e: any) {
-          // ✅ Erreur normale si aucun redirect n’a eu lieu
+          // Normal error if no redirect occurred
           if (e.errorCode !== 'no_token_request_cache_error') {
             console.error('MSAL redirect error:', e);
           }
@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setMsalInstance(instance);
       } catch (err) {
-        console.error('Erreur lors de l\'initialisation de MSAL:', err);
+        console.error('Error initializing MSAL:', err);
       } finally {
         setIsLoading(false);
       }
@@ -72,11 +72,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   /**
-   * Connexion SSO Azure AD (Redirect)
+   * SSO Azure AD login (Redirect)
    */
   const loginWithSSO = async () => {
     if (!msalInstance) {
-      console.warn('MSAL pas encore prêt');
+      console.warn('MSAL not ready yet');
       return;
     }
 
@@ -85,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * TEMPORAIRE - Connexion email/password
+   * TEMPORARY - Email/password login
    */
   const loginWithEmail = async (email: string, password: string) => {
     try {
@@ -108,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Déconnexion
+   * Logout
    */
   const logout = async () => {
     try {
@@ -130,7 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Récupération du token Graph API
+   * Graph API token retrieval
    */
   const getAccessToken = async (): Promise<string | null> => {
     if (!msalInstance || !account) {
@@ -170,7 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth doit être utilisé dans un AuthProvider');
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };

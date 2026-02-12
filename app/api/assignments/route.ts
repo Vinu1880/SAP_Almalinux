@@ -3,7 +3,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
 // Helper function to map location to canton code
 function getUserCantonFromLocation(location: string): string {
@@ -59,11 +58,8 @@ async function validateAssignmentAgainstHolidays(
 
     // Check if any holiday applies to this user
     for (const holiday of holidays) {
-      // Parse cantons from string if needed (MSSQL stores as String)
-      const holidayCantons: string[] = fromJsonString(holiday.cantons) || [];
-
       // Check if holiday applies to all cantons
-      if (holidayCantons.includes('ALL')) {
+      if (holiday.cantons.includes('ALL')) {
         return {
           valid: false,
           reason: `Non-working day in all cantons`,
@@ -84,7 +80,7 @@ async function validateAssignmentAgainstHolidays(
       }
 
       // Check if user's canton matches holiday canton
-      if (holidayCantons.includes(userCanton)) {
+      if (holiday.cantons.includes(userCanton)) {
         return {
           valid: false,
           reason: `Non-working day in ${userCanton}`,
@@ -101,7 +97,7 @@ async function validateAssignmentAgainstHolidays(
   }
 }
 
-// POST - Créer des assignations de shifts (bulk)
+// POST - Create shift assignments (bulk)
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -109,19 +105,19 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { shiftId, assignments } = body;
-    
-    // Vérifier que le shift existe
+
+    // Verify that the shift exists
     const shift = await prisma.shift.findUnique({
       where: { id: shiftId }
     });
-    
+
     if (!shift) {
       return NextResponse.json(
         { error: 'Shift not found' },
         { status: 404 }
       );
     }
-    
+
     // Validate all assignments against holidays first
     const validationResults = await Promise.all(
       assignments.map(async (assignment: any) => {
@@ -168,11 +164,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Créer les assignations en bulk (only if all validations passed)
+    // Create assignments in bulk (only if all validations passed)
     const createdAssignments = await Promise.all(
       assignments.map(async (assignment: any) => {
         try {
-          // Vérifier si l'assignation existe déjà
+          // Check if the assignment already exists
           const existing = await prisma.shiftAssignment.findUnique({
             where: {
               date_shiftId_userId: {
@@ -184,7 +180,7 @@ export async function POST(request: NextRequest) {
           });
 
           if (existing) {
-            // Mettre à jour si elle existe
+            // Update if it exists
             return await prisma.shiftAssignment.update({
               where: { id: existing.id },
               data: {
@@ -194,7 +190,7 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          // Créer une nouvelle assignation
+          // Create a new assignment
           return await prisma.shiftAssignment.create({
             data: {
               date: new Date(assignment.date),
@@ -210,11 +206,11 @@ export async function POST(request: NextRequest) {
         }
       })
     );
-    
-    // Filtrer les assignations nulles (erreurs)
+
+    // Filter out null assignments (errors)
     const successfulAssignments = createdAssignments.filter(a => a !== null);
-    
-    // Mettre à jour le compteur d'utilisation du shift
+
+    // Update the shift usage counter
     await prisma.shift.update({
       where: { id: shiftId },
       data: {
@@ -222,23 +218,23 @@ export async function POST(request: NextRequest) {
         lastUsedAt: new Date()
       }
     });
-    
-    // Log audit
+
+    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'CREATE',
         entity: 'ASSIGNMENT',
         entityId: shiftId,
-        data: toJsonString({ count: successfulAssignments.length })
+        data: { count: successfulAssignments.length }
       }
     });
-    
+
     return NextResponse.json({
       success: true,
       created: successfulAssignments.length,
       assignments: successfulAssignments
     }, { status: 201 });
-    
+
   } catch (error) {
     console.error('Error creating assignments:', error);
     return NextResponse.json(
@@ -248,7 +244,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Récupérer les assignations
+// GET - Retrieve assignments
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -260,20 +256,20 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const status = searchParams.get('status');
-    
+
     const where: any = {};
-    
+
     if (userId) where.userId = userId;
     if (shiftId) where.shiftId = shiftId;
     if (status) where.status = status;
-    
+
     if (startDate && endDate) {
       where.date = {
         gte: new Date(startDate),
         lte: new Date(endDate)
       };
     }
-    
+
     const assignments = await prisma.shiftAssignment.findMany({
       where,
       include: {
@@ -289,18 +285,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Parse string fields in included shift data
-    const normalizedAssignments = assignments.map(a => ({
-      ...a,
-      shift: {
-        ...a.shift,
-        daysOfWeek: fromJsonString(a.shift.daysOfWeek),
-        includedUserIds: fromJsonString(a.shift.includedUserIds),
-        excludedUserIds: fromJsonString(a.shift.excludedUserIds),
-      }
-    }));
-
-    return NextResponse.json(normalizedAssignments);
+    return NextResponse.json(assignments);
   } catch (error) {
     console.error('Error fetching assignments:', error);
     return NextResponse.json(

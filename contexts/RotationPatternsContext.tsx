@@ -40,26 +40,25 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
     return fetch(url, { ...options, headers });
   }, [getAccessToken]);
 
-  // Charger les patterns depuis la DB au montage
+  // Load patterns from DB on mount
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const loadPatterns = async () => {
       try {
-        // Essayer de charger depuis la DB
+        // Try to load from DB
         const response = await authFetch('/api/rotation-patterns');
         if (response.ok) {
           const dbPatterns = await response.json();
 
-          // Si la DB est vide, migrer depuis localStorage
+          // If DB is empty, migrate from localStorage
           if (dbPatterns.length === 0 && typeof window !== 'undefined') {
             const saved = localStorage.getItem('rotationPatterns');
             if (saved) {
               try {
                 const localPatterns = JSON.parse(saved);
-                console.log('🔄 Migration des patterns depuis localStorage vers DB...');
 
-                // Sauvegarder chaque pattern dans la DB
+                // Save each pattern to DB
                 for (const pattern of localPatterns) {
                   await authFetch('/api/rotation-patterns', {
                     method: 'POST',
@@ -68,28 +67,27 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
                   });
                 }
 
-                // Recharger depuis la DB après migration
+                // Reload from DB after migration
                 const migratedResponse = await authFetch('/api/rotation-patterns');
                 if (migratedResponse.ok) {
                   const migratedPatterns = await migratedResponse.json();
                   setPatterns(migratedPatterns);
-                  console.log('✅ Migration réussie!');
 
-                  // Nettoyer localStorage après migration réussie
+                  // Clean up localStorage after successful migration
                   localStorage.removeItem('rotationPatterns');
                 }
               } catch (e) {
-                console.error('❌ Erreur migration patterns:', e);
+                console.error('Error migrating patterns:', e);
               }
             }
           } else {
             setPatterns(dbPatterns);
           }
         } else {
-          console.error('❌ Erreur chargement patterns DB');
+          console.error('Error loading patterns from DB');
         }
       } catch (error) {
-        console.error('❌ Erreur lors du chargement des patterns:', error);
+        console.error('Error loading patterns:', error);
       } finally {
         setIsInitialized(true);
       }
@@ -100,7 +98,7 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
 
   const addPattern = async (pattern: RotationPattern) => {
     try {
-      // Sauvegarder dans la DB
+      // Save to DB
       const response = await authFetch('/api/rotation-patterns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,18 +108,17 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
       if (response.ok) {
         const savedPattern = await response.json();
         setPatterns(prev => [...prev, savedPattern]);
-        console.log('✅ Pattern ajouté à la DB:', savedPattern.name);
       } else {
-        console.error('❌ Erreur sauvegarde pattern');
+        console.error('Error saving pattern');
       }
     } catch (error) {
-      console.error('❌ Erreur lors de l\'ajout du pattern:', error);
+      console.error('Error adding pattern:', error);
     }
   };
 
   const updatePattern = async (pattern: RotationPattern) => {
     try {
-      // Mettre à jour dans la DB
+      // Update in DB
       const response = await authFetch(`/api/rotation-patterns/${pattern.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -131,30 +128,28 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
       if (response.ok) {
         const updatedPattern = await response.json();
         setPatterns(prev => prev.map(p => p.id === pattern.id ? updatedPattern : p));
-        console.log('✅ Pattern mis à jour dans la DB:', updatedPattern.name);
       } else {
-        console.error('❌ Erreur mise à jour pattern');
+        console.error('Error updating pattern');
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour du pattern:', error);
+      console.error('Error updating pattern:', error);
     }
   };
 
   const deletePattern = async (id: string) => {
     try {
-      // Supprimer de la DB
+      // Delete from DB
       const response = await authFetch(`/api/rotation-patterns/${id}`, {
         method: 'DELETE'
       });
 
       if (response.ok) {
         setPatterns(prev => prev.filter(p => p.id !== id));
-        console.log('✅ Pattern supprimé de la DB');
       } else {
-        console.error('❌ Erreur suppression pattern');
+        console.error('Error deleting pattern');
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la suppression du pattern:', error);
+      console.error('Error deleting pattern:', error);
     }
   };
 

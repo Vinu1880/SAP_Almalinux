@@ -3,9 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
-// GET - Récupérer un shift par ID
+// GET - Retrieve a shift by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,14 +22,14 @@ export async function GET(
         assignments: true
       }
     });
-    
+
     if (!shift) {
       return NextResponse.json(
         { error: 'Shift not found' },
         { status: 404 }
       );
     }
-    
+
     return NextResponse.json(shift);
   } catch (error) {
     console.error('Error fetching shift:', error);
@@ -41,7 +40,7 @@ export async function GET(
   }
 }
 
-// PUT - Mettre à jour un shift
+// PUT - Update a shift
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -53,9 +52,9 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    // Préparer les données de mise à jour
+    // Prepare update data
     const updateData: any = {};
-    
+
     if (body.name !== undefined) updateData.name = body.name;
     if (body.description !== undefined) updateData.description = body.description || null;
     if (body.startTime !== undefined) updateData.startTime = body.startTime;
@@ -66,10 +65,10 @@ export async function PUT(
     if (body.status !== undefined) updateData.status = body.status;
     if (body.color !== undefined) updateData.color = body.color;
     if (body.senderMailbox !== undefined) updateData.senderMailbox = body.senderMailbox;
-    if (body.includedUserIds !== undefined) updateData.includedUserIds = toJsonString(body.includedUserIds);
-    if (body.excludedUserIds !== undefined) updateData.excludedUserIds = toJsonString(body.excludedUserIds);
-    if (body.daysOfWeek !== undefined) updateData.daysOfWeek = toJsonString(body.daysOfWeek);
-    
+    if (body.includedUserIds !== undefined) updateData.includedUserIds = body.includedUserIds;
+    if (body.excludedUserIds !== undefined) updateData.excludedUserIds = body.excludedUserIds;
+    if (body.daysOfWeek !== undefined) updateData.daysOfWeek = body.daysOfWeek;
+
     const shift = await prisma.shift.update({
       where: { id },
       data: updateData,
@@ -77,20 +76,20 @@ export async function PUT(
         team: true
       }
     });
-    
-    // Log audit
+
+    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'UPDATE',
         entity: 'SHIFT',
         entityId: shift.id,
-        data: toJsonString({
+        data: {
           before: body,
           after: shift
-        })
+        } as any
       }
     });
-    
+
     return NextResponse.json(shift);
   } catch (error) {
     console.error('Error updating shift:', error);
@@ -101,7 +100,7 @@ export async function PUT(
   }
 }
 
-// DELETE - Supprimer un shift
+// DELETE - Delete a shift
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -112,21 +111,21 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Supprimer le shift (les assignations seront supprimées en cascade grâce à onDelete: Cascade)
+    // Delete the shift (assignments will be cascade-deleted thanks to onDelete: Cascade)
     const shift = await prisma.shift.delete({
       where: { id }
     });
-    
-    // Log audit
+
+    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'DELETE',
         entity: 'SHIFT',
         entityId: id,
-        data: toJsonString(shift)
+        data: shift as any
       }
     });
-    
+
     return NextResponse.json({ success: true, deleted: shift });
   } catch (error) {
     console.error('Error deleting shift:', error);

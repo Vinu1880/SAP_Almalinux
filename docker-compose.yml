@@ -1,6 +1,26 @@
 version: "3.9"
 
 services:
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: sap-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sa_sap
+      POSTGRES_PASSWORD: "Jq1v*lHHU_;sT+X^"
+      POSTGRES_DB: shiftautoplanner
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - sap-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sa_sap -d shiftautoplanner"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     build:
       context: .
@@ -13,6 +33,9 @@ services:
     image: sap-app:latest
     container_name: sap-app
     restart: unless-stopped
+    depends_on:
+      postgres-db:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
@@ -45,6 +68,7 @@ services:
       - sap-network
 
 volumes:
+  postgres-data:
   nginx-certs:
 
 networks:

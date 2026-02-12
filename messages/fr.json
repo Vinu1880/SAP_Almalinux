@@ -595,6 +595,11 @@
     "invitationsSentSuccess": "Invitations envoyées avec succès !",
     "invitationsSent": "{count} invitation(s) envoyée(s)",
     "assignmentsCreated": "{count} assignation(s) créée(s)",
-    "sendErrors": "{count} erreur(s) lors de l'envoi. Vérifiez votre access token et les adresses email."
+    "sendErrors": "{count} erreur(s) lors de l'envoi. Vérifiez votre access token et les adresses email.",
+    "accessTokenMissingOrInvalid": "Access token manquant ou invalide. Veuillez vous reconnecter.",
+    "noInvitationsSentError": "Aucune invitation n'a pu être envoyée ({count} erreur(s)).\n\nRaisons possibles :\n- Access token expiré\n- Adresse email invalide\n- Pas de connexion internet\n\nAucune assignation n'a été créée dans la base de données.",
+    "noInvitationsToSend": "Aucune invitation à envoyer.",
+    "sendingInProgress": "Envoi en cours...",
+    "understood": "Compris"
   }
 }

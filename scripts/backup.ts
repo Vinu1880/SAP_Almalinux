@@ -6,14 +6,14 @@ import path from 'path';
 const prisma = new PrismaClient();
 
 async function backup() {
-  console.log('📦 Création de la sauvegarde...');
-  
-  // Créer le dossier backups s'il n'existe pas
+  console.log('Creating backup...');
+
+  // Create the backups directory if it does not exist
   const backupsDir = path.join(process.cwd(), 'backups');
   if (!fs.existsSync(backupsDir)) {
     fs.mkdirSync(backupsDir);
   }
-  
+
   const data = {
     teams: await prisma.team.findMany(),
     users: await prisma.user.findMany(),
@@ -24,11 +24,11 @@ async function backup() {
     outOfOfficeEvents: await prisma.outOfOfficeEvent.findMany(),
     auditLogs: await prisma.auditLog.findMany(),
   };
-  
+
   const fileName = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}.json`;
   const filePath = path.join(backupsDir, fileName);
-  
-  const backup = {
+
+  const backupData = {
     version: '1.0.0',
     backupDate: new Date().toISOString(),
     counts: {
@@ -43,20 +43,20 @@ async function backup() {
     },
     data
   };
-  
-  fs.writeFileSync(filePath, JSON.stringify(backup, null, 2));
-  
-  // Créer aussi un backup "latest"
+
+  fs.writeFileSync(filePath, JSON.stringify(backupData, null, 2));
+
+  // Also create a "latest" backup
   const latestPath = path.join(backupsDir, 'backup_latest.json');
-  fs.writeFileSync(latestPath, JSON.stringify(backup, null, 2));
-  
-  console.log(`✅ Sauvegarde créée: ${fileName}`);
-  console.log(`   - ${data.teams.length} équipes`);
-  console.log(`   - ${data.users.length} utilisateurs`);
+  fs.writeFileSync(latestPath, JSON.stringify(backupData, null, 2));
+
+  console.log(`Backup created: ${fileName}`);
+  console.log(`   - ${data.teams.length} teams`);
+  console.log(`   - ${data.users.length} users`);
   console.log(`   - ${data.shifts.length} shifts`);
   console.log(`   - ${data.piketts.length} piketts`);
-  console.log(`   - ${data.rotationPatterns.length} patterns de rotation`);
-  console.log(`   - ${data.shiftAssignments.length} assignations`);
+  console.log(`   - ${data.rotationPatterns.length} rotation patterns`);
+  console.log(`   - ${data.shiftAssignments.length} assignments`);
 }
 
 backup()

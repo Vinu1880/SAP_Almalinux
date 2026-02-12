@@ -595,6 +595,11 @@
     "invitationsSentSuccess": "Invitations sent successfully!",
     "invitationsSent": "{count} invitation(s) sent",
     "assignmentsCreated": "{count} assignment(s) created",
-    "sendErrors": "{count} error(s) while sending. Check your access token and email addresses."
+    "sendErrors": "{count} error(s) while sending. Check your access token and email addresses.",
+    "accessTokenMissingOrInvalid": "Access token missing or invalid. Please reconnect.",
+    "noInvitationsSentError": "No invitation could be sent ({count} error(s)).\n\nPossible reasons:\n- Expired access token\n- Invalid email address\n- No internet connection\n\nNo assignment was created in the database.",
+    "noInvitationsToSend": "No invitations to send.",
+    "sendingInProgress": "Sending in progress...",
+    "understood": "Got it"
   }
 }

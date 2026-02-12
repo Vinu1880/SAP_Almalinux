@@ -3,9 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
-// GET - Récupérer tous les utilisateurs
+// GET - Fetch all users with team relations
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -21,39 +20,26 @@ export async function GET(request: NextRequest) {
         { lastName: 'asc' }
       ]
     });
-    
-    // Log détaillé pour debug et normaliser les champs JSON
-    console.log('=== USERS FROM DATABASE ===');
+
+    // Normalize JSON fields that may have been stored as strings
     const normalizedUsers = users.map(user => {
-      // S'assurer que rotationConfig est un objet, pas une chaîne
       let normalizedRotationConfig = user.rotationConfig;
       if (typeof user.rotationConfig === 'string') {
         try {
           normalizedRotationConfig = JSON.parse(user.rotationConfig);
-          console.log(`⚠️ Parsing rotationConfig string for ${user.firstName}`);
-        } catch (e) {
-          console.error(`❌ Failed to parse rotationConfig for ${user.firstName}:`, e);
+        } catch {
           normalizedRotationConfig = null;
         }
       }
 
-      // S'assurer que availability est un objet, pas une chaîne
       let normalizedAvailability = user.availability;
       if (typeof user.availability === 'string') {
         try {
           normalizedAvailability = JSON.parse(user.availability);
-        } catch (e) {
-          console.error(`❌ Failed to parse availability for ${user.firstName}:`, e);
+        } catch {
           normalizedAvailability = null;
         }
       }
-
-      console.log(`${user.firstName} ${user.lastName}:`, {
-        rotationConfig: normalizedRotationConfig,
-        rotationConfigType: typeof normalizedRotationConfig,
-        hasPatternId: !!(normalizedRotationConfig && (normalizedRotationConfig as any).patternId),
-        rawJSON: JSON.stringify(normalizedRotationConfig)
-      });
 
       return {
         ...user,
@@ -61,7 +47,6 @@ export async function GET(request: NextRequest) {
         availability: normalizedAvailability
       };
     });
-    console.log('==============================');
 
     return NextResponse.json(normalizedUsers);
   } catch (error) {
@@ -73,7 +58,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Créer un nouvel utilisateur
+// POST - Create a new user
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -81,10 +66,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    console.log('=== CREATING USER ===');
-    console.log('Request body:', JSON.stringify(body, null, 2));
-    
-    // Préparer les données de base
     const userData: any = {
       firstName: body.firstName,
       lastName: body.lastName,
@@ -96,32 +77,27 @@ export async function POST(request: NextRequest) {
       status: body.status || 'ACTIVE',
       notes: body.notes || null
     };
-    
-    // Ajouter teamId seulement s'il existe
+
+    // Only set teamId if provided and valid
     if (body.teamId && body.teamId !== 'none') {
       userData.teamId = body.teamId;
     }
-    
-    // STOCKAGE DIRECT du rotationConfig comme JSON (stringifié pour MSSQL)
+
+    // Store rotation config as JSON
     if (body.rotationConfig && body.rotationConfig.patternId) {
-      userData.rotationConfig = toJsonString({
+      userData.rotationConfig = {
         patternId: body.rotationConfig.patternId,
         priority: body.rotationConfig.priority || 'medium',
         allowedShiftTypes: body.rotationConfig.allowedShiftTypes || []
-      });
-      console.log('Storing rotationConfig as JSON string:', userData.rotationConfig);
+      };
     } else {
       userData.rotationConfig = null;
-      console.log('No rotation config to store');
     }
 
-    // Ajouter availability si présent (stringifié pour MSSQL)
     if (body.availability) {
-      userData.availability = toJsonString(body.availability);
+      userData.availability = body.availability;
     }
-    
-    console.log('Final userData to create:', JSON.stringify(userData, null, 2));
-    
+
     const user = await prisma.user.create({
       data: userData,
       include: {
@@ -129,45 +105,30 @@ export async function POST(request: NextRequest) {
         leadingTeam: true
       }
     });
-    
-    console.log('User created successfully:', {
-      name: `${user.firstName} ${user.lastName}`,
-      rotationConfig: user.rotationConfig,
-      id: user.id
-    });
-    
-    // Log audit
+
     await prisma.auditLog.create({
       data: {
         action: 'CREATE',
         entity: 'USER',
         entityId: user.id,
-        data: toJsonString(user)
+        data: user
       }
     });
-    
+
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
     console.error('Error creating user:', error);
-    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
 
-    // Détecter l'erreur d'email en double (Prisma unique constraint violation)
+    // Detect duplicate email (Prisma unique constraint violation)
     if (error instanceof Error && error.message.includes('Unique constraint failed on the fields: (`email`)')) {
       return NextResponse.json(
-        {
-          error: 'Cet email est déjà utilisé par un autre utilisateur',
-          code: 'EMAIL_EXISTS'
-        },
+        { error: 'This email is already used by another user', code: 'EMAIL_EXISTS' },
         { status: 409 }
       );
     }
 
     return NextResponse.json(
-      {
-        error: 'Erreur lors de la création de l\'utilisateur',
-        details: error instanceof Error ? error.message : 'Erreur inconnue',
-        stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : null) : undefined
-      },
+      { error: 'Failed to create user', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

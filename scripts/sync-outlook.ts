@@ -1,20 +1,20 @@
 #!/usr/bin/env tsx
 
 // scripts/sync-outlook.ts
-// Script pour synchroniser manuellement les réponses Outlook
+// Script to manually synchronize Outlook responses
 
 import { config } from 'dotenv';
 import { resolve } from 'path';
 
-// Charger les variables d'environnement
+// Load environment variables
 config({ path: resolve(process.cwd(), '.env') });
 
 const CRON_SECRET = process.env.CRON_SECRET || 'dev-secret-change-in-production';
 const BASE_URL = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
 
 async function syncOutlookResponses() {
-  console.log('🔄 Starting Outlook responses synchronization...');
-  console.log(`📍 API endpoint: ${BASE_URL}/api/cron/sync-outlook-responses`);
+  console.log('Starting Outlook responses synchronization...');
+  console.log(`API endpoint: ${BASE_URL}/api/cron/sync-outlook-responses`);
 
   try {
     const response = await fetch(`${BASE_URL}/api/cron/sync-outlook-responses`, {
@@ -27,39 +27,39 @@ async function syncOutlookResponses() {
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('❌ Synchronization failed:');
+      console.error('Synchronization failed:');
       console.error(error);
       process.exit(1);
     }
 
     const result = await response.json();
 
-    console.log('\n✅ Synchronization completed successfully!');
-    console.log(`\n📊 Results:`);
+    console.log('\nSynchronization completed successfully!');
+    console.log(`\nResults:`);
     console.log(`   - Checked: ${result.checked} assignments`);
     console.log(`   - Updated: ${result.updated} assignments`);
     console.log(`   - Errors: ${result.errors}`);
 
     if (result.results && result.results.length > 0) {
-      console.log('\n📝 Details:');
+      console.log('\nDetails:');
       result.results.forEach((r: any, index: number) => {
         if (r.success) {
-          console.log(`   ${index + 1}. ✅ ${r.userEmail} - ${r.shiftName}: ${r.oldStatus} → ${r.newStatus}`);
+          console.log(`   ${index + 1}. OK ${r.userEmail} - ${r.shiftName}: ${r.oldStatus} -> ${r.newStatus}`);
         } else {
-          console.log(`   ${index + 1}. ❌ ${r.userEmail}: ${r.error}`);
+          console.log(`   ${index + 1}. FAIL ${r.userEmail}: ${r.error}`);
         }
       });
     }
 
-    console.log('\n✨ Done!');
+    console.log('\nDone!');
   } catch (error) {
-    console.error('❌ Error during synchronization:');
+    console.error('Error during synchronization:');
     console.error(error);
     process.exit(1);
   }
 }
 
-// Vérifier le statut avant de synchroniser
+// Check status before synchronizing
 async function checkSyncStatus() {
   try {
     const response = await fetch(`${BASE_URL}/api/cron/sync-outlook-responses`, {
@@ -67,19 +67,19 @@ async function checkSyncStatus() {
     });
 
     if (!response.ok) {
-      console.error('❌ Failed to check sync status');
+      console.error('Failed to check sync status');
       return;
     }
 
     const status = await response.json();
 
-    console.log('📊 Current sync status:');
+    console.log('Current sync status:');
     console.log(`   - Pending assignments: ${status.pendingAssignments}`);
     console.log(`   - Recent syncs: ${status.recentSyncs}`);
     console.log(`   - Last sync: ${status.lastSync ? new Date(status.lastSync).toLocaleString() : 'Never'}`);
     console.log('');
   } catch (error) {
-    console.error('❌ Error checking sync status:', error);
+    console.error('Error checking sync status:', error);
   }
 }
 
@@ -92,7 +92,7 @@ async function main() {
     await checkSyncStatus();
   } else if (command === 'help' || command === '--help' || command === '-h') {
     console.log(`
-📖 Outlook Sync Script
+Outlook Sync Script
 
 Usage:
   tsx scripts/sync-outlook.ts [command]

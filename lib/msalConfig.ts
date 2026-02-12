@@ -1,46 +1,26 @@
 import { Configuration, PopupRequest } from '@azure/msal-browser';
 
-/**
- * Configuration MSAL pour Azure AD
- * Authentification SSO Microsoft (SPA)
- */
+// MSAL configuration for Azure AD SSO (SPA)
 export const msalConfig: Configuration = {
   auth: {
-    /**
-     * ✅ OBLIGATOIRE
-     * Ne jamais mettre de fallback vide :
-     * si absent, le build doit échouer (meilleur qu’un bug OAuth silencieux)
-     */
+    // Required - Azure AD application client ID
     clientId: process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID!,
 
-    /**
-     * ✅ Tenant Azure AD
-     */
+    // Azure AD tenant authority
     authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID}`,
 
-    /**
-     * ✅ MSAL SPA → URL de base de l’application
-     * PAS de /api/auth/*
-     */
+    // MSAL SPA redirect URI (base app URL, not /api/auth/*)
     redirectUri: process.env.NEXT_PUBLIC_AZURE_AD_REDIRECT_URI!,
 
-    /**
-     * ✅ Redirection après logout
-     */
+    // Post-logout redirect
     postLogoutRedirectUri: process.env.NEXT_PUBLIC_AZURE_AD_REDIRECT_URI!,
   },
 
-  /**
-   * Cache MSAL
-   */
   cache: {
     cacheLocation: 'sessionStorage',
     storeAuthStateInCookie: false,
   },
 
-  /**
-   * Logging MSAL (debug utile en dev / pre-prod)
-   */
   system: {
     loggerOptions: {
       loggerCallback: (level, message, containsPii) => {
@@ -65,10 +45,7 @@ export const msalConfig: Configuration = {
   },
 };
 
-/**
- * Scopes demandés lors du login
- * Microsoft Graph (profil + calendrier)
- */
+// Scopes requested during login (Microsoft Graph: profile + calendar)
 export const loginRequest: PopupRequest = {
   scopes: [
     'openid',
@@ -81,9 +58,7 @@ export const loginRequest: PopupRequest = {
   ],
 };
 
-/**
- * Scopes pour l'acquisition silencieuse de token
- */
+// Scopes for silent token acquisition
 export const tokenRequest = {
   scopes: [
     'User.Read',
@@ -92,4 +67,3 @@ export const tokenRequest = {
     'Calendars.ReadWrite.Shared',
   ],
 };
-

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
     if (!userId || !date) {
       return NextResponse.json(
-        { error: 'userId et date sont requis' },
+        { error: 'userId and date are required' },
         { status: 400 }
       );
     }
@@ -24,12 +24,16 @@ export async function POST(request: NextRequest) {
     const nextDate = new Date(targetDate);
     nextDate.setDate(nextDate.getDate() + 1);
 
-    // Chercher des assignations pour cet utilisateur la veille ou le lendemain
+    // Convert to ISO string format (YYYY-MM-DD)
+    const prevDateStr = prevDate.toISOString().split('T')[0];
+    const nextDateStr = nextDate.toISOString().split('T')[0];
+
+    // Search for assignments for this user on the previous or next day
     const consecutiveAssignments = await prisma.shiftAssignment.findMany({
       where: {
         userId: userId,
         date: {
-          in: [prevDate, nextDate]
+          in: [prevDateStr, nextDateStr]
         },
         status: {
           not: 'CANCELLED'
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error checking consecutive shifts:', error);
     return NextResponse.json(
-      { error: 'Erreur lors de la vérification des shifts consécutifs' },
+      { error: 'Error checking consecutive shifts' },
       { status: 500 }
     );
   }

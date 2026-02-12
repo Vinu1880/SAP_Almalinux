@@ -2,9 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { toJsonString } from '@/lib/json-helpers';
 
-// Fonction pour obtenir un access token valide
+// Get a valid access token
 async function getAccessToken(): Promise<string> {
   const clientId = process.env.AZURE_AD_CLIENT_ID!;
   const clientSecret = process.env.AZURE_AD_CLIENT_SECRET!;
@@ -12,7 +11,7 @@ async function getAccessToken(): Promise<string> {
   const refreshToken = process.env.MICROSOFT_GRAPH_REFRESH_TOKEN;
 
   if (refreshToken) {
-    // Utiliser le refresh token pour obtenir un nouveau access token
+    // Use the refresh token to obtain a new access token
     const tokenResponse = await fetch(
       `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
       {
@@ -35,7 +34,7 @@ async function getAccessToken(): Promise<string> {
     const tokenData = await tokenResponse.json();
     return tokenData.access_token;
   } else {
-    // Utiliser Client Credentials (application permissions)
+    // Use Client Credentials (application permissions)
     const tokenResponse = await fetch(
       `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
       {
@@ -59,7 +58,7 @@ async function getAccessToken(): Promise<string> {
   }
 }
 
-// Mapper les réponses Outlook vers nos statuts
+// Map Outlook responses to our statuses
 function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'REFUSED' | 'PENDING' {
   switch (response?.toLowerCase()) {
     case 'accepted':
@@ -72,10 +71,10 @@ function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'REFUSED' | 
   }
 }
 
-// POST - Synchroniser les réponses Outlook
+// POST - Synchronize Outlook responses
 export async function POST(request: NextRequest) {
   try {
-    // Vérifier l'authentification (optionnel : ajouter un secret pour sécuriser)
+    // Verify authentication
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET || 'dev-secret-change-in-production';
 
@@ -86,15 +85,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[SYNC] Starting Outlook responses synchronization...');
-    console.log('[SYNC] Using credentials:', {
-      hasClientId: !!process.env.AZURE_AD_CLIENT_ID,
-      hasClientSecret: !!process.env.AZURE_AD_CLIENT_SECRET,
-      hasTenantId: !!process.env.AZURE_AD_TENANT_ID,
-      hasRefreshToken: !!process.env.MICROSOFT_GRAPH_REFRESH_TOKEN
-    });
-
-    // Récupérer toutes les assignments PENDING avec un outlookEventId
+    // Retrieve all PENDING assignments with an outlookEventId
     const pendingAssignments = await prisma.shiftAssignment.findMany({
       where: {
         status: 'PENDING',
@@ -107,17 +98,6 @@ export async function POST(request: NextRequest) {
         shift: true
       }
     });
-
-    console.log(`[SYNC] Found ${pendingAssignments.length} pending assignments to check`);
-
-    if (pendingAssignments.length > 0) {
-      console.log('[SYNC] First assignment details:', {
-        id: pendingAssignments[0].id,
-        userEmail: pendingAssignments[0].user.email,
-        shiftName: pendingAssignments[0].shift.name,
-        outlookEventId: pendingAssignments[0].outlookEventId?.substring(0, 30) + '...'
-      });
-    }
 
     if (pendingAssignments.length === 0) {
       return NextResponse.json({
@@ -138,19 +118,14 @@ export async function POST(request: NextRequest) {
       try {
         const { outlookEventId, user, shift, id } = assignment;
 
-        console.log(`[SYNC] Processing assignment ${id} for ${user.email}`);
-
         if (!outlookEventId) {
-          console.log(`[SYNC] No outlookEventId for assignment ${id}, skipping`);
           continue;
         }
 
-        // Récupérer les détails de l'événement depuis Microsoft Graph
-        // IMPORTANT: Les événements sont créés dans le calendrier du créateur (token owner)
-        // donc on utilise toujours /me/events
+        // Fetch event details from Microsoft Graph
+        // IMPORTANT: Events are created in the creator's calendar (token owner)
+        // so we always use /me/events
         const eventUrl = `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`;
-
-        console.log(`[SYNC] Fetching event from: ${eventUrl}`);
 
         const eventResponse = await fetch(eventUrl, {
           headers: {
@@ -159,49 +134,34 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        console.log(`[SYNC] Event response status: ${eventResponse.status}`);
-
         if (!eventResponse.ok) {
           if (eventResponse.status === 404) {
-            console.log(`[SYNC] Event not found for assignment ${id}, skipping...`);
             continue;
           }
           const errorText = await eventResponse.text();
-          console.error(`[SYNC] Failed to fetch event: ${eventResponse.statusText}`, errorText);
+          console.error(`[SYNC] Failed to fetch event for assignment ${id}: ${eventResponse.statusText}`, errorText);
           throw new Error(`Failed to fetch event: ${eventResponse.statusText}`);
         }
 
         const event = await eventResponse.json();
-        console.log(`[SYNC] Event fetched successfully. Attendees count: ${event.attendees?.length || 0}`);
 
-        // Trouver la réponse de l'utilisateur dans les attendees
+        // Find the user's response in the attendees
         const attendee = event.attendees?.find(
           (a: any) => a.emailAddress.address.toLowerCase() === user.email.toLowerCase()
         );
 
         if (!attendee) {
-          console.log(`[SYNC] No attendee found matching ${user.email} in event ${id}`);
-          if (event.attendees) {
-            console.log(`[SYNC] Available attendees:`, event.attendees.map((a: any) => a.emailAddress.address));
-          }
           continue;
         }
 
-        console.log(`[SYNC] Attendee found: ${attendee.emailAddress.address}`);
-        console.log(`[SYNC] Attendee status:`, attendee.status);
-
         if (!attendee.status) {
-          console.log(`[SYNC] No response status found for assignment ${id}`);
           continue;
         }
 
         const responseStatus = attendee.status.response;
-        console.log(`[SYNC] Response status: ${responseStatus}`);
-
         const newStatus = mapOutlookResponseToStatus(responseStatus);
-        console.log(`[SYNC] Mapped to: ${newStatus}`);
 
-        // Ne mettre à jour que si le statut a changé et n'est pas PENDING
+        // Only update if the status has changed and is not PENDING
         if (newStatus !== 'PENDING' && newStatus !== assignment.status) {
           await prisma.shiftAssignment.update({
             where: { id },
@@ -211,11 +171,9 @@ export async function POST(request: NextRequest) {
             }
           });
 
-          // Si le shift est refusé, supprimer l'événement Outlook du calendrier du sender
+          // If the shift is refused, delete the Outlook event from the sender's calendar
           if (newStatus === 'REFUSED' && outlookEventId) {
             try {
-              console.log(`[SYNC] Shift refusé, suppression de l'événement Outlook ${outlookEventId}`);
-
               const deleteUrl = `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`;
               const deleteResponse = await fetch(deleteUrl, {
                 method: 'DELETE',
@@ -225,32 +183,30 @@ export async function POST(request: NextRequest) {
                 }
               });
 
-              if (deleteResponse.ok || deleteResponse.status === 204) {
-                console.log(`[SYNC] ✅ Événement Outlook supprimé avec succès`);
-              } else {
+              if (!deleteResponse.ok && deleteResponse.status !== 204) {
                 const errorText = await deleteResponse.text();
-                console.error(`[SYNC] ⚠️ Erreur lors de la suppression de l'événement: ${deleteResponse.status}`, errorText);
+                console.error(`[SYNC] Error deleting Outlook event: ${deleteResponse.status}`, errorText);
               }
             } catch (deleteError) {
-              console.error(`[SYNC] ⚠️ Erreur lors de la suppression de l'événement Outlook:`, deleteError);
-              // On continue même si la suppression échoue
+              console.error(`[SYNC] Error deleting Outlook event:`, deleteError);
+              // Continue even if deletion fails
             }
           }
 
-          // Créer un audit log
+          // Create an audit log
           await prisma.auditLog.create({
             data: {
               action: 'UPDATE',
               entity: 'SHIFT_ASSIGNMENT',
               entityId: id,
               userId: user.id,
-              data: toJsonString({
+              data: {
                 source: 'outlook-sync',
                 oldStatus: assignment.status,
                 newStatus: newStatus,
                 outlookResponse: responseStatus,
                 outlookEventDeleted: newStatus === 'REFUSED'
-              })
+              }
             }
           });
 
@@ -265,10 +221,6 @@ export async function POST(request: NextRequest) {
             outlookResponse: responseStatus,
             outlookEventDeleted: newStatus === 'REFUSED'
           });
-
-          console.log(`[SYNC] Updated assignment ${id}: ${assignment.status} -> ${newStatus}`);
-        } else {
-          console.log(`[SYNC] No change needed for assignment ${id} (response: ${responseStatus})`);
         }
 
       } catch (error) {
@@ -282,8 +234,6 @@ export async function POST(request: NextRequest) {
         });
       }
     }
-
-    console.log(`[SYNC] Synchronization completed: ${updatedCount} updated, ${errorCount} errors`);
 
     return NextResponse.json({
       success: true,
@@ -306,7 +256,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Vérifier le statut de la synchronisation
+// GET - Check synchronization status
 export async function GET(request: NextRequest) {
   try {
     const pendingCount = await prisma.shiftAssignment.count({
@@ -323,7 +273,8 @@ export async function GET(request: NextRequest) {
         entity: 'SHIFT_ASSIGNMENT',
         action: 'UPDATE',
         data: {
-          contains: 'outlook-sync'
+          path: ['source'],
+          equals: 'outlook-sync'
         }
       },
       orderBy: {

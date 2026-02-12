@@ -3,9 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
-// GET - Récupérer les jours fériés
+// GET - Fetch holidays with optional year and canton filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -31,30 +30,12 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'asc' }
     });
 
-    // Parse cantons from string to array for each holiday
-    const normalizedHolidays = holidays.map(h => ({
-      ...h,
-      cantons: fromJsonString(h.cantons) || []
-    }));
-
-    console.log(`=== HOLIDAYS FETCHED ===`);
-    console.log(`Year filter: ${year || 'none'}`);
-    console.log(`Canton filter: ${canton || 'none'}`);
-    console.log(`Total holidays found: ${normalizedHolidays.length}`);
-    normalizedHolidays.forEach(h => {
-      const cantonsArr = Array.isArray(h.cantons) ? h.cantons : [];
-      console.log(`- ${h.name} (${new Date(h.date).toISOString().split('T')[0]}) - Cantons: ${cantonsArr.join(', ')}`);
-    });
-    console.log(`========================`);
-
-    // Filtrer par canton si spécifié
-    let filteredHolidays = normalizedHolidays;
+    // Filter by canton if specified
+    let filteredHolidays = holidays;
     if (canton && canton !== 'ALL') {
-      filteredHolidays = normalizedHolidays.filter((holiday: any) => {
-        const cantonsArr = Array.isArray(holiday.cantons) ? holiday.cantons : [];
-        return cantonsArr.includes('ALL') || cantonsArr.includes(canton);
-      });
-      console.log(`After canton filter (${canton}): ${filteredHolidays.length} holidays`);
+      filteredHolidays = holidays.filter((holiday: any) =>
+        holiday.cantons.includes('ALL') || holiday.cantons.includes(canton)
+      );
     }
 
     return NextResponse.json(filteredHolidays);
@@ -67,7 +48,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Créer un nouveau jour férié
+// POST - Create a new holiday
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -75,9 +56,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { name, date, cantons, type, recurring, description } = body;
-
-    console.log('=== CREATING HOLIDAY ===');
-    console.log('Body received:', JSON.stringify(body, null, 2));
 
     if (!name || !date || !cantons || !type) {
       return NextResponse.json(
@@ -90,15 +68,12 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         date: new Date(date),
-        cantons: toJsonString(cantons),
+        cantons,
         type,
         recurring: recurring || false,
         description: description || null
       }
     });
-
-    console.log('Holiday created successfully:', holiday);
-    console.log('========================');
 
     return NextResponse.json(holiday, { status: 201 });
   } catch (error) {

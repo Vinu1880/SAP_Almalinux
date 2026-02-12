@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 
-// GET - Récupérer les statistiques des assignations de shifts
+// GET - Retrieve shift assignment statistics
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const dateFilter = searchParams.get('dateFilter'); // '24h', '7d', '30d', '90d', '180d'
     const teamId = searchParams.get('teamId');
 
-    // Calculer la date de début basée sur le filtre
+    // Calculate start date based on filter
     const where: any = {};
 
     if (dateFilter) {
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Récupérer toutes les assignations pour le filtre
+    // Retrieve all assignments for the filter
     const allAssignments = await prisma.shiftAssignment.findMany({
       where,
       include: {
@@ -48,20 +48,20 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Filtrer par équipe si spécifié
+    // Filter by team if specified
     let assignments = allAssignments;
     if (teamId) {
       assignments = allAssignments.filter(a => a.shift.teamId === teamId);
     }
 
-    // Compter par status
+    // Count by status
     const accepted = assignments.filter(a => a.status === 'ACCEPTED').length;
     const refused = assignments.filter(a => a.status === 'REFUSED').length;
     const pending = assignments.filter(a => a.status === 'PENDING').length;
     const cancelled = assignments.filter(a => a.status === 'CANCELLED').length;
     const total = assignments.length;
 
-    // Statistiques par utilisateur
+    // Statistics per user
     const userStats: any = {};
     assignments.forEach(assignment => {
       const userId = assignment.userId;
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       userStats[userId][assignment.status.toLowerCase()]++;
     });
 
-    // Statistiques par équipe
+    // Statistics per team
     const teamStats: any = {};
     allAssignments.forEach(assignment => {
       const teamId = assignment.shift.teamId;

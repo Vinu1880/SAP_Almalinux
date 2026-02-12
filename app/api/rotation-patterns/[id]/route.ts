@@ -3,9 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString, fromJsonString } from '@/lib/json-helpers';
 
-// GET - Récupérer un pattern spécifique
+// GET - Retrieve a specific pattern
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -26,12 +25,7 @@ export async function GET(
       );
     }
 
-    // Parse string fields back to objects for frontend
-    return NextResponse.json({
-      ...pattern,
-      weeks: fromJsonString(pattern.weeks),
-      userShifts: fromJsonString(pattern.userShifts),
-    });
+    return NextResponse.json(pattern);
   } catch (error) {
     console.error('Error fetching rotation pattern:', error);
     return NextResponse.json(
@@ -41,7 +35,7 @@ export async function GET(
   }
 }
 
-// PUT - Mettre à jour un pattern
+// PUT - Update a pattern
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -59,8 +53,8 @@ export async function PUT(
         name: body.name,
         description: body.description || null,
         cycleLength: body.cycleLength,
-        weeks: toJsonString(body.weeks),
-        userShifts: toJsonString(body.userShifts || [])
+        weeks: body.weeks,
+        userShifts: body.userShifts || []
       }
     });
 
@@ -74,7 +68,7 @@ export async function PUT(
   }
 }
 
-// DELETE - Supprimer un pattern
+// DELETE - Delete a pattern
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

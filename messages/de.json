@@ -595,6 +595,11 @@
     "invitationsSentSuccess": "Einladungen erfolgreich gesendet!",
     "invitationsSent": "{count} Einladung(en) gesendet",
     "assignmentsCreated": "{count} Zuweisung(en) erstellt",
-    "sendErrors": "{count} Fehler beim Senden. Überprüfen Sie Ihren Zugriffstoken und die E-Mail-Adressen."
+    "sendErrors": "{count} Fehler beim Senden. Überprüfen Sie Ihren Zugriffstoken und die E-Mail-Adressen.",
+    "accessTokenMissingOrInvalid": "Zugriffstoken fehlt oder ist ungültig. Bitte erneut anmelden.",
+    "noInvitationsSentError": "Keine Einladung konnte gesendet werden ({count} Fehler).\n\nMögliche Ursachen:\n- Abgelaufener Zugriffstoken\n- Ungültige E-Mail-Adresse\n- Keine Internetverbindung\n\nEs wurde keine Zuweisung in der Datenbank erstellt.",
+    "noInvitationsToSend": "Keine Einladungen zu senden.",
+    "sendingInProgress": "Wird gesendet...",
+    "understood": "Verstanden"
   }
 }

@@ -3,9 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { toJsonString } from '@/lib/json-helpers';
 
-// GET - Récupérer toutes les assignations de shifts avec filtres
+// GET - Retrieve all shift assignments with filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId');
     const status = searchParams.get('status');
 
-    // Calculer la date de début basée sur le filtre
+    // Calculate start date based on filter
     let startDate = new Date();
     if (dateFilter === '24h') {
       startDate.setHours(startDate.getHours() - 24);
@@ -31,7 +30,7 @@ export async function GET(request: NextRequest) {
       startDate.setDate(startDate.getDate() - 180);
     }
 
-    // Construire les filtres
+    // Build filters
     const where: any = {};
 
     if (dateFilter) {
@@ -48,7 +47,7 @@ export async function GET(request: NextRequest) {
       where.userId = userId;
     }
 
-    // Récupérer les assignations avec les relations
+    // Retrieve assignments with relations
     const assignments = await prisma.shiftAssignment.findMany({
       where,
       include: {
@@ -68,7 +67,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Filtrer par équipe si spécifié (après récupération car team est dans shift)
+    // Filter by team if specified (after retrieval because team is in shift)
     let filteredAssignments = assignments;
     if (teamId) {
       filteredAssignments = assignments.filter(a => a.shift.teamId === teamId);
@@ -84,14 +83,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Créer plusieurs assignations de shifts
+// POST - Create multiple shift assignments
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
   try {
     const body = await request.json();
-    const { assignments } = body; // Array d'objets {date, shiftId, userId, status}
+    const { assignments } = body; // Array of objects {date, shiftId, userId, status}
 
     if (!assignments || !Array.isArray(assignments)) {
       return NextResponse.json(
@@ -100,48 +99,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Creating shift assignments:', assignments.length);
+    // Create all assignments using createMany
+    const result = await prisma.shiftAssignment.createMany({
+      data: assignments.map((a: any) => ({
+        date: new Date(a.date),
+        shiftId: a.shiftId,
+        userId: a.userId,
+        status: a.status || 'PENDING',
+        reason: a.reason || null
+      })),
+      skipDuplicates: true // Avoid duplicates thanks to the unique constraint
+    });
 
-    // Créer les assignations en utilisant upsert (skipDuplicates non supporté sur MSSQL)
-    let createdCount = 0;
-    for (const a of assignments) {
-      try {
-        await prisma.shiftAssignment.upsert({
-          where: {
-            date_shiftId_userId: {
-              date: new Date(a.date),
-              shiftId: a.shiftId,
-              userId: a.userId
-            }
-          },
-          update: {},
-          create: {
-            date: new Date(a.date),
-            shiftId: a.shiftId,
-            userId: a.userId,
-            status: a.status || 'PENDING',
-            reason: a.reason || null
-          }
-        });
-        createdCount++;
-      } catch (e: any) {
-        if (e.code === 'P2002') continue;
-        throw e;
-      }
-    }
-
-    console.log(`Created ${createdCount} shift assignments`);
-
-    // Log audit
+    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'CREATE_BULK',
         entity: 'SHIFT_ASSIGNMENT',
-        data: toJsonString({ count: createdCount, assignments })
+        data: { count: result.count, assignments }
       }
     });
 
-    // Récupérer les assignations créées pour les retourner
+    // Retrieve the created assignments to return them
     const createdAssignments = await prisma.shiftAssignment.findMany({
       where: {
         date: {
@@ -170,7 +149,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      count: createdCount,
+      count: result.count,
       assignments: createdAssignments
     }, { status: 201 });
   } catch (error) {
