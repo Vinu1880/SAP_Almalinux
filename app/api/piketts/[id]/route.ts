@@ -30,7 +30,10 @@ export async function PUT(
 
     if (body.name !== undefined) updateData.name = body.name;
     if (body.description !== undefined) updateData.description = body.description || null;
+    if (body.startWeek !== undefined) updateData.startWeek = body.startWeek;
+    if (body.endWeek !== undefined) updateData.endWeek = body.endWeek || null;
     if (body.teamId !== undefined) updateData.teamId = body.teamId;
+    if (body.userId !== undefined) updateData.userId = body.userId || null;
     if (body.color !== undefined) updateData.color = body.color;
     if (body.status !== undefined) updateData.status = body.status;
     if (body.is24_7 !== undefined) updateData.is24_7 = body.is24_7;

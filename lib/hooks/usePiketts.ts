@@ -9,6 +9,7 @@ interface Pikett {
   team?: any;
   startWeek: string;
   endWeek?: string;
+  userId?: string | null;
   includedUserIds: string[];
   excludedUserIds: string[];
   color: string;

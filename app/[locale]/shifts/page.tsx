@@ -260,6 +260,9 @@ const ShiftsPage = () => {
       await updatePikettHook(selectedPikett.id, {
         name: selectedPikett.name,
         teamId: selectedPikett.teamId,
+        startWeek: selectedPikett.startWeek,
+        endWeek: selectedPikett.endWeek || null,
+        userId: selectedPikett.userId || null,
         includedUserIds: selectedPikett.includedUserIds,
         excludedUserIds: selectedPikett.excludedUserIds,
         color: selectedPikett.color,
@@ -313,12 +316,14 @@ const ShiftsPage = () => {
         startTime: selectedShift.startTime,
         endTime: selectedShift.endTime,
         teamId: selectedShift.teamId,
-        membersRequired: 1,
-        priority: 'MEDIUM',
+        membersRequired: selectedShift.membersRequired || 1,
+        priority: selectedShift.priority || 'MEDIUM',
         status: selectedShift.status,
         color: selectedShift.color,
         senderMailbox: selectedShift.senderMailbox,
-        daysOfWeek: selectedShift.daysOfWeek
+        daysOfWeek: selectedShift.daysOfWeek,
+        includedUserIds: selectedShift.includedUserIds,
+        excludedUserIds: selectedShift.excludedUserIds,
       });
       
       setIsEditDialogOpen(false);
@@ -351,10 +356,13 @@ const ShiftsPage = () => {
         startTime: shift.startTime,
         endTime: shift.endTime,
         teamId: shift.teamId,
-        membersRequired: 1,
-        priority: 'MEDIUM',
+        membersRequired: shift.membersRequired || 1,
+        priority: shift.priority || 'MEDIUM',
         color: shift.color,
         senderMailbox: shift.senderMailbox,
+        daysOfWeek: shift.daysOfWeek,
+        includedUserIds: shift.includedUserIds || [],
+        excludedUserIds: shift.excludedUserIds || [],
       });
     } catch (error) {
       console.error('Erreur lors de la duplication:', error);
