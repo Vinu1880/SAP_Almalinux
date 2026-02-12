@@ -150,10 +150,10 @@ const TEAM_COLORS = [
 ];
 
 const SWISS_CANTONS = [
-  { value: 'VD', label: 'Vaud (VD)' },
-  { value: 'BE', label: 'Berne (BE)' },
-  { value: 'ZH', label: 'Zurich (ZH)' }
-];
+  { value: 'VD', labelKey: 'cantonVaud' },
+  { value: 'BE', labelKey: 'cantonBerne' },
+  { value: 'ZH', labelKey: 'cantonZurich' }
+] as const;
 
 // CSS style for rotation animation
 const rotationStyle = `
@@ -180,6 +180,7 @@ const UsersPage = () => {
   const [isCreateTeamDialogOpen, setIsCreateTeamDialogOpen] = useState(false);
   const [isEditTeamDialogOpen, setIsEditTeamDialogOpen] = useState(false);
   const [isCreatePatternOpen, setIsCreatePatternOpen] = useState(false);
+  const [patternUserId, setPatternUserId] = useState<string | null>(null);
   const [editingPattern, setEditingPattern] = useState<RotationPattern | null>(null);
   const [savingPattern, setSavingPattern] = useState(false);
   const [deletePatternId, setDeletePatternId] = useState<string | null>(null);
@@ -629,6 +630,9 @@ const UsersPage = () => {
                             userShifts: userShifts.map((s: any) => s.id),
                             name: `Pattern ${selectedUser?.firstName || ''} ${selectedUser?.lastName || ''}`.trim()
                           });
+                          setPatternUserId(userId);
+                        } else {
+                          setPatternUserId(null);
                         }
                         setIsCreatePatternOpen(true);
                       }}
@@ -719,6 +723,21 @@ const UsersPage = () => {
                                   {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
                                     const dayLabel = day.substring(0, 3).toUpperCase();
                                     const dayAvailable = isDayAvailable(day);
+                                    const dayAvail = availability[day as keyof WeekAvailability];
+                                    const hasMorning = dayAvail?.morning === true;
+                                    const hasAfternoon = dayAvail?.afternoon === true;
+
+                                    // Filter shifts based on user availability for this day
+                                    const filteredShifts = userShifts.filter((shift: any) => {
+                                      if (!dayAvail) return true;
+                                      const startHour = parseInt(shift.startTime?.split(':')[0] || '0');
+                                      const endHour = parseInt(shift.endTime?.split(':')[0] || '0');
+                                      const needsMorning = startHour < 13;
+                                      const needsAfternoon = endHour > 13 || (endHour < startHour);
+                                      if (needsMorning && !hasMorning) return false;
+                                      if (needsAfternoon && !hasAfternoon) return false;
+                                      return true;
+                                    });
 
                                     return (
                                       <div key={day} className="text-center">
@@ -735,13 +754,15 @@ const UsersPage = () => {
                                             }
                                             setEditingPattern({ ...editingPattern, weeks: updatedWeeks });
                                           }}
-                                          disabled={!dayAvailable}
+                                          disabled={!dayAvailable || filteredShifts.length === 0}
                                         >
                                           <SelectTrigger className={`w-full h-auto text-xs py-1 ${
-                                            !dayAvailable ? 'opacity-50 bg-slate-100' : ''
+                                            (!dayAvailable || filteredShifts.length === 0) ? 'opacity-50 bg-slate-100' : ''
                                           }`}>
                                             <SelectValue>
                                               {!dayAvailable ? (
+                                                <span className="text-slate-400">{t("unavailableShort")}</span>
+                                              ) : filteredShifts.length === 0 ? (
                                                 <span className="text-slate-400">{t("unavailableShort")}</span>
                                               ) : week[day]?.[0] ? (
                                                 <span className="truncate">
@@ -752,12 +773,12 @@ const UsersPage = () => {
                                               )}
                                             </SelectValue>
                                           </SelectTrigger>
-                                          {dayAvailable && (
+                                          {dayAvailable && filteredShifts.length > 0 && (
                                             <SelectContent>
                                               <SelectItem value="none">
                                                 <span className="text-slate-400">{t("free")}</span>
                                               </SelectItem>
-                                              {userShifts.map((shift: any) => (
+                                              {filteredShifts.map((shift: any) => (
                                                 <SelectItem key={shift.id} value={shift.id}>
                                                   <div className="flex items-center gap-2">
                                                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: shift.color }} />
@@ -1521,7 +1542,7 @@ const UsersPage = () => {
                               <SelectItem value="none">{t("notSpecified")}</SelectItem>
                               {SWISS_CANTONS.map((canton) => (
                                 <SelectItem key={canton.value} value={canton.value}>
-                                  {canton.label}
+                                  {t(canton.labelKey)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -2150,11 +2171,11 @@ const UsersPage = () => {
                     <SelectContent>
                       <SelectItem value="none">{t("notSpecified")}</SelectItem>
                       {SWISS_CANTONS.map((canton) => (
-                                <SelectItem 
-                                  key={canton.value} 
+                                <SelectItem
+                                  key={canton.value}
                                   value={canton.value}
                                 >
-                                  {canton.label}
+                                  {t(canton.labelKey)}
                                 </SelectItem>
                               ))}
                     </SelectContent>
@@ -2397,21 +2418,21 @@ const UsersPage = () => {
               </div>
 
               {/* User selection to view their shifts */}
+              {users.filter(u => u.status === 'ACTIVE').length > 0 && (
               <div>
                 <Label>{t("basedOnUserShifts")}</Label>
                 <Select
-                  onValueChange={(userId) => {
-                    const user = users.find(u => u.id === userId);
+                  value={patternUserId || undefined}
+                  onValueChange={(uid) => {
+                    setPatternUserId(uid);
+                    const user = users.find(u => u.id === uid);
                     if (user) {
-                      // Find shifts assigned to this user
                       const userShifts = shifts.filter((shift: any) => {
                         const userInTeam = user.teamId === shift.teamId;
-                        const userIncluded = shift.includedUserIds?.includes(userId);
-                        const userExcluded = shift.excludedUserIds?.includes(userId);
+                        const userIncluded = shift.includedUserIds?.includes(uid);
+                        const userExcluded = shift.excludedUserIds?.includes(uid);
                         return (userInTeam && !userExcluded) || userIncluded;
                       });
-                      
-                      // Update the pattern with the user's shifts
                       setNewPattern({
                         ...newPattern,
                         userShifts: userShifts.map((s: any) => s.id)
@@ -2431,6 +2452,7 @@ const UsersPage = () => {
                   </SelectContent>
                 </Select>
               </div>
+              )}
 
               {/* Week configuration with actual shifts and availability taken into account */}
               {newPattern.userShifts && newPattern.userShifts.length > 0 ? (
@@ -2448,16 +2470,26 @@ const UsersPage = () => {
                       <h4 className="font-medium mb-2">{t("weekNumber", { week: weekIndex + 1 })}</h4>
                       <div className="grid grid-cols-7 gap-2">
                         {days.map((day) => {
-                          // Check user availability for this day
-                          const selectedUserId = newPattern.name.includes('Pattern') ? 
-                            users.find(u => newPattern.name.includes(u.firstName) && newPattern.name.includes(u.lastName))?.id : 
-                            null;
-                          const selectedUser = selectedUserId ? users.find(u => u.id === selectedUserId) : null;
-                          const userAvailability = selectedUser?.availability;
-                          const isDayAvailable = userAvailability ? 
-                            (userAvailability[day as keyof WeekAvailability]?.morning || 
-                             userAvailability[day as keyof WeekAvailability]?.afternoon) : 
-                            true;
+                          // Check user availability for this day using patternUserId
+                          const patternUser = patternUserId ? users.find(u => u.id === patternUserId) : null;
+                          const userAvailability = patternUser?.availability;
+                          const dayAvail = userAvailability ? userAvailability[day as keyof WeekAvailability] : null;
+                          const hasMorning = dayAvail?.morning === true;
+                          const hasAfternoon = dayAvail?.afternoon === true;
+                          const isDayAvailable = userAvailability ? (hasMorning || hasAfternoon) : true;
+
+                          // Filter shifts based on user availability for this day
+                          // A shift needs morning if it starts before 13:00, afternoon if it ends after 13:00
+                          const availableShifts = (newPattern.userShifts || []).map(sid => shifts.find((s: any) => s.id === sid)).filter(Boolean).filter((shift: any) => {
+                            if (!userAvailability || !dayAvail) return true;
+                            const startHour = parseInt(shift.startTime?.split(':')[0] || '0');
+                            const endHour = parseInt(shift.endTime?.split(':')[0] || '0');
+                            const needsMorning = startHour < 13;
+                            const needsAfternoon = endHour > 13 || (endHour < startHour);
+                            if (needsMorning && !hasMorning) return false;
+                            if (needsAfternoon && !hasAfternoon) return false;
+                            return true;
+                          });
 
                           return (
                             <div key={day} className="text-center">
@@ -2473,13 +2505,15 @@ const UsersPage = () => {
                                   }
                                   setNewPattern({ ...newPattern, weeks: updatedWeeks });
                                 }}
-                                disabled={!isDayAvailable}
+                                disabled={!isDayAvailable || availableShifts.length === 0}
                               >
                                 <SelectTrigger className={`w-full h-auto text-xs ${
-                                  !isDayAvailable ? 'opacity-50 bg-slate-100 cursor-not-allowed' : ''
+                                  (!isDayAvailable || availableShifts.length === 0) ? 'opacity-50 bg-slate-100 cursor-not-allowed' : ''
                                 }`}>
                                   <SelectValue>
                                     {!isDayAvailable ? (
+                                      <span className="text-slate-400">{t("unavailableShort")}</span>
+                                    ) : availableShifts.length === 0 ? (
                                       <span className="text-slate-400">{t("unavailableShort")}</span>
                                     ) : week[day]?.[0] ? (
                                       <span className="truncate">
@@ -2490,18 +2524,15 @@ const UsersPage = () => {
                                     )}
                                   </SelectValue>
                                 </SelectTrigger>
-                                {isDayAvailable && (
+                                {isDayAvailable && availableShifts.length > 0 && (
                                   <SelectContent>
                                     <SelectItem value="none">
                                       <span className="text-slate-400">{t("free")}</span>
                                     </SelectItem>
-                                      {(newPattern.userShifts || []).map(shiftId => {
-                                        const shift = shifts.find((s: any) => s.id === shiftId);
-                                        if (!shift) return null;
-                                        return (
-                                          <SelectItem key={shiftId} value={shiftId}>
+                                      {availableShifts.map((shift: any) => (
+                                          <SelectItem key={shift.id} value={shift.id}>
                                             <div className="flex items-center gap-2">
-                                              <div 
+                                              <div
                                                 className="w-2 h-2 rounded-full"
                                                 style={{ backgroundColor: shift.color }}
                                               />
@@ -2511,8 +2542,7 @@ const UsersPage = () => {
                                               </span>
                                             </div>
                                           </SelectItem>
-                                        );
-                                      })}
+                                        ))}
                                   </SelectContent>
                                 )}
                               </Select>
@@ -2537,6 +2567,7 @@ const UsersPage = () => {
               <div className="flex justify-end space-x-3">
                 <Button variant="outline" onClick={() => {
                   setIsCreatePatternOpen(false);
+                  setPatternUserId(null);
                   setNewPattern({
                     id: '',
                     name: '',

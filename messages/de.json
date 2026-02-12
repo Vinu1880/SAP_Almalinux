@@ -141,7 +141,11 @@
     "updateError": "Fehler beim Aktualisieren der Zuweisung",
     "createError": "Fehler beim Erstellen der Zuweisung",
     "userNotFound": "Benutzer nicht gefunden",
-    "reasonConsecutiveShift": "Aufeinanderfolgende Schicht ({shifts})"
+    "reasonConsecutiveShift": "Aufeinanderfolgende Schicht ({shifts})",
+    "invitationEmailDate": "Datum:",
+    "invitationEmailSchedule": "Zeitplan:",
+    "invitationEmailDescription": "Beschreibung:",
+    "invitationSentFromDashboard": "Einladung vom Dashboard gesendet"
   },
   "shifts": {
     "title": "Schichtverwaltung",
@@ -352,7 +356,10 @@
     "nameRequired": "Name ist erforderlich",
     "createTeamError": "Fehler beim Erstellen des Teams",
     "updateTeamError": "Fehler beim Aktualisieren des Teams",
-    "deleteTeamError": "Fehler beim Löschen des Teams"
+    "deleteTeamError": "Fehler beim Löschen des Teams",
+    "cantonVaud": "Waadt (VD)",
+    "cantonBerne": "Bern (BE)",
+    "cantonZurich": "Zürich (ZH)"
   },
   "settings": {
     "title": "Einstellungen",
@@ -446,7 +453,10 @@
     "holidayDeleted": "Feiertag erfolgreich gelöscht",
     "holidayDeleteError": "Fehler beim Löschen des Feiertags",
     "holidaysImported": "{count} Feiertage erfolgreich importiert",
-    "holidaysImportError": "Fehler beim Importieren der Feiertage"
+    "holidaysImportError": "Fehler beim Importieren der Feiertage",
+    "cantonBerne": "Bern",
+    "cantonZurich": "Zürich",
+    "cantonVaud": "Waadt"
   },
   "login": {
     "title": "Anmelden",

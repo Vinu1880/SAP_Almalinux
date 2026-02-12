@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 
+// PUT - Update a pikett by ID
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -45,6 +46,7 @@ export async function PUT(
   }
 }
 
+// DELETE - Delete a pikett by ID
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

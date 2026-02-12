@@ -141,7 +141,11 @@
     "updateError": "Error updating assignment",
     "createError": "Error creating assignment",
     "userNotFound": "User not found",
-    "reasonConsecutiveShift": "Consecutive shift ({shifts})"
+    "reasonConsecutiveShift": "Consecutive shift ({shifts})",
+    "invitationEmailDate": "Date:",
+    "invitationEmailSchedule": "Schedule:",
+    "invitationEmailDescription": "Description:",
+    "invitationSentFromDashboard": "Invitation sent from the dashboard"
   },
   "shifts": {
     "title": "Shift Management",
@@ -352,7 +356,10 @@
     "nameRequired": "Name is required",
     "createTeamError": "Error creating team",
     "updateTeamError": "Error updating team",
-    "deleteTeamError": "Error deleting team"
+    "deleteTeamError": "Error deleting team",
+    "cantonVaud": "Vaud (VD)",
+    "cantonBerne": "Berne (BE)",
+    "cantonZurich": "Zurich (ZH)"
   },
   "settings": {
     "title": "Settings",
@@ -446,7 +453,10 @@
     "holidayDeleted": "Holiday deleted successfully",
     "holidayDeleteError": "Error deleting holiday",
     "holidaysImported": "{count} holidays imported successfully",
-    "holidaysImportError": "Error importing holidays"
+    "holidaysImportError": "Error importing holidays",
+    "cantonBerne": "Berne",
+    "cantonZurich": "Zurich",
+    "cantonVaud": "Vaud"
   },
   "login": {
     "title": "Login",

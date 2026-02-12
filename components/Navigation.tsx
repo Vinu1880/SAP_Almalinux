@@ -40,7 +40,7 @@ const Navigation = () => {
       await logout();
       router.push('/');
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
+      console.error('Error during logout:', error);
     }
   };
 

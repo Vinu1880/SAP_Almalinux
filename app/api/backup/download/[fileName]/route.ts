@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth';
 import fs from 'fs';
 import path from 'path';
 
+// GET - Download a specific backup file
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileName: string }> }
@@ -18,7 +19,7 @@ export async function GET(
     
     if (!fs.existsSync(filePath)) {
       return NextResponse.json(
-        { error: 'Fichier non trouvé' },
+        { error: 'File not found' },
         { status: 404 }
       );
     }
@@ -33,9 +34,9 @@ export async function GET(
     });
     
   } catch (error) {
-    console.error('Erreur:', error);
+    console.error('Error:', error);
     return NextResponse.json(
-      { error: 'Erreur lors du téléchargement' },
+      { error: 'Error during download' },
       { status: 500 }
     );
   }

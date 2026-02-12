@@ -395,9 +395,9 @@ const SettingsPage = () => {
     
     const labels: { [key: string]: string } = {
       'ALL': tCommon("all"),
-      'BE': 'Berne',
-      'ZH': 'Zurich',
-      'VD': 'Vaud'
+      'BE': t('cantonBerne'),
+      'ZH': t('cantonZurich'),
+      'VD': t('cantonVaud')
     };
 
     return (

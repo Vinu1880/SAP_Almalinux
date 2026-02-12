@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import fs from 'fs';
 import path from 'path';
 
+// GET - List all available backup files
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// POST - Create a new database backup
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

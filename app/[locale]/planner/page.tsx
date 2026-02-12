@@ -233,7 +233,7 @@ const getUserCantonFromLocation = (location: string): string => {
 };
 
   // Utility function to check if a user works on a given day
-const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string): boolean => {
+const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEndTime?: string): boolean => {
   if (!user.availability) return true; // If no config, assume they work every day
 
   // Function to map cities to cantons
@@ -265,14 +265,16 @@ const getUserCantonFromLocation = (location: string): string => {
   if (!dayAvailability) return true;
   
   // Check based on shift time if provided
+  // A shift needs morning if it starts before 13:00, afternoon if it ends after 13:00
   if (shiftTime) {
-    const [hour] = shiftTime.split(':').map(Number);
-    // Consider morning as before 13h, afternoon after
-    if (hour < 13) {
-      return dayAvailability.morning === true;
-    } else {
-      return dayAvailability.afternoon === true;
-    }
+    const startHour = parseInt(shiftTime.split(':')[0]);
+    const endHour = shiftEndTime ? parseInt(shiftEndTime.split(':')[0]) : startHour;
+    const needsMorning = startHour < 13;
+    const needsAfternoon = endHour > 13 || (endHour < startHour);
+
+    if (needsMorning && dayAvailability.morning !== true) return false;
+    if (needsAfternoon && dayAvailability.afternoon !== true) return false;
+    return true;
   }
   
   // If no time specified, check if at least part of the day is available
@@ -1111,7 +1113,7 @@ const processShiftAssignments = async () => {
           // ========================================
           // PRIORITY 2: WORK AVAILABILITY
           // ========================================
-          const worksThisDay = isUserWorkingOnDay(user, date, shift?.startTime);
+          const worksThisDay = isUserWorkingOnDay(user, date, shift?.startTime, shift?.endTime);
           if (!worksThisDay) {
             unavailableUsers.push({
               user,
@@ -1346,7 +1348,7 @@ const processShiftAssignments = async () => {
               }
 
               const event = {
-                subject: `${assignment.shift.name}${assignment.isPikett ? ' 🛡️ PIKETT' : ''}`,
+                subject: `${assignment.shift.name}${assignment.isPikett ? ` 🛡️ ${t('pikett').toUpperCase()}` : ''}`,
                 body: {
                   contentType: 'HTML',
                   content: `
@@ -2522,7 +2524,7 @@ useEffect(() => {
                                               const excluded = (shift as any).excludedUserIds?.includes(u.id);
                                               const isEligible = (inTeam && !excluded) || included;
                                               // ADDED: Check if user works on this day
-                                              const worksThisDay = isUserWorkingOnDay(u, assignment.date, shift.startTime);
+                                              const worksThisDay = isUserWorkingOnDay(u, assignment.date, shift.startTime, shift.endTime);
                                               return isEligible && worksThisDay;
                                             });
 
@@ -2580,7 +2582,7 @@ useEffect(() => {
                                           }
 
                                           // 3. Check if not working this day (already filtered in eligibleUsers but double check)
-                                          const worksThisDay = isUserWorkingOnDay(user, assignment.date, shift?.startTime);
+                                          const worksThisDay = isUserWorkingOnDay(user, assignment.date, shift?.startTime, shift?.endTime);
                                           if (!worksThisDay) {
                                             usersNotWorkingToday.push({
                                               user,

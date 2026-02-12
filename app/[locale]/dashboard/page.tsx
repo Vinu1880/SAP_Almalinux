@@ -452,11 +452,11 @@ const DashboardPage = () => {
           contentType: 'HTML',
           content: `
             <h2>${shift.name}</h2>
-            <p><strong>Date:</strong> ${date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-            <p><strong>Schedule:</strong> ${shift.startTime} - ${shift.endTime}</p>
-            ${shift.description ? `<p><strong>Description:</strong> ${shift.description}</p>` : ''}
+            <p><strong>${t('invitationEmailDate')}</strong> ${date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p><strong>${t('invitationEmailSchedule')}</strong> ${shift.startTime} - ${shift.endTime}</p>
+            ${shift.description ? `<p><strong>${t('invitationEmailDescription')}</strong> ${shift.description}</p>` : ''}
             <hr>
-            <p><em>Invitation sent from the dashboard</em></p>
+            <p><em>${t('invitationSentFromDashboard')}</em></p>
           `
         },
         start: {

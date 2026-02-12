@@ -18,7 +18,7 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirection si déjà authentifié
+  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
       router.push('/dashboard');
@@ -26,16 +26,16 @@ export default function HomePage() {
   }, [isAuthenticated, authLoading, router]);
 
   /**
-   * Gestion de la connexion SSO Microsoft Azure AD
+   * Handle Microsoft Azure AD SSO connection
    */
   const handleAzureLogin = async () => {
     try {
       setIsLoading(true);
       setError(null);
       await loginWithSSO();
-      // La redirection sera gérée par useEffect
+      // Redirection will be managed by useEffect
     } catch (err) {
-      console.error('Erreur de connexion SSO:', err);
+      console.error('SSO connection error:', err);
       setError(t('loginError'));
     } finally {
       setIsLoading(false);
@@ -44,7 +44,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex relative overflow-hidden">
-      {/* Éléments décoratifs d'arrière-plan */}
+      {/* Decorative background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl"></div>

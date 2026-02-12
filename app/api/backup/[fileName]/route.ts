@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth';
 import fs from 'fs';
 import path from 'path';
 
+// DELETE - Delete a specific backup file
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ fileName: string }> }
@@ -18,7 +19,7 @@ export async function DELETE(
     
     if (!fs.existsSync(filePath)) {
       return NextResponse.json(
-        { error: 'Fichier non trouvé' },
+        { error: 'File not found' },
         { status: 404 }
       );
     }
@@ -27,13 +28,13 @@ export async function DELETE(
     
     return NextResponse.json({ 
       success: true,
-      message: 'Sauvegarde supprimée' 
+      message: 'Backup deleted' 
     });
     
   } catch (error) {
-    console.error('Erreur:', error);
+    console.error('Error:', error);
     return NextResponse.json(
-      { error: 'Erreur lors de la suppression' },
+      { error: 'Error during deletion' },
       { status: 500 }
     );
   }

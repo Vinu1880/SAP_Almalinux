@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import fs from 'fs';
 import path from 'path';
 
+// POST - Restore database from a backup file
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

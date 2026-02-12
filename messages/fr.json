@@ -141,7 +141,11 @@
     "updateError": "Erreur lors de la mise à jour de l'assignation",
     "createError": "Erreur lors de la création de l'assignation",
     "userNotFound": "Utilisateur non trouvé",
-    "reasonConsecutiveShift": "Shift consécutif ({shifts})"
+    "reasonConsecutiveShift": "Shift consécutif ({shifts})",
+    "invitationEmailDate": "Date :",
+    "invitationEmailSchedule": "Horaires :",
+    "invitationEmailDescription": "Description :",
+    "invitationSentFromDashboard": "Invitation envoyée depuis le dashboard"
   },
   "shifts": {
     "title": "Gestion des Shifts",
@@ -352,7 +356,10 @@
     "nameRequired": "Le nom est obligatoire",
     "createTeamError": "Erreur lors de la création de l'équipe",
     "updateTeamError": "Erreur lors de la mise à jour de l'équipe",
-    "deleteTeamError": "Erreur lors de la suppression de l'équipe"
+    "deleteTeamError": "Erreur lors de la suppression de l'équipe",
+    "cantonVaud": "Vaud (VD)",
+    "cantonBerne": "Berne (BE)",
+    "cantonZurich": "Zurich (ZH)"
   },
   "settings": {
     "title": "Paramètres",
@@ -446,7 +453,10 @@
     "holidayDeleted": "Jour férié supprimé avec succès",
     "holidayDeleteError": "Erreur lors de la suppression du jour férié",
     "holidaysImported": "{count} jours fériés importés avec succès",
-    "holidaysImportError": "Erreur lors de l'import des jours fériés"
+    "holidaysImportError": "Erreur lors de l'import des jours fériés",
+    "cantonBerne": "Berne",
+    "cantonZurich": "Zurich",
+    "cantonVaud": "Vaud"
   },
   "login": {
     "title": "Connexion",

@@ -22,9 +22,9 @@ model User {
   status        UserStatus  @default(ACTIVE)
   notes         String?
   piketts       Pikett[]
-  // CHAMPS pour la rotation et disponibilité
-  rotationConfig Json?      // Stocke la configuration de rotation directement
-  availability   Json?      // Stocke les disponibilités hebdomadaires
+  // Fields for rotation and availability
+  rotationConfig Json?      // Stores rotation configuration directly
+  availability   Json?      // Stores weekly availability
   
   teamId        String?
   team          Team?       @relation("TeamMembers", fields: [teamId], references: [id])
@@ -38,14 +38,14 @@ model User {
   @@index([teamId])
 }
 
-// Ajouter un modèle pour stocker les patterns de rotation
+// Model for storing rotation patterns
 model RotationPattern {
   id          String   @id @default(cuid())
   name        String
   description String?
   cycleLength Int
-  weeks       Json     // Stocke les patterns de semaine
-  userShifts  Json?    // IDs des shifts associés à ce pattern
+  weeks       Json     // Stores weekly patterns
+  userShifts  Json?    // IDs of shifts associated with this pattern
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -76,8 +76,8 @@ model Pikett {
   name            String
   description     String?
   startWeek       String   // Format: "2025-W03"
-  daysOfWeek     Int[]    @default([1, 2, 3, 4, 5]) // Lun=1, Mar=2, etc. Dim=0
-  endWeek         String?  // Si null, pikett permanent
+  daysOfWeek     Int[]    @default([1, 2, 3, 4, 5]) // Mon=1, Tue=2, etc. Sun=0
+  endWeek         String?  // If null, permanent pikett
   color           String   @default("#dc2626")
   status          Status   @default(ACTIVE)
   is24_7          Boolean  @default(true)
@@ -86,11 +86,11 @@ model Pikett {
   teamId          String
   team            Team     @relation(fields: [teamId], references: [id])
   
-  // Relation optionnelle avec User (pour la relation inverse)
+  // Optional relation with User (for reverse relation)
   userId          String?
   user            User?    @relation(fields: [userId], references: [id])
   
-  // Listes d'IDs pour inclusion/exclusion
+  // Lists of IDs for inclusion/exclusion
   includedUserIds String[]
   excludedUserIds String[]
   
@@ -109,14 +109,14 @@ model Shift {
   description    String?
   startTime      String   // Format HH:MM
   endTime        String   // Format HH:MM
-  daysOfWeek     Int[]    @default([1, 2, 3, 4, 5]) // Lun=1, Mar=2, etc. Dim=0
+  daysOfWeek     Int[]    @default([1, 2, 3, 4, 5]) // Mon=1, Tue=2, etc. Sun=0
   membersRequired Int     @default(1)
   priority       Priority @default(MEDIUM)
   status         Status   @default(ACTIVE)
   color          String   @default("#3b82f6")
-  senderMailbox  String   @default("") // Shared mailbox pour l'envoi des invitations
+  senderMailbox  String   @default("") // Shared mailbox for sending invitations
 
-  // Listes d'IDs pour inclusion/exclusion
+  // Lists of IDs for inclusion/exclusion
   includedUserIds String[]
   excludedUserIds String[]
 
@@ -140,9 +140,9 @@ model ShiftAssignment {
   status          AssignmentStatus @default(PENDING)
   reason          String?
   respondedAt     DateTime?
-  outlookEventId  String?          // ID de l'événement Outlook pour synchronisation
-  resent          Boolean          @default(false) // Indique si c'est un resend
-  resentAt        DateTime?        // Date du resend
+  outlookEventId  String?          // Outlook event ID for synchronization
+  resent          Boolean          @default(false) // Indicates if this is a resend
+  resentAt        DateTime?        // Date of resend
 
   shiftId         String
   shift           Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
