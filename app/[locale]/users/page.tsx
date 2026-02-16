@@ -2479,16 +2479,29 @@ const UsersPage = () => {
                           const isDayAvailable = userAvailability ? (hasMorning || hasAfternoon) : true;
 
                           // Filter shifts based on user availability for this day
-                          // A shift needs morning if it starts before 13:00, afternoon if it ends after 13:00
+                          // Uses proportion-based logic: if <25% of shift falls in a period, treat as single-period
                           const availableShifts = (newPattern.userShifts || []).map(sid => shifts.find((s: any) => s.id === sid)).filter(Boolean).filter((shift: any) => {
                             if (!userAvailability || !dayAvail) return true;
-                            const startHour = parseInt(shift.startTime?.split(':')[0] || '0');
-                            const endHour = parseInt(shift.endTime?.split(':')[0] || '0');
-                            const needsMorning = startHour < 13;
-                            const needsAfternoon = endHour > 13 || (endHour < startHour);
-                            if (needsMorning && !hasMorning) return false;
-                            if (needsAfternoon && !hasAfternoon) return false;
-                            return true;
+                            const [startH, startM] = (shift.startTime || '0:0').split(':').map(Number);
+                            const [endH, endM] = (shift.endTime || '0:0').split(':').map(Number);
+                            const startMinutes = startH * 60 + (startM || 0);
+                            const endMinutes = endH * 60 + (endM || 0);
+                            const midday = 13 * 60; // 13:00
+                            // Shift entirely in morning
+                            if (endMinutes <= midday) return hasMorning;
+                            // Shift entirely in afternoon
+                            if (startMinutes >= midday) return hasAfternoon;
+                            // Shift spans both — check proportions
+                            const morningPortion = midday - startMinutes;
+                            const afternoonPortion = endMinutes - midday;
+                            const totalDuration = endMinutes - startMinutes;
+                            const minorPortion = Math.min(morningPortion, afternoonPortion);
+                            if (totalDuration > 0 && minorPortion / totalDuration < 0.25) {
+                              // Minor portion <25%: treat as single-period shift
+                              return afternoonPortion > morningPortion ? hasAfternoon : hasMorning;
+                            }
+                            // Both portions significant: needs both
+                            return hasMorning && hasAfternoon;
                           });
 
                           return (
