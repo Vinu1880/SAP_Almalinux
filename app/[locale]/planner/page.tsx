@@ -264,17 +264,43 @@ const getUserCantonFromLocation = (location: string): string => {
   const dayAvailability = user.availability[dayName];
   if (!dayAvailability) return true;
   
-  // Check based on shift time if provided
-  // A shift needs morning if it starts before 13:00, afternoon if it ends after 13:00
+  // Check based on actual shift hours vs user availability
+  // Boundary: 13:00 separates morning from afternoon
+  // Logic: check where the MAJORITY of the shift falls
   if (shiftTime) {
-    const startHour = parseInt(shiftTime.split(':')[0]);
-    const endHour = shiftEndTime ? parseInt(shiftEndTime.split(':')[0]) : startHour;
-    const needsMorning = startHour < 13;
-    const needsAfternoon = endHour > 13 || (endHour < startHour);
+    const [startH, startM] = shiftTime.split(':').map(Number);
+    const startMinutes = startH * 60 + (startM || 0);
+    const endMinutes = shiftEndTime
+      ? parseInt(shiftEndTime.split(':')[0]) * 60 + (parseInt(shiftEndTime.split(':')[1]) || 0)
+      : startMinutes;
+    const midday = 13 * 60; // 13:00
 
-    if (needsMorning && dayAvailability.morning !== true) return false;
-    if (needsAfternoon && dayAvailability.afternoon !== true) return false;
-    return true;
+    // Shift fully within morning (ends at or before 13:00)
+    if (endMinutes <= midday) {
+      return dayAvailability.morning === true;
+    }
+    // Shift fully within afternoon (starts at or after 13:00)
+    if (startMinutes >= midday) {
+      return dayAvailability.afternoon === true;
+    }
+    // Shift spans both morning and afternoon
+    const morningPortion = midday - startMinutes;
+    const afternoonPortion = endMinutes - midday;
+    const totalDuration = endMinutes - startMinutes;
+    const minorPortion = Math.min(morningPortion, afternoonPortion);
+
+    // If the minor portion is small (< 25% of total), treat as single-period shift
+    // e.g. 12:30-17:00 = 30min morning out of 270min total (11%) → afternoon shift
+    // e.g. 08:00-14:00 = 60min afternoon out of 360min total (17%) → morning shift
+    if (minorPortion / totalDuration < 0.25) {
+      if (afternoonPortion > morningPortion) {
+        return dayAvailability.afternoon === true;
+      } else {
+        return dayAvailability.morning === true;
+      }
+    }
+    // Both portions are significant → needs both (e.g. 08:00-17:00)
+    return dayAvailability.morning === true && dayAvailability.afternoon === true;
   }
   
   // If no time specified, check if at least part of the day is available
