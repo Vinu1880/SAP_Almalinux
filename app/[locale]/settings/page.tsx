@@ -227,7 +227,7 @@ const SettingsPage = () => {
       const response = await authFetch('/api/backup/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: selectedBackup })
+        body: JSON.stringify({ fileName: selectedBackup, confirmed: true })
       });
       
       if (response.ok) {
@@ -279,7 +279,7 @@ const SettingsPage = () => {
       const response = await authFetch('/api/backup/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(backupData)
+        body: JSON.stringify({ ...backupData, confirmed: true })
       });
 
       if (response.ok) {
