@@ -234,7 +234,11 @@
     "activeFilter": "Aktiv",
     "inactiveFilter": "Inaktiv",
     "deletePikettButton": "Löschen",
-    "copy": "(Kopie)"
+    "copy": "(Kopie)",
+    "noShiftFound": "Keine Schicht entspricht Ihrer Suche",
+    "noShiftConfigured": "Keine Schicht konfiguriert",
+    "tryModifySearch": "Versuchen Sie, Ihre Suchkriterien oder Filter anzupassen.",
+    "createFirstShift": "Erstellen Sie Ihre erste Schicht, um loszulegen."
   },
   "users": {
     "title": "Benutzer- & Teamverwaltung",

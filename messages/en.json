@@ -234,7 +234,11 @@
     "activeFilter": "Active",
     "inactiveFilter": "Inactive",
     "deletePikettButton": "Delete",
-    "copy": "(Copy)"
+    "copy": "(Copy)",
+    "noShiftFound": "No shift matches your search",
+    "noShiftConfigured": "No shift configured",
+    "tryModifySearch": "Try modifying your search criteria or filters.",
+    "createFirstShift": "Create your first shift to get started."
   },
   "users": {
     "title": "User & Team Management",
