@@ -24,7 +24,8 @@ import {
   Send,
   AlertCircle,
   Building2,
-  X
+  X,
+  FilterX
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -851,7 +852,11 @@ const DashboardPage = () => {
               disabled={syncing || loading}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
               {syncing ? t('syncing') : t('sync')}
             </Button>
 
@@ -1042,8 +1047,8 @@ const DashboardPage = () => {
                         onClick={resetFilters}
                         className="hover:bg-secondary/20 w-full"
                       >
-                        <X className="w-4 h-4 mr-2" />
-                        {tCommon('refresh')}
+                        <FilterX className="w-4 h-4 mr-2" />
+                        {tCommon('resetFilters')}
                       </Button>
                     </div>
                   </div>
