@@ -89,7 +89,10 @@ export function usePiketts() {
         method: 'DELETE'
       });
       
-      if (!response.ok) throw new Error('Failed to delete pikett');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete pikett');
+      }
       
       setPiketts(prev => prev.filter(p => p.id !== id));
       return true;

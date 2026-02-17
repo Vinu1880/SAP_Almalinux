@@ -173,17 +173,43 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // Check for pending/accepted assignments
+    const activeAssignments = await prisma.shiftAssignment.count({
+      where: { userId: id, status: { in: ['PENDING', 'ACCEPTED'] } }
+    });
+    if (activeAssignments > 0) {
+      return NextResponse.json(
+        { error: `Cannot delete user: ${activeAssignments} active assignment(s) exist. Cancel or reassign them first.` },
+        { status: 400 }
+      );
+    }
+
+    // Check if user is assigned to active piketts
+    const activePiketts = await prisma.pikett.count({
+      where: { userId: id, status: 'ACTIVE' }
+    });
+    if (activePiketts > 0) {
+      return NextResponse.json(
+        { error: `Cannot delete user: assigned to ${activePiketts} active pikett(s). Remove the user from piketts first.` },
+        { status: 400 }
+      );
+    }
+
     // Remove user as team lead if applicable
     const teamsLed = await prisma.team.findMany({
       where: { leadId: id }
     });
-
     if (teamsLed.length > 0) {
       await prisma.team.updateMany({
         where: { leadId: id },
         data: { leadId: null }
       });
     }
+
+    // Clean up old cancelled/refused assignments before delete
+    await prisma.shiftAssignment.deleteMany({
+      where: { userId: id }
+    });
 
     const user = await prisma.user.delete({
       where: { id }
@@ -203,7 +229,7 @@ export async function DELETE(
   } catch (error) {
     console.error('Error deleting user:', error);
     return NextResponse.json(
-      { error: 'Failed to delete user' },
+      { error: 'Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error') },
       { status: 500 }
     );
   }

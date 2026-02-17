@@ -210,9 +210,12 @@ const SettingsPage = () => {
       if (response.ok) {
         showNotification(t('backupDeleted'), 'success');
         loadBackups();
+      } else {
+        const errorData = await response.json();
+        showNotification(errorData.error || t('deleteError'), 'error');
       }
     } catch (error) {
-      showNotification(t('deleteError'), 'error');
+      showNotification(error instanceof Error ? error.message : t('deleteError'), 'error');
     } finally {
       setIsDeleteBackupDialogOpen(false);
       setDeleteBackupFileName(null);
@@ -237,10 +240,11 @@ const SettingsPage = () => {
           window.location.reload();
         }, 2000);
       } else {
-        throw new Error(t('restoreError'));
+        const errorData = await response.json();
+        throw new Error(errorData.error || t('restoreError'));
       }
     } catch (error) {
-      showNotification(t('restoreError'), 'error');
+      showNotification(error instanceof Error ? error.message : t('restoreError'), 'error');
     } finally {
       setIsRestoring(false);
     }
@@ -421,7 +425,7 @@ const SettingsPage = () => {
   const filteredHolidays = holidays.filter(holiday => {
     const holidayYear = new Date(holiday.date).getFullYear();
     return holidayYear === selectedYear;
-  });
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const SettingItem = ({ icon: Icon, title, description, children }: SettingItemProps) => (
     <div className="flex items-start space-x-4 p-4 rounded-lg border border-slate-200 bg-slate-50">

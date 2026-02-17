@@ -290,7 +290,7 @@ const ShiftsPage = () => {
       setDeletePikettId(null);
     } catch (error) {
       console.error('Erreur lors de la suppression du pikett:', error);
-      alert(t('pikettDeleteError'));
+      alert(error instanceof Error ? error.message : t('pikettDeleteError'));
     }
   };
 
@@ -330,7 +330,7 @@ const ShiftsPage = () => {
       setSelectedShift(null);
     } catch (error) {
       console.error('Erreur lors de la modification:', error);
-      alert(t('shiftEditError'));
+      alert(error instanceof Error ? error.message : t('shiftEditError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -345,7 +345,7 @@ const ShiftsPage = () => {
       setDeleteShiftId(null);
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
-      alert(t('shiftDeleteError'));
+      alert(error instanceof Error ? error.message : t('shiftDeleteError'));
     }
   };
 

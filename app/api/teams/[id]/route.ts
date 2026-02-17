@@ -190,25 +190,38 @@ export async function DELETE(
     const { id } = await params;
 
     // Check if there are members in the team
-    const membersCount = await prisma.user.count({
-      where: { teamId: id }
+    const members = await prisma.user.findMany({
+      where: { teamId: id },
+      select: { firstName: true, lastName: true }
     });
-
-    if (membersCount > 0) {
+    if (members.length > 0) {
+      const names = members.map(m => `${m.firstName} ${m.lastName}`).join(', ');
       return NextResponse.json(
-        { error: 'Cannot delete team with members. Please reassign members first.' },
+        { error: `Cannot delete team: ${members.length} user(s) assigned (${names}). Remove them from the team first.` },
         { status: 400 }
       );
     }
 
     // Check if there are associated shifts
-    const shiftsCount = await prisma.shift.count({
+    const shifts = await prisma.shift.findMany({
+      where: { teamId: id },
+      select: { name: true }
+    });
+    if (shifts.length > 0) {
+      const names = shifts.map(s => s.name).join(', ');
+      return NextResponse.json(
+        { error: `Cannot delete team: ${shifts.length} shift(s) linked (${names}). Delete or reassign them first.` },
+        { status: 400 }
+      );
+    }
+
+    // Check if there are associated piketts
+    const piketts = await prisma.pikett.count({
       where: { teamId: id }
     });
-
-    if (shiftsCount > 0) {
+    if (piketts > 0) {
       return NextResponse.json(
-        { error: 'Cannot delete team with shifts. Please delete or reassign shifts first.' },
+        { error: `Cannot delete team: ${piketts} pikett(s) linked. Delete or reassign them first.` },
         { status: 400 }
       );
     }

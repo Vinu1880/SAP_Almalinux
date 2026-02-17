@@ -1142,7 +1142,7 @@ const UsersPage = () => {
       setDeleteUserId(null);
     } catch (error) {
       console.error('Error:', error);
-      showError(t('deleteUserError'));
+      showError(error instanceof Error ? error.message : t('deleteUserError'));
     }
   };
 
@@ -1221,7 +1221,7 @@ const UsersPage = () => {
       setDeleteTeamId(null);
     } catch (error) {
       console.error('Error:', error);
-      showError(t('deleteTeamError'));
+      showError(error instanceof Error ? error.message : t('deleteTeamError'));
     }
   };
 

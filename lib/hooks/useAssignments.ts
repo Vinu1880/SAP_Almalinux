@@ -100,7 +100,10 @@ export function useAssignments(filters?: {
       const response = await authFetch(`/api/assignments/${id}`, {
         method: 'DELETE'
       });
-      if (!response.ok) throw new Error('Failed to cancel assignment');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to cancel assignment');
+      }
       await fetchAssignments(); // Refresh the list
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

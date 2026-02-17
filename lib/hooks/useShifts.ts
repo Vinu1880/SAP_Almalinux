@@ -88,7 +88,10 @@ export function useShifts() {
       const response = await authFetch(`/api/shifts/${id}`, {
         method: 'DELETE'
       });
-      if (!response.ok) throw new Error('Failed to delete shift');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete shift');
+      }
       setShifts(shifts.filter(s => s.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

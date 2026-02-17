@@ -128,7 +128,22 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Delete the shift (assignments will be cascade-deleted thanks to onDelete: Cascade)
+    // Check for pending/accepted assignments
+    const activeAssignments = await prisma.shiftAssignment.count({
+      where: { shiftId: id, status: { in: ['PENDING', 'ACCEPTED'] } }
+    });
+    if (activeAssignments > 0) {
+      return NextResponse.json(
+        { error: `Cannot delete shift: ${activeAssignments} active assignment(s) exist. Cancel them first or wait for them to be completed.` },
+        { status: 400 }
+      );
+    }
+
+    // Clean up old cancelled/refused assignments before delete
+    await prisma.shiftAssignment.deleteMany({
+      where: { shiftId: id }
+    });
+
     const shift = await prisma.shift.delete({
       where: { id }
     });
@@ -148,7 +163,7 @@ export async function DELETE(
   } catch (error) {
     console.error('Error deleting shift:', error);
     return NextResponse.json(
-      { error: 'Failed to delete shift', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to delete shift: ' + (error instanceof Error ? error.message : 'Unknown error') },
       { status: 500 }
     );
   }
