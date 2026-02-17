@@ -360,14 +360,19 @@ const SettingsPage = () => {
     }
   };
 
+  const [isImportingHolidays, setIsImportingHolidays] = useState(false);
+
   const handleImportStandardHolidays = async () => {
     const selectedCantons = ['BE', 'ZH', 'VD'];
+    setIsImportingHolidays(true);
 
     try {
       const imported = await importStandardHolidays(selectedYear, selectedCantons);
       showNotification(t('holidaysImported').replace('{count}', imported.length.toString()), 'success');
     } catch (error) {
       showNotification(t('holidaysImportError'), 'error');
+    } finally {
+      setIsImportingHolidays(false);
     }
   };
 
@@ -621,9 +626,14 @@ const SettingsPage = () => {
                       onClick={handleImportStandardHolidays}
                       variant="outline"
                       size="sm"
+                      disabled={isImportingHolidays}
                       className="hover:bg-secondary/20"
                     >
-                      <FileDown className="w-4 h-4 mr-2" />
+                      {isImportingHolidays ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileDown className="w-4 h-4 mr-2" />
+                      )}
                       {t("importStandards")}
                     </Button>
                     <Dialog open={isCreateHolidayDialogOpen} onOpenChange={setIsCreateHolidayDialogOpen}>
