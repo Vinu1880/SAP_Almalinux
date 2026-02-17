@@ -68,10 +68,10 @@ export function checkRateLimit(
 
 export function getClientIdentifier(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) return realIp;
-  return 'unknown';
+  const ip = forwarded ? forwarded.split(',')[0].trim() : (request.headers.get('x-real-ip') || 'unknown');
+  // Include pathname so rate limits are per-route, not shared across all APIs
+  const url = new URL(request.url);
+  return `${ip}:${url.pathname}`;
 }
 
 // Pre-configured rate limit profiles
