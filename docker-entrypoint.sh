@@ -45,10 +45,14 @@ npx prisma migrate deploy 2>/dev/null || {
     npx prisma db push --accept-data-loss 2>/dev/null || true
 }
 
-echo "[3/3] Démarrage de l'application Next.js..."
+# Fix permissions on mounted backup volume (host may own as root)
+echo "[3/4] Correction des permissions du dossier backups..."
+chown -R nextjs:nodejs /app/backups 2>/dev/null || true
+
+echo "[4/4] Démarrage de l'application Next.js..."
 echo "==================================="
 echo "Application disponible sur http://0.0.0.0:3000"
 echo "==================================="
 
-# Exécuter la commande passée en argument (par défaut: node server.js)
-exec "$@"
+# Drop to nextjs user and run the app
+exec su -s /bin/sh nextjs -c "node server.js"

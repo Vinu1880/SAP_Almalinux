@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { safePath } from '@/lib/pathSecurity';
-import { verifySHA256 } from '@/lib/backup-crypto';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import fs from 'fs';
 import path from 'path';
@@ -38,18 +37,7 @@ export async function GET(
       );
     }
 
-    const fileContent = fs.readFileSync(filePath);
-
-    const checksumPath = filePath + '.sha256';
-    if (fs.existsSync(checksumPath)) {
-      const expectedHash = fs.readFileSync(checksumPath, 'utf-8').trim();
-      if (!verifySHA256(fileContent, expectedHash)) {
-        return NextResponse.json(
-          { error: 'Backup integrity check failed. File may be corrupted.' },
-          { status: 500 }
-        );
-      }
-    }
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
 
     await prisma.auditLog.create({
       data: {
@@ -61,11 +49,9 @@ export async function GET(
       }
     });
 
-    const contentType = fileName.endsWith('.enc') ? 'application/octet-stream' : 'application/json';
-
     return new NextResponse(fileContent, {
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="${fileName}"`,
       },
     });

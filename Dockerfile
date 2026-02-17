@@ -87,11 +87,12 @@ RUN chown -R nextjs:nodejs /app/node_modules
 # Créer le dossier backups avec les bonnes permissions
 RUN mkdir -p /app/backups && chown nextjs:nodejs /app/backups
 
-# Changer vers l'utilisateur non-root
-USER nextjs
+# Copier le script d'entrée
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Exposer le port
 EXPOSE 3000
 
-# Commande par défaut - démarrage direct de Next.js
-CMD ["node", "server.js"]
+# Entrypoint runs as root to fix volume permissions, then drops to nextjs user
+CMD ["/app/docker-entrypoint.sh"]

@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { safePath } from '@/lib/pathSecurity';
-import { decryptBackup, verifySHA256 } from '@/lib/backup-crypto';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { logSecurityEvent } from '@/lib/securityLogger';
 import fs from 'fs';
@@ -40,34 +39,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const fileContent = fs.readFileSync(filePath);
-
-      // SHA-256 integrity check
-      const checksumPath = filePath + '.sha256';
-      if (fs.existsSync(checksumPath)) {
-        const expectedHash = fs.readFileSync(checksumPath, 'utf-8').trim();
-        if (!verifySHA256(fileContent, expectedHash)) {
-          logSecurityEvent({
-            type: 'BACKUP_INTEGRITY_FAILURE',
-            userEmail: auth.user.mail,
-            details: `fileName=${body.fileName}`,
-          });
-          return NextResponse.json(
-            { error: 'Backup integrity check failed. File may be corrupted or tampered with.' },
-            { status: 400 }
-          );
-        }
-      }
-
-      // Decrypt if encrypted
-      let jsonString: string;
-      if (body.fileName.endsWith('.enc')) {
-        jsonString = decryptBackup(fileContent);
-      } else {
-        jsonString = fileContent.toString('utf-8');
-      }
-
-      const backup = JSON.parse(jsonString);
+      const fileContent = fs.readFileSync(filePath, 'utf-8');
+      const backup = JSON.parse(fileContent);
       data = backup.data || backup;
       backupSource = body.fileName;
     } else if (body.data) {

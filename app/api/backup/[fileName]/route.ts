@@ -39,11 +39,6 @@ export async function DELETE(
 
     fs.unlinkSync(filePath);
 
-    const checksumPath = filePath + '.sha256';
-    if (fs.existsSync(checksumPath)) {
-      fs.unlinkSync(checksumPath);
-    }
-
     await prisma.auditLog.create({
       data: {
         action: 'DELETE',

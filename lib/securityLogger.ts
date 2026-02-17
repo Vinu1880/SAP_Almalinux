@@ -11,7 +11,6 @@ export type SecurityEventType =
   | 'PATH_TRAVERSAL_ATTEMPT'
   | 'BACKUP_CREATED'
   | 'BACKUP_RESTORED'
-  | 'BACKUP_INTEGRITY_FAILURE'
   | 'CRON_AUTH_FAILURE';
 
 interface SecurityEvent {
@@ -40,7 +39,6 @@ export function logSecurityEvent(event: SecurityEvent): void {
     'RATE_LIMIT_HIT',
     'CORS_BLOCKED',
     'PATH_TRAVERSAL_ATTEMPT',
-    'BACKUP_INTEGRITY_FAILURE',
     'CRON_AUTH_FAILURE',
   ].includes(event.type);
 
