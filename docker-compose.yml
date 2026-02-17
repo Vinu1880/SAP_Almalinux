@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  postgres-db:
+  sap-postgres:
     image: postgres:16-alpine
     container_name: sap-postgres
     restart: unless-stopped
@@ -33,7 +33,7 @@ services:
     container_name: sap-app
     restart: unless-stopped
     depends_on:
-      postgres-db:
+      sap-postgres:
         condition: service_healthy
     ports:
       - "3000:3000"
