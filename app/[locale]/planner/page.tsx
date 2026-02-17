@@ -58,6 +58,7 @@ import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { usePiketts } from '@/lib/hooks/usePiketts';
 import { useHolidays } from '@/lib/hooks/useHolidays';
+import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { useTranslations, useLocale } from 'next-intl';
 
 // Types
@@ -181,11 +182,47 @@ const {
 
   // Auth
   const { getAccessToken } = useAuth();
+  const authFetch = useAuthFetch();
+  const isAuthReady = useAuthReady();
+
+  // DB assignments state (for status badges)
+  const [dbAssignments, setDbAssignments] = useState<any[]>([]);
 
   // Hooks
   const { shifts, loading: shiftsLoading } = useShifts();
   const { users, loading: usersLoading } = useUsers();
   const { teams, loading: teamsLoading } = useTeams();
+
+  // Fetch existing DB assignments for status badges
+  const fetchDbAssignments = async () => {
+    try {
+      const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+      const startDateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-01`;
+      const endDateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+      const response = await authFetch(`/api/shift-assignments?startDate=${startDateStr}&endDate=${endDateStr}`);
+      if (response.ok) {
+        const data = await response.json();
+        setDbAssignments(data);
+      }
+    } catch (err) {
+      console.error('Error fetching DB assignments:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthReady) {
+      fetchDbAssignments();
+    }
+  }, [calendarMonth, calendarYear, isAuthReady]);
+
+  // Status lookup helper
+  const getDbStatus = (date: string, shiftId: string, userId: string): 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED' | null => {
+    const match = dbAssignments.find((a: any) => {
+      const dbDate = new Date(a.date).toISOString().split('T')[0];
+      return dbDate === date && a.shiftId === shiftId && a.userId === userId;
+    });
+    return match?.status || null;
+  };
 
   // Settings
   const loadSettings = () => {
@@ -1507,6 +1544,9 @@ const processShiftAssignments = async () => {
         }
       }
 
+      // Refresh DB assignments for status badges
+      fetchDbAssignments();
+
       // Show success dialog
       setSuccessMessage({
         outlookSuccess,
@@ -1623,9 +1663,17 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                   {assignment.shift?.name || 'Shift'}
                 </span>
                 {assignment.assignedUsers.length > 0 ? (
-                  <span className="text-slate-700 truncate text-xs">
-                    : {assignment.assignedUsers[0].firstName} {assignment.assignedUsers[0].lastName}
-                  </span>
+                  <>
+                    <span className="text-slate-700 truncate text-xs">
+                      : {assignment.assignedUsers[0].firstName} {assignment.assignedUsers[0].lastName}
+                    </span>
+                    {(() => {
+                      const status = getDbStatus(assignment.date, assignment.shiftId, assignment.assignedUsers[0].id);
+                      if (!status) return null;
+                      const dotColor = status === 'ACCEPTED' ? 'bg-green-500' : status === 'REFUSED' ? 'bg-red-500' : status === 'PENDING' ? 'bg-blue-500' : 'bg-gray-400';
+                      return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} title={t(`status${status.charAt(0) + status.slice(1).toLowerCase()}`)} />;
+                    })()}
+                  </>
                 ) : (
                   <span className="text-orange-600 text-xs">: ⚠</span>
                 )}
@@ -2189,6 +2237,20 @@ useEffect(() => {
                       <RotateCw className="w-3 h-3 text-purple-600" />
                       <span className="text-slate-600">{t('automaticRotation')}</span>
                     </div>
+                    <div className="border-l pl-4 flex items-center gap-4">
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        <span className="text-slate-600">{t('statusPending')}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500" />
+                        <span className="text-slate-600">{t('statusAccepted')}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-red-500" />
+                        <span className="text-slate-600">{t('statusRefused')}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -2750,11 +2812,44 @@ useEffect(() => {
                                                 {t('assignedManually')} ({assignment.overrideReason})
                                               </Badge>
                                             )}
+                                            {(() => {
+                                              const status = getDbStatus(assignment.date, assignment.shiftId, assignment.assignedUsers[0]?.id);
+                                              if (status === 'PENDING') return (
+                                                <Badge className="text-xs mt-2 bg-blue-100 text-blue-700 border-0 inline-flex items-center gap-1">
+                                                  <Clock className="w-3 h-3" />
+                                                  {t('statusPending')}
+                                                </Badge>
+                                              );
+                                              if (status === 'ACCEPTED') return (
+                                                <Badge className="text-xs mt-2 bg-green-100 text-green-700 border-0 inline-flex items-center gap-1">
+                                                  <CheckCircle className="w-3 h-3" />
+                                                  {t('statusAccepted')}
+                                                </Badge>
+                                              );
+                                              if (status === 'REFUSED') return (
+                                                <Badge className="text-xs mt-2 bg-red-100 text-red-700 border-0 inline-flex items-center gap-1">
+                                                  <XCircle className="w-3 h-3" />
+                                                  {t('statusRefused')}
+                                                </Badge>
+                                              );
+                                              if (status === 'CANCELLED') return (
+                                                <Badge className="text-xs mt-2 bg-gray-100 text-gray-600 border-0 inline-flex items-center gap-1">
+                                                  <XCircle className="w-3 h-3" />
+                                                  {t('statusCancelled')}
+                                                </Badge>
+                                              );
+                                              return (
+                                                <Badge variant="outline" className="text-xs mt-2 bg-slate-50 text-slate-500 inline-flex items-center gap-1">
+                                                  <Send className="w-3 h-3" />
+                                                  {t('statusNotSent')}
+                                                </Badge>
+                                              );
+                                            })()}
                                           </div>
                                         </>
                                       )}
                                     </div>
-                              
+
                               <div className="flex items-center gap-2">
                                 {assignment.isRotationAssignment && !editingAssignment && (
                                   <Badge className={`text-xs border-0 ${

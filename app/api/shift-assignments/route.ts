@@ -19,27 +19,35 @@ export async function GET(request: NextRequest) {
     const teamId = searchParams.get('teamId');
     const userId = searchParams.get('userId');
     const status = searchParams.get('status');
+    const rangeStart = searchParams.get('startDate');
+    const rangeEnd = searchParams.get('endDate');
 
     // Calculate start date based on filter
-    let startDate = new Date();
+    let filterStartDate = new Date();
     if (dateFilter === '24h') {
-      startDate.setHours(startDate.getHours() - 24);
+      filterStartDate.setHours(filterStartDate.getHours() - 24);
     } else if (dateFilter === '7d') {
-      startDate.setDate(startDate.getDate() - 7);
+      filterStartDate.setDate(filterStartDate.getDate() - 7);
     } else if (dateFilter === '30d') {
-      startDate.setDate(startDate.getDate() - 30);
+      filterStartDate.setDate(filterStartDate.getDate() - 30);
     } else if (dateFilter === '90d') {
-      startDate.setDate(startDate.getDate() - 90);
+      filterStartDate.setDate(filterStartDate.getDate() - 90);
     } else if (dateFilter === '180d') {
-      startDate.setDate(startDate.getDate() - 180);
+      filterStartDate.setDate(filterStartDate.getDate() - 180);
     }
 
     // Build filters
     const where: any = {};
 
-    if (dateFilter) {
+    if (rangeStart && rangeEnd) {
+      // Date range filter on the assignment date field
+      where.date = {
+        gte: new Date(rangeStart),
+        lte: new Date(rangeEnd)
+      };
+    } else if (dateFilter) {
       where.createdAt = {
-        gte: startDate
+        gte: filterStartDate
       };
     }
 

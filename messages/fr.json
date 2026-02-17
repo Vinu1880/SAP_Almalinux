@@ -624,6 +624,11 @@
     "noInvitationsSentError": "Aucune invitation n'a pu être envoyée ({count} erreur(s)).\n\nRaisons possibles :\n- Access token expiré\n- Adresse email invalide\n- Pas de connexion internet\n\nAucune assignation n'a été créée dans la base de données.",
     "noInvitationsToSend": "Aucune invitation à envoyer.",
     "sendingInProgress": "Envoi en cours...",
-    "understood": "Compris"
+    "understood": "Compris",
+    "statusNotSent": "Non envoyé",
+    "statusPending": "En attente",
+    "statusAccepted": "Accepté",
+    "statusRefused": "Refusé",
+    "statusCancelled": "Annulé"
   }
 }

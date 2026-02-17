@@ -624,6 +624,11 @@
     "noInvitationsSentError": "No invitation could be sent ({count} error(s)).\n\nPossible reasons:\n- Expired access token\n- Invalid email address\n- No internet connection\n\nNo assignment was created in the database.",
     "noInvitationsToSend": "No invitations to send.",
     "sendingInProgress": "Sending in progress...",
-    "understood": "Got it"
+    "understood": "Got it",
+    "statusNotSent": "Not sent",
+    "statusPending": "Pending",
+    "statusAccepted": "Accepted",
+    "statusRefused": "Refused",
+    "statusCancelled": "Cancelled"
   }
 }
