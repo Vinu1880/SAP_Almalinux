@@ -323,6 +323,7 @@ const DashboardPage = () => {
   };
 
   // Effect to calculate user availability when the modal opens
+  // Follows the same logic as the planner dropdown (which works correctly)
   React.useEffect(() => {
     if (!resendingAssignment) {
       setUsersAvailability({ available: [], alreadyAssigned: [], unavailable: [] });
@@ -334,41 +335,55 @@ const DashboardPage = () => {
       setCheckingAvailability(true);
 
       try {
-        // Normalize date to YYYY-MM-DD for constraint checks
-        const rawDate = resendingAssignment.date;
-        const d = new Date(rawDate);
-        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-        const shift = resendingAssignment.shift;
-
-        const eligibleUsers = getEligibleUsersForShift(
-          shift,
-          resendingAssignment.userId
-        );
-
-        // Fetch Out of Office using getSchedule API with eligible user emails
-        const eligibleEmails = eligibleUsers.filter(u => u.email).map(u => u.email);
-        const oofEvents = await fetchOutOfOfficeForDate(dateStr, eligibleEmails);
-        setOutOfOfficeEvents(oofEvents);
-
-        // Check which users are already assigned that day (normalize dates for comparison)
+        // Normalize date to YYYY-MM-DD
         const normalizeDate = (dateVal: string | Date) => {
           const dt = new Date(dateVal);
           return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
         };
-        const assignmentDateNorm = normalizeDate(resendingAssignment.date);
-        const assignedToday = assignments.filter(a => {
-          return normalizeDate(a.date) === assignmentDateNorm && a.id !== resendingAssignment.id;
-        });
+        const dateStr = normalizeDate(resendingAssignment.date);
+        const shift = resendingAssignment.shift;
 
+        // Get eligible users for the shift (same logic as planner)
+        const eligibleUsers = getEligibleUsersForShift(
+          shift,
+          resendingAssignment.userId // exclude the user who refused
+        );
+
+        // Fetch Out of Office using getSchedule API
+        const eligibleEmails = eligibleUsers.filter(u => u.email).map(u => u.email);
+        const oofEvents = await fetchOutOfOfficeForDate(dateStr, eligibleEmails);
+        setOutOfOfficeEvents(oofEvents);
+
+        // Get all assignments for this date from DB (not just local state)
+        // This ensures we have the latest status (ACCEPTED, REFUSED, etc.)
+        const assignmentDateNorm = dateStr;
+
+        // Calculate prev/next dates for consecutive shift check
+        const assignmentDate = new Date(dateStr);
+        const prevDate = new Date(assignmentDate);
+        prevDate.setDate(prevDate.getDate() - 1);
+        const nextDate = new Date(assignmentDate);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const prevDateStr = normalizeDate(prevDate);
+        const nextDateStr = normalizeDate(nextDate);
+
+        // Categorize each eligible user (same as planner)
         const available: any[] = [];
         const alreadyAssigned: any[] = [];
         const unavailable: Array<{ user: any; reason: string }> = [];
 
         for (const user of eligibleUsers) {
-          // 1. Check if already assigned today
-          const hasOtherShift = assignedToday.some(a => a.userId === user.id);
-          if (hasOtherShift) {
+          // 1. Check if user has an ACTIVE (non-refused) assignment on this date
+          //    REFUSED assignments should NOT block the user
+          const activeAssignmentToday = assignments.find(a =>
+            normalizeDate(a.date) === assignmentDateNorm &&
+            a.userId === user.id &&
+            a.id !== resendingAssignment.id &&
+            a.status !== 'REFUSED' &&
+            a.status !== 'CANCELLED'
+          );
+
+          if (activeAssignmentToday) {
             alreadyAssigned.push(user);
             continue;
           }
@@ -377,8 +392,7 @@ const DashboardPage = () => {
           const canton = user.location || 'BE';
           if (isUserOnHoliday(dateStr, canton)) {
             const holidayForDate = holidays.find(h => {
-              const hd = new Date(h.date);
-              const hDateStr = `${hd.getFullYear()}-${String(hd.getMonth() + 1).padStart(2, '0')}-${String(hd.getDate()).padStart(2, '0')}`;
+              const hDateStr = normalizeDate(h.date);
               return hDateStr === dateStr && h.cantons.includes(canton);
             });
             unavailable.push({
@@ -388,42 +402,44 @@ const DashboardPage = () => {
             continue;
           }
 
-          // 3. Check if user works this day
+          // 3. Check if user works this day (same as planner isUserWorkingOnDay)
           if (!isUserWorkingOnDay(user, dateStr, shift?.startTime)) {
             unavailable.push({ user, reason: t('reasonNotWorkingToday') });
             continue;
           }
 
-          // 4. Check Out of Office (use fetched oofEvents directly)
-          if (oofEvents.length > 0) {
-            const oofCheck = isUserAvailable(user, dateStr, oofEvents, shift);
-            if (!oofCheck.available) {
-              unavailable.push({ user, reason: t('reasonOutOfOffice') });
-              continue;
-            }
+          // 4. Check Out of Office (always check, even if oofEvents is empty the function handles it)
+          const oofCheck = isUserAvailable(user, dateStr, oofEvents, shift);
+          if (!oofCheck.available) {
+            unavailable.push({ user, reason: t('reasonOutOfOffice') });
+            continue;
           }
 
-          // 5. Check consecutive shifts via API
-          try {
-            const response = await authFetch('/api/shift-assignments/check-consecutive', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: user.id, date: dateStr })
+          // 5. Check consecutive shifts (same logic as planner: check prev/next day)
+          //    Use DB assignments instead of API call for consistency
+          const hasConsecutiveShift = assignments.some(a => {
+            const aDateNorm = normalizeDate(a.date);
+            return (aDateNorm === prevDateStr || aDateNorm === nextDateStr) &&
+              a.userId === user.id &&
+              a.status !== 'REFUSED' &&
+              a.status !== 'CANCELLED';
+          });
+
+          if (hasConsecutiveShift) {
+            // Find shift names for the constraint message
+            const consecutiveAssignments = assignments.filter(a => {
+              const aDateNorm = normalizeDate(a.date);
+              return (aDateNorm === prevDateStr || aDateNorm === nextDateStr) &&
+                a.userId === user.id &&
+                a.status !== 'REFUSED' &&
+                a.status !== 'CANCELLED';
             });
-
-            if (response.ok) {
-              const data = await response.json();
-              if (data.hasConsecutiveShift) {
-                const shiftNames = data.consecutiveAssignments.map((a: any) => a.shiftName).join(', ');
-                unavailable.push({ user, reason: t('reasonConsecutiveShift', { shifts: shiftNames }) });
-                continue;
-              }
-            }
-          } catch {
-            // Skip consecutive check on error
+            const shiftNames = consecutiveAssignments.map(a => a.shift?.name || 'Shift').join(', ');
+            unavailable.push({ user, reason: t('reasonConsecutiveShift', { shifts: shiftNames }) });
+            continue;
           }
 
-          // 6. All checks passed
+          // 6. All checks passed - user is available
           available.push(user);
         }
 
