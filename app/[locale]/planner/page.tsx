@@ -177,6 +177,7 @@ const {
   const [successMessage, setSuccessMessage] = useState<{
     outlookSuccess: number;
     outlookErrors: number;
+    outlookErrorDetails?: string[];
     dbCount: number;
   } | null>(null);
 
@@ -215,13 +216,21 @@ const {
     }
   }, [calendarMonth, calendarYear, isAuthReady]);
 
-  // Status lookup helper
-  const getDbStatus = (date: string, shiftId: string, userId: string): 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED' | null => {
-    const match = dbAssignments.find((a: any) => {
-      const dbDate = new Date(a.date).toISOString().split('T')[0];
-      return dbDate === date && a.shiftId === shiftId && a.userId === userId;
-    });
-    return match?.status || null;
+  // Helper: normalize DB date to YYYY-MM-DD (local timezone)
+  const normalizeDbDate = (dateValue: string | Date): string => {
+    const d = new Date(dateValue);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // Get the status of a date+shift combination (checks if already sent)
+  const getDateShiftStatus = (date: string, shiftId: string): 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED' | null => {
+    const matches = dbAssignments.filter((a: any) => normalizeDbDate(a.date) === date && a.shiftId === shiftId);
+    if (matches.length === 0) return null;
+    // If any is ACCEPTED, show ACCEPTED; if any REFUSED, show REFUSED; else PENDING
+    if (matches.some((a: any) => a.status === 'ACCEPTED')) return 'ACCEPTED';
+    if (matches.some((a: any) => a.status === 'REFUSED')) return 'REFUSED';
+    if (matches.some((a: any) => a.status === 'CANCELLED')) return 'CANCELLED';
+    return 'PENDING';
   };
 
   // Settings
@@ -1454,9 +1463,41 @@ const processShiftAssignments = async () => {
       }
     }
     
+    // Fetch fresh DB assignments to override with real users
+    let freshDbAssignments: any[] = [];
+    try {
+      const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+      const sDateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-01`;
+      const eDateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+      const dbResponse = await authFetch(`/api/shift-assignments?startDate=${sDateStr}&endDate=${eDateStr}`);
+      if (dbResponse.ok) {
+        freshDbAssignments = await dbResponse.json();
+        setDbAssignments(freshDbAssignments);
+      }
+    } catch {
+      // Use existing state as fallback
+      freshDbAssignments = dbAssignments;
+    }
+
+    // Override assigned users with real DB data for already-sent date+shift combos
+    for (const assignment of assignments) {
+      const dbMatches = freshDbAssignments.filter((a: any) => {
+        return normalizeDbDate(a.date) === assignment.date && a.shiftId === assignment.shiftId;
+      });
+
+      if (dbMatches.length > 0) {
+        // Replace assigned users with the real DB users
+        const dbUsers = dbMatches.map((dbA: any) => {
+          const fullUser = users.find(u => u.id === dbA.userId);
+          return fullUser || dbA.user || { id: dbA.userId, firstName: '?', lastName: '?', email: '' };
+        });
+        assignment.assignedUsers = dbUsers;
+      }
+    }
+
     setRandomSeed(prev => prev + 1);
     setShiftAssignments(assignments);
-    
+
   } catch (error) {
     alert(t('processingError'));
   } finally {
@@ -1488,12 +1529,31 @@ const processShiftAssignments = async () => {
       return;
     }
 
+    // Filter out assignments where date+shift already exists in DB
+    const newAssignments = assignmentsWithUsers.filter(a => {
+      return getDateShiftStatus(a.date, a.shiftId) === null;
+    });
+
+    // Count skipped assignments
+    const skippedCount = assignmentsWithUsers.length - newAssignments.length;
+
+    if (newAssignments.length === 0) {
+      alert(t('allAssignmentsAlreadySent'));
+      return;
+    }
+
+    if (skippedCount > 0) {
+      const proceed = confirm(t('someAssignmentsAlreadySent', { newCount: newAssignments.length, skippedCount }));
+      if (!proceed) return;
+    }
+
     setSendingInvitations(true);
 
     try {
       // STEP 1: Send Outlook invitations first
       let outlookSuccess = 0;
       let outlookErrors = 0;
+      const outlookErrorDetails: string[] = [];
       const successfulAssignments: Array<{
         date: string;
         shiftId: string;
@@ -1504,13 +1564,7 @@ const processShiftAssignments = async () => {
         shiftName: string;
       }> = [];
 
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        alert(t('accessTokenMissingOrInvalid'));
-        return;
-      }
-
-        for (const assignment of assignmentsWithUsers) {
+        for (const assignment of newAssignments) {
           for (const user of assignment.assignedUsers) {
             try {
               const shiftStartTime = assignment.shift.startTime || '00:00';
@@ -1576,21 +1630,17 @@ const processShiftAssignments = async () => {
               };
 
               const mailbox = assignment.shift.senderMailbox || 'me';
-              const graphUrl = mailbox === 'me'
-                ? 'https://graph.microsoft.com/v1.0/me/events'
-                : `https://graph.microsoft.com/v1.0/users/${mailbox}/events`;
 
-              const outlookResponse = await fetch(graphUrl, {
+              // Send via server-side API route (uses application permissions)
+              // so the organizer is the shared mailbox, not the admin user
+              const outlookResponse = await authFetch('/api/outlook/send-event', {
                 method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(event)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mailbox, event })
               });
 
               if (outlookResponse.ok) {
-                const createdEvent = await outlookResponse.json();
+                const result = await outlookResponse.json();
                 outlookSuccess++;
 
                 // Add to the list of successful assignments
@@ -1599,14 +1649,18 @@ const processShiftAssignments = async () => {
                   shiftId: assignment.shiftId,
                   userId: user.id,
                   status: 'PENDING',
-                  outlookEventId: createdEvent.id,
+                  outlookEventId: result.eventId,
                   userEmail: user.email,
                   shiftName: assignment.shift.name
                 });
               } else {
+                const errorBody = await outlookResponse.json().catch(() => ({}));
+                const graphError = errorBody?.graphError || errorBody?.error || `HTTP ${outlookResponse.status}`;
+                outlookErrorDetails.push(`${user.email}: ${graphError}`);
                 outlookErrors++;
               }
             } catch (error) {
+              outlookErrorDetails.push(`${user.email}: ${error instanceof Error ? error.message : 'Network error'}`);
               outlookErrors++;
             }
           }
@@ -1615,7 +1669,7 @@ const processShiftAssignments = async () => {
       // STEP 2: Create in DB ONLY the assignments whose invitation succeeded
       if (successfulAssignments.length === 0) {
         const errorMessage = outlookErrors > 0
-          ? t('noInvitationsSentError', { count: outlookErrors })
+          ? `${t('noInvitationsSentError', { count: outlookErrors })}\n\n${outlookErrorDetails.join('\n')}`
           : t('noInvitationsToSend');
         setSendingInvitations(false);
         alert(errorMessage);
@@ -1668,6 +1722,7 @@ const processShiftAssignments = async () => {
       setSuccessMessage({
         outlookSuccess,
         outlookErrors,
+        outlookErrorDetails,
         dbCount: result.count
       });
       setShowSuccessDialog(true);
@@ -1784,7 +1839,7 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                       : {assignment.assignedUsers[0].firstName} {assignment.assignedUsers[0].lastName}
                     </span>
                     {(() => {
-                      const status = getDbStatus(assignment.date, assignment.shiftId, assignment.assignedUsers[0].id);
+                      const status = getDateShiftStatus(assignment.date, assignment.shiftId);
                       if (!status) return null;
                       const dotColor = status === 'ACCEPTED' ? 'bg-green-500' : status === 'REFUSED' ? 'bg-red-500' : status === 'PENDING' ? 'bg-blue-500' : 'bg-gray-400';
                       return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} title={t(`status${status.charAt(0) + status.slice(1).toLowerCase()}`)} />;
@@ -2055,25 +2110,42 @@ useEffect(() => {
                     )}
                   </Button>
 
-                  {shiftAssignments.length > 0 && (
-                    <Button
-                      onClick={sendShiftInvitations}
-                      disabled={sendingInvitations}
-                      className="w-full bg-[#00ff7b] text-black hover:bg-[#00ff7b]/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {sendingInvitations ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          {t('sendingInProgress')}
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4 mr-2" />
-                          {t('sendInvitations')}
-                        </>
-                      )}
-                    </Button>
-                  )}
+                  {shiftAssignments.length > 0 && (() => {
+                    // Count by date+shift (not per-user)
+                    const assignmentsWithUsers = shiftAssignments.filter(a => a.assignedUsers.length > 0);
+                    const newCount = assignmentsWithUsers.filter(a => getDateShiftStatus(a.date, a.shiftId) === null).length;
+                    const alreadySentCount = assignmentsWithUsers.filter(a => getDateShiftStatus(a.date, a.shiftId) !== null).length;
+
+                    return (
+                      <div className="space-y-2">
+                        <Button
+                          onClick={sendShiftInvitations}
+                          disabled={sendingInvitations || newCount === 0}
+                          className="w-full bg-[#00ff7b] text-black hover:bg-[#00ff7b]/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {sendingInvitations ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              {t('sendingInProgress')}
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-4 h-4 mr-2" />
+                              {t('sendInvitations')}
+                            </>
+                          )}
+                        </Button>
+                        {alreadySentCount > 0 && (
+                          <p className="text-xs text-slate-500 text-center">
+                            {newCount > 0
+                              ? t('newAndAlreadySentCount', { newCount, alreadySentCount })
+                              : t('allAlreadySentCount', { count: alreadySentCount })
+                            }
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -2937,7 +3009,7 @@ useEffect(() => {
                                               </Badge>
                                             )}
                                             {(() => {
-                                              const status = getDbStatus(assignment.date, assignment.shiftId, assignment.assignedUsers[0]?.id);
+                                              const status = getDateShiftStatus(assignment.date, assignment.shiftId);
                                               if (status === 'PENDING') return (
                                                 <Badge className="text-xs mt-2 bg-blue-100 text-blue-700 border-0 inline-flex items-center gap-1">
                                                   <Clock className="w-3 h-3" />
@@ -3152,7 +3224,14 @@ useEffect(() => {
                   <Alert className="border-orange-200 bg-orange-50">
                     <AlertCircle className="h-4 w-4 text-orange-600" />
                     <AlertDescription className="text-orange-800">
-                      {t('sendErrors', { count: successMessage.outlookErrors })}
+                      <p>{t('sendErrors', { count: successMessage.outlookErrors })}</p>
+                      {successMessage.outlookErrorDetails && successMessage.outlookErrorDetails.length > 0 && (
+                        <ul className="mt-2 text-xs space-y-1">
+                          {successMessage.outlookErrorDetails.map((detail, i) => (
+                            <li key={i} className="font-mono">{detail}</li>
+                          ))}
+                        </ul>
+                      )}
                     </AlertDescription>
                   </Alert>
                 )}

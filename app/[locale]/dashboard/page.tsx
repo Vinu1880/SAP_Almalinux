@@ -77,6 +77,7 @@ const DashboardPage = () => {
   const [selectedShift, setSelectedShift] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [sortByDate, setSortByDate] = useState<'asc' | 'desc' | null>('asc');
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -123,62 +124,95 @@ const DashboardPage = () => {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [outOfOfficeEvents, setOutOfOfficeEvents] = useState<any[]>([]);
 
-  // Function to fetch Out of Office events for a specific date
-  const fetchOutOfOfficeForDate = async (date: string): Promise<any[]> => {
+  // Function to fetch Out of Office events for a specific date using getSchedule API
+  const fetchOutOfOfficeForDate = async (date: string, userEmails?: string[]): Promise<any[]> => {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) return [];
 
-      // Fetch events for the previous day, the current day, and the next day
-      const targetDate = new Date(date);
-      const prevDay = new Date(targetDate);
-      prevDay.setDate(prevDay.getDate() - 1);
-      const nextDay = new Date(targetDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-
-      const startDateTime = new Date(prevDay.toISOString().split('T')[0] + 'T00:00:00').toISOString();
-      const endDateTime = new Date(nextDay.toISOString().split('T')[0] + 'T23:59:59').toISOString();
+      // Collect emails to check
+      const emails = userEmails || users?.filter((u: any) => u.email && (u.status === 'ACTIVE' || u.status === 'active')).map((u: any) => u.email) || [];
+      if (emails.length === 0) return [];
 
       const allOutOfOfficeEvents: any[] = [];
 
-      const calendarsResponse = await fetch('https://graph.microsoft.com/v1.0/me/calendars', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Use getSchedule API (same as planner) - batches of 20
+      const batchSize = 20;
+      for (let i = 0; i < emails.length; i += batchSize) {
+        const batch = emails.slice(i, i + batchSize);
 
-      if (!calendarsResponse.ok) return [];
-
-      const calendarsData = await calendarsResponse.json();
-
-      for (const calendar of calendarsData.value) {
-        const eventsUrl = `https://graph.microsoft.com/v1.0/me/calendars/${calendar.id}/events?` +
-          `$select=subject,start,end,showAs,isAllDay,organizer,attendees` +
-          `&$filter=start/dateTime le '${endDateTime}' and end/dateTime ge '${startDateTime}'`;
-
-        const eventsResponse = await fetch(eventsUrl, {
+        const scheduleResponse = await fetch('https://graph.microsoft.com/v1.0/me/calendar/getSchedule', {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
             'Prefer': 'outlook.timezone="Europe/Zurich"'
-          }
+          },
+          body: JSON.stringify({
+            schedules: batch,
+            startTime: {
+              dateTime: date + 'T00:00:00',
+              timeZone: 'Europe/Zurich'
+            },
+            endTime: {
+              dateTime: date + 'T23:59:59',
+              timeZone: 'Europe/Zurich'
+            },
+            availabilityViewInterval: 1440
+          })
         });
 
-        if (eventsResponse.ok) {
-          const eventsData = await eventsResponse.json();
+        if (!scheduleResponse.ok) continue;
 
-          const oofEvents = eventsData.value.filter((event: any) => {
-            return event.showAs === 'oof' || event.showAs === 'busy';
-          });
+        const scheduleData = await scheduleResponse.json();
 
-          oofEvents.forEach((event: any) => {
-            allOutOfOfficeEvents.push({
-              ...event,
-              calendarName: calendar.name,
-              calendarId: calendar.id
-            });
-          });
+        for (const userSchedule of scheduleData.value) {
+          const userEmail = userSchedule.scheduleId?.toLowerCase() || '';
+          let hasScheduleItem = false;
+
+          // Check scheduleItems first (detailed events)
+          if (userSchedule.scheduleItems && userSchedule.scheduleItems.length > 0) {
+            for (const item of userSchedule.scheduleItems) {
+              if (item.status === 'oof' || item.status === 'busy') {
+                hasScheduleItem = true;
+                const endDt = new Date(item.end.dateTime);
+                endDt.setDate(endDt.getDate() - 1);
+                const adjustedEnd = `${endDt.getFullYear()}-${String(endDt.getMonth() + 1).padStart(2, '0')}-${String(endDt.getDate()).padStart(2, '0')}T23:59:59`;
+
+                allOutOfOfficeEvents.push({
+                  id: `schedule-${userEmail}-${item.start.dateTime}`,
+                  subject: item.subject || (item.status === 'oof' ? 'Out of Office' : 'Busy'),
+                  start: { dateTime: item.start.dateTime },
+                  end: { dateTime: adjustedEnd },
+                  showAs: item.status,
+                  isAllDay: false,
+                  organizer: { emailAddress: { address: userEmail, name: '' } },
+                  attendees: [{ emailAddress: { address: userEmail, name: '' } }]
+                });
+              }
+            }
+          }
+
+          // Fallback: check availabilityView if no scheduleItems were found
+          // availabilityView codes: 0=free, 1=tentative, 2=busy, 3=oof, 4=workingElsewhere
+          if (!hasScheduleItem && userSchedule.availabilityView) {
+            const viewCodes = userSchedule.availabilityView.split('');
+            const hasOof = viewCodes.some((c: string) => c === '3');
+            const hasBusy = viewCodes.some((c: string) => c === '2');
+
+            if (hasOof || hasBusy) {
+              allOutOfOfficeEvents.push({
+                id: `availability-${userEmail}-${date}`,
+                subject: hasOof ? 'Out of Office' : 'Busy',
+                start: { dateTime: date + 'T00:00:00' },
+                end: { dateTime: date + 'T23:59:59' },
+                showAs: hasOof ? 'oof' : 'busy',
+                isAllDay: true,
+                organizer: { emailAddress: { address: userEmail, name: '' } },
+                attendees: [{ emailAddress: { address: userEmail, name: '' } }]
+              });
+            }
+          }
         }
       }
 
@@ -267,7 +301,8 @@ const DashboardPage = () => {
     user: any,
     shift: any,
     date: string,
-    currentAssignmentId?: string
+    currentAssignmentId?: string,
+    oofEventsOverride?: any[]
   ): Promise<{ available: boolean; reason?: string }> => {
     // Check public holidays
     const canton = user.location || 'BE';
@@ -287,9 +322,10 @@ const DashboardPage = () => {
       return { available: false, reason: t('reasonNotWorkingToday') };
     }
 
-    // Check Out of Office
-    if (outOfOfficeEvents.length > 0) {
-      const availability = isUserAvailable(user, date, outOfOfficeEvents, shift);
+    // Check Out of Office (use override if provided, else state)
+    const oofToCheck = oofEventsOverride ?? outOfOfficeEvents;
+    if (oofToCheck.length > 0) {
+      const availability = isUserAvailable(user, date, oofToCheck, shift);
       if (!availability.available) {
         return { available: false, reason: t('reasonOutOfOffice') };
       }
@@ -354,14 +390,20 @@ const DashboardPage = () => {
       setCheckingAvailability(true);
 
       try {
-        // Fetch Out of Office events for this date
-        const oofEvents = await fetchOutOfOfficeForDate(resendingAssignment.date);
-        setOutOfOfficeEvents(oofEvents);
+        // Normalize date to YYYY-MM-DD for constraint checks
+        const rawDate = resendingAssignment.date;
+        const d = new Date(rawDate);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
         const eligibleUsers = getEligibleUsersForShift(
           resendingAssignment.shift,
           resendingAssignment.userId
         );
+
+        // Fetch Out of Office using getSchedule API with eligible user emails
+        const eligibleEmails = eligibleUsers.filter(u => u.email).map(u => u.email);
+        const oofEvents = await fetchOutOfOfficeForDate(dateStr, eligibleEmails);
+        setOutOfOfficeEvents(oofEvents);
 
         // Check which users are already assigned that day
         const assignedToday = assignments.filter(
@@ -381,12 +423,13 @@ const DashboardPage = () => {
             continue;
           }
 
-          // Check other constraints
+          // Check other constraints (pass oofEvents directly since state isn't updated yet)
           const availability = await checkUserAvailability(
             user,
             resendingAssignment.shift,
-            resendingAssignment.date,
-            resendingAssignment.id
+            dateStr,
+            resendingAssignment.id,
+            oofEvents
           );
 
           if (availability.available) {
@@ -417,10 +460,8 @@ const DashboardPage = () => {
       const newUser = users?.find(u => u.id === selectedNewUser);
       if (!newUser) throw new Error(t('userNotFound'));
 
-      const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error(t('tokenError'));
-
-      // 1. Create the Outlook event
+      // 1. Create the Outlook event via server-side API (application permissions)
+      // so the organizer is the shared mailbox, not the admin user
       const shift = resendingAssignment.shift;
       const date = new Date(resendingAssignment.date);
 
@@ -436,6 +477,8 @@ const DashboardPage = () => {
       if (endDateTime <= startDateTime) {
         endDateTime.setDate(endDateTime.getDate() + 1);
       }
+
+      const mailbox = shift.senderMailbox || 'me';
 
       const event = {
         subject: shift.name,
@@ -478,19 +521,16 @@ const DashboardPage = () => {
         categories: ['Shift', shift.name]
       };
 
-      // Send to Outlook
-      const outlookResponse = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+      // Send via server-side API route (uses application permissions)
+      const outlookResponse = await authFetch('/api/outlook/send-event', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(event)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mailbox, event })
       });
 
       if (!outlookResponse.ok) {
-        const error = await outlookResponse.json();
-        throw new Error(error.error?.message || t('outlookSendError'));
+        const errorBody = await outlookResponse.json().catch(() => ({}));
+        throw new Error(errorBody?.graphError || errorBody?.error || t('outlookSendError'));
       }
 
       const createdEvent = await outlookResponse.json();
@@ -518,8 +558,7 @@ const DashboardPage = () => {
             date: resendingAssignment.date,
             shiftId: shift.id,
             userId: newUser.id,
-            status: 'PENDING',
-            outlookEventId: createdEvent.id
+            status: 'PENDING'
           }]
         })
       });
@@ -528,17 +567,29 @@ const DashboardPage = () => {
         throw new Error(t('createError'));
       }
 
-      // 4. Delete the old Outlook event if it exists
+      // 3b. Set the outlookEventId on the new assignment
+      const createResult = await createResponse.json();
+      const newAssignment = createResult.assignments?.find((a: any) => a.userId === newUser.id);
+      if (newAssignment) {
+        await authFetch(`/api/shift-assignments/${newAssignment.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outlookEventId: createdEvent.eventId })
+        });
+      }
+
+      // 4. Delete the old Outlook event if it exists via server-side API
       if (resendingAssignment.outlookEventId) {
         try {
-          await fetch(`https://graph.microsoft.com/v1.0/me/events/${resendingAssignment.outlookEventId}`, {
+          await authFetch('/api/outlook/send-event', {
             method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mailbox,
+              eventId: resendingAssignment.outlookEventId
+            })
           });
-        } catch (deleteError) {
+        } catch {
           // Failed to delete old event - continue with resend
         }
       }
@@ -568,46 +619,40 @@ const DashboardPage = () => {
     }
   };
 
-  // Function to sync with Outlook
+  // Function to sync with Outlook via server-side cron route (uses application permissions)
   const syncOutlook = async () => {
     setSyncing(true);
     setSyncMessage(null);
 
     try {
-      const response = await fetch('/api/cron/sync-outlook-responses', {
+      // Call the server-side cron sync route which uses application permissions
+      // This can read events from shared mailboxes via /users/{mailbox}/events
+      const syncResponse = await authFetch('/api/outlook/sync', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to sync with Outlook');
+      if (!syncResponse.ok) {
+        const errorBody = await syncResponse.json().catch(() => ({}));
+        throw new Error(errorBody?.error || 'Sync failed');
       }
 
-      const result = await response.json();
+      const result = await syncResponse.json();
 
       // Refresh dashboard data
       await refresh();
 
-      // Display success message
       setSyncMessage({
         type: 'success',
-        text: t('syncSuccess', { count: result.updated })
+        text: t('syncSuccess', { count: result.updated || 0 })
       });
-
-      // Hide message after 5 seconds
       setTimeout(() => setSyncMessage(null), 5000);
     } catch (err) {
-      // Sync error - notification shown to user
       setSyncMessage({
         type: 'error',
-        text: t('syncError')
+        text: `${t('syncError')}: ${err instanceof Error ? err.message : ''}`
       });
-
-      // Hide error message after 5 seconds
-      setTimeout(() => setSyncMessage(null), 5000);
+      setTimeout(() => setSyncMessage(null), 10000);
     } finally {
       setSyncing(false);
     }
@@ -657,8 +702,17 @@ const DashboardPage = () => {
       });
     }
 
+    // Sort by date
+    if (sortByDate) {
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return sortByDate === 'asc' ? dateA - dateB : dateB - dateA;
+      });
+    }
+
     return filtered;
-  }, [assignments, selectedUser, selectedShift, selectedStatus, selectedDate]);
+  }, [assignments, selectedUser, selectedShift, selectedStatus, selectedDate, sortByDate]);
 
   // Calculate total pages
   const totalPages = useMemo(() => {
@@ -1072,7 +1126,17 @@ const DashboardPage = () => {
                           <tr className="border-b border-slate-200">
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('user')}</th>
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('shift')}</th>
-                            <th className="text-left text-slate-600 font-medium py-3 px-2">{t('date')}</th>
+                            <th
+                              className="text-left text-slate-600 font-medium py-3 px-2 cursor-pointer select-none hover:text-slate-900 transition-colors"
+                              onClick={() => setSortByDate(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc')}
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                {t('date')}
+                                {sortByDate === 'asc' && <span className="text-blue-600">↑</span>}
+                                {sortByDate === 'desc' && <span className="text-blue-600">↓</span>}
+                                {!sortByDate && <span className="text-slate-400">↕</span>}
+                              </span>
+                            </th>
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('status')}</th>
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('actions')}</th>
                           </tr>

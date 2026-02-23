@@ -139,9 +139,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Fetch event details from Microsoft Graph
-        // IMPORTANT: Events are created in the creator's calendar (token owner)
-        // so we always use /me/events
-        const eventUrl = `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`;
+        // Events created via shared mailbox calendar are stored under the shared mailbox
+        // Events created via /me/events are stored under the admin user
+        const mailbox = shift.senderMailbox || process.env.SYNC_ADMIN_EMAIL || 'me';
+        const eventUrl = mailbox === 'me'
+          ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
+          : `https://graph.microsoft.com/v1.0/users/${mailbox}/events/${outlookEventId}`;
 
         const eventResponse = await fetch(eventUrl, {
           headers: {
@@ -188,7 +191,9 @@ export async function POST(request: NextRequest) {
           // If the shift is refused, delete the Outlook event from the sender's calendar
           if (newStatus === 'REFUSED' && outlookEventId) {
             try {
-              const deleteUrl = `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`;
+              const deleteUrl = mailbox === 'me'
+                ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
+                : `https://graph.microsoft.com/v1.0/users/${mailbox}/events/${outlookEventId}`;
               const deleteResponse = await fetch(deleteUrl, {
                 method: 'DELETE',
                 headers: {
@@ -258,7 +263,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: 'Synchronization failed'
+        error: 'Synchronization failed',
+        debug: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );
