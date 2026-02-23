@@ -169,15 +169,7 @@ const DashboardPage = () => {
           const eventsData = await eventsResponse.json();
 
           const oofEvents = eventsData.value.filter((event: any) => {
-            const isOof = event.showAs === 'oof';
-            const hasOofKeywords = event.subject && (
-              event.subject.toLowerCase().includes('out of office') ||
-              event.subject.toLowerCase().includes('ooo') ||
-              event.subject.toLowerCase().includes('congé') ||
-              event.subject.toLowerCase().includes('absence') ||
-              event.subject.toLowerCase().includes('vacances')
-            );
-            return isOof || hasOofKeywords;
+            return event.showAs === 'oof' || event.showAs === 'busy';
           });
 
           oofEvents.forEach((event: any) => {
