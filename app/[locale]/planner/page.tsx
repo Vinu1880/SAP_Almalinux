@@ -623,9 +623,94 @@ const getUserCantonFromLocation = (location: string): string => {
         return [];
       }
 
+      const allOutOfOfficeEvents: OutlookEvent[] = [];
+
+      // Collect all eligible user emails
+      const userEmails = availableUsers
+        .filter(u => u.email)
+        .map(u => u.email);
+
+      if (userEmails.length === 0) return [];
+
+      // Use Graph getSchedule API to check availability of all users at once
+      // Process in batches of 20 (Graph API limit)
+      const batchSize = 20;
+      for (let i = 0; i < userEmails.length; i += batchSize) {
+        const batch = userEmails.slice(i, i + batchSize);
+
+        const scheduleResponse = await fetch('https://graph.microsoft.com/v1.0/me/calendar/getSchedule', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'outlook.timezone="Europe/Zurich"'
+          },
+          body: JSON.stringify({
+            schedules: batch,
+            startTime: {
+              dateTime: startDate + 'T00:00:00',
+              timeZone: 'Europe/Zurich'
+            },
+            endTime: {
+              dateTime: endDate + 'T23:59:59',
+              timeZone: 'Europe/Zurich'
+            },
+            availabilityViewInterval: 1440 // 24h blocks (full day)
+          })
+        });
+
+        if (!scheduleResponse.ok) {
+          console.error('Error fetching schedule:', scheduleResponse.status);
+          // Fallback: try the old method with /me/calendars
+          return await fetchOutOfOfficeFromOwnCalendar();
+        }
+
+        const scheduleData = await scheduleResponse.json();
+
+        for (const userSchedule of scheduleData.value) {
+          const userEmail = userSchedule.scheduleId?.toLowerCase() || '';
+          if (!userSchedule.scheduleItems) continue;
+
+          for (const item of userSchedule.scheduleItems) {
+            if (item.status === 'oof' || item.status === 'busy') {
+              // getSchedule with availabilityViewInterval=1440 returns day-level items
+              // End dates are exclusive (OOF until March 1 → end = March 2T00:00)
+              // Subtract 1 day from end to get the real last day
+              const endDt = new Date(item.end.dateTime);
+              endDt.setDate(endDt.getDate() - 1);
+              // Set end to 23:59:59 of the last real day
+              const adjustedEnd = `${endDt.getFullYear()}-${String(endDt.getMonth() + 1).padStart(2, '0')}-${String(endDt.getDate()).padStart(2, '0')}T23:59:59`;
+
+              allOutOfOfficeEvents.push({
+                id: `schedule-${userEmail}-${item.start.dateTime}`,
+                subject: item.subject || (item.status === 'oof' ? 'Out of Office' : 'Busy'),
+                start: { dateTime: item.start.dateTime },
+                end: { dateTime: adjustedEnd },
+                showAs: item.status as 'oof' | 'busy',
+                isAllDay: false,
+                organizer: { emailAddress: { address: userEmail, name: '' } },
+                attendees: [{ emailAddress: { address: userEmail, name: '' } }]
+              });
+            }
+          }
+        }
+      }
+
+      return allOutOfOfficeEvents;
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+      return [];
+    }
+  };
+
+  // Fallback: read own calendars (old method)
+  const fetchOutOfOfficeFromOwnCalendar = async (): Promise<OutlookEvent[]> => {
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken || !startDate || !endDate) return [];
+
       const startDateTime = new Date(startDate + 'T00:00:00').toISOString();
       const endDateTime = new Date(endDate + 'T23:59:59').toISOString();
-
       const allOutOfOfficeEvents: OutlookEvent[] = [];
 
       const calendarsResponse = await fetch('https://graph.microsoft.com/v1.0/me/calendars', {
@@ -635,11 +720,7 @@ const getUserCantonFromLocation = (location: string): string => {
         }
       });
 
-      if (!calendarsResponse.ok) {
-        console.error('Error fetching calendars:', calendarsResponse.status);
-        return [];
-      }
-
+      if (!calendarsResponse.ok) return [];
       const calendarsData = await calendarsResponse.json();
 
       for (const calendar of calendarsData.value) {
@@ -658,39 +739,20 @@ const getUserCantonFromLocation = (location: string): string => {
 
           if (eventsResponse.ok) {
             const eventsData = await eventsResponse.json();
-
             const oofEvents = eventsData.value.filter((event: OutlookEvent) => {
-              const isOof = event.showAs === 'oof';
-              const hasOofKeywords = event.subject && (
-                event.subject.toLowerCase().includes('out of office') ||
-                event.subject.toLowerCase().includes('ooo') ||
-                event.subject.toLowerCase().includes('absent') ||
-                event.subject.toLowerCase().includes('congé') ||
-                event.subject.toLowerCase().includes('vacances') ||
-                event.subject.toLowerCase().includes('holiday') ||
-                event.subject.toLowerCase().includes('vacation')
-              );
-              return isOof || hasOofKeywords;
+              return event.showAs === 'oof' || event.showAs === 'busy';
             });
-
             oofEvents.forEach((event: OutlookEvent) => {
-              allOutOfOfficeEvents.push({
-                ...event,
-                calendarName: calendar.name,
-                calendarId: calendar.id
-              });
+              allOutOfOfficeEvents.push({ ...event, calendarName: calendar.name, calendarId: calendar.id });
             });
-          } else {
-            console.error('Error fetching events:', eventsResponse.status);
           }
         } catch (error) {
           console.error('Error for calendar:', error);
         }
       }
-
       return allOutOfOfficeEvents;
     } catch (error) {
-      console.error('Error fetching out of office events:', error);
+      console.error('Error fetching own calendar:', error);
       return [];
     }
   };
@@ -826,6 +888,7 @@ const processShiftAssignments = async () => {
     
     const assignments: ShiftAssignment[] = [];
     const userShiftsTracking: { [userId: string]: { [shiftId: string]: number } } = {};
+    const userAvailableDays: { [userId: string]: { [shiftId: string]: number } } = {};
     
     // PART 1: Process selected PIKETTS
     if (selectedPiketts.length > 0) {
@@ -1256,20 +1319,35 @@ const processShiftAssignments = async () => {
           // IF WE GET HERE: THE USER IS AVAILABLE
           // ========================================
           availableForThisDate.push(user);
+
+          // Track available days per user per shift (for ratio-based balancing)
+          if (!userAvailableDays[user.id]) {
+            userAvailableDays[user.id] = {};
           }
-          
+          if (!userAvailableDays[user.id][shiftId]) {
+            userAvailableDays[user.id][shiftId] = 0;
+          }
+          userAvailableDays[user.id][shiftId]++;
+          }
+
           let assignedUsers: any[] = [];
           let noAssignmentReason: string | undefined = undefined;
 
           if (availableForThisDate.length > 0) {
             const seedString = `${shiftId}-${date}`;
             let candidateUsers = shuffleArray(availableForThisDate, randomSeed, seedString);
-            
+
             if (settings.balanceShifts) {
+              // Use ratio (shifts assigned / days available) instead of absolute count
+              // This prevents penalizing users returning from vacation
               candidateUsers.sort((a, b) => {
                 const aCount = (userShiftsTracking[a.id]?.[shiftId] || 0);
                 const bCount = (userShiftsTracking[b.id]?.[shiftId] || 0);
-                if (aCount !== bCount) return aCount - bCount;
+                const aDays = (userAvailableDays[a.id]?.[shiftId] || 1);
+                const bDays = (userAvailableDays[b.id]?.[shiftId] || 1);
+                const aRatio = aCount / aDays;
+                const bRatio = bCount / bDays;
+                if (aRatio !== bRatio) return aRatio - bRatio;
                 return 0;
               });
             }
@@ -1514,7 +1592,7 @@ const processShiftAssignments = async () => {
       }));
 
       // Create assignments in DB
-      const response = await fetch('/api/shift-assignments', {
+      const response = await authFetch('/api/shift-assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assignments: dbAssignments })
@@ -1536,7 +1614,7 @@ const processShiftAssignments = async () => {
         });
 
         if (foundAssignment) {
-          await fetch(`/api/shift-assignments/${foundAssignment.id}`, {
+          await authFetch(`/api/shift-assignments/${foundAssignment.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ outlookEventId: successfulAssignment.outlookEventId })
@@ -2354,8 +2432,8 @@ useEffect(() => {
                   <CardContent>
                     <div className="max-h-[280px] overflow-y-auto pr-2 space-y-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
                       {(() => {
-                        // Create a list of (user, event) pairs instead of grouping
-                        const userEventPairs: Array<{ user: any; event: OutlookEvent }> = [];
+                        // Group events by user
+                        const userEventsMap = new Map<string, { user: any; events: OutlookEvent[] }>();
 
                         outOfOfficeEvents.forEach((event: OutlookEvent) => {
                           const eventStart = new Date(event.start.dateTime);
@@ -2364,24 +2442,31 @@ useEffect(() => {
                           const periodEnd = new Date(endDate);
 
                           if (eventStart <= periodEnd && eventEnd >= periodStart) {
-                            const userEmail = event.organizer?.emailAddress?.address;
+                            const userEmail = event.organizer?.emailAddress?.address?.toLowerCase();
                             if (userEmail) {
-                              const user = availableUsers.find(u => u.email?.toLowerCase() === userEmail.toLowerCase());
+                              const user = availableUsers.find(u => u.email?.toLowerCase() === userEmail);
                               if (user) {
-                                userEventPairs.push({ user, event });
+                                const existing = userEventsMap.get(user.id);
+                                if (existing) {
+                                  existing.events.push(event);
+                                } else {
+                                  userEventsMap.set(user.id, { user, events: [event] });
+                                }
                               }
                             }
                           }
                         });
 
-                        // Sort by start date
-                        const sortedPairs = userEventPairs.sort((a, b) => {
-                          const aStart = new Date(a.event.start.dateTime).getTime();
-                          const bStart = new Date(b.event.start.dateTime).getTime();
-                          return aStart - bStart;
+                        const groupedUsers = Array.from(userEventsMap.values());
+
+                        // Sort by earliest event start date
+                        groupedUsers.sort((a, b) => {
+                          const aMin = Math.min(...a.events.map(e => new Date(e.start.dateTime).getTime()));
+                          const bMin = Math.min(...b.events.map(e => new Date(e.start.dateTime).getTime()));
+                          return aMin - bMin;
                         });
 
-                        if (sortedPairs.length === 0) {
+                        if (groupedUsers.length === 0) {
                           return (
                             <div className="flex flex-col items-center justify-center py-8 text-slate-400">
                               <Calendar className="w-12 h-12 mb-2 opacity-50" />
@@ -2390,28 +2475,49 @@ useEffect(() => {
                           );
                         }
 
-                        return sortedPairs.map(({ user, event }, index) => {
-                          // Adjust end date for all-day events
-                          const startDate = new Date(event.start.dateTime);
-                          const displayEndDate = event.isAllDay
-                            ? new Date(new Date(event.end.dateTime).getTime() - 1000)
-                            : new Date(event.end.dateTime);
+                        const dateFormat = { day: 'numeric', month: 'short' } as const;
 
-                          // Check if it's a single day
-                          const isSingleDay = startDate.toDateString() === displayEndDate.toDateString();
+                        return groupedUsers.map(({ user, events }) => {
+                          // Sort events by start date and merge overlapping/adjacent ranges
+                          const sorted = [...events].sort((a, b) =>
+                            new Date(a.start.dateTime).getTime() - new Date(b.start.dateTime).getTime()
+                          );
 
-                          // Check if the dates span different years
-                          const isDifferentYear = startDate.getFullYear() !== displayEndDate.getFullYear();
+                          // Merge overlapping/contiguous periods
+                          const mergedRanges: Array<{ start: Date; end: Date; reasons: Set<string> }> = [];
+                          for (const evt of sorted) {
+                            const evtStart = new Date(evt.start.dateTime);
+                            const evtEnd = evt.isAllDay
+                              ? new Date(new Date(evt.end.dateTime).getTime() - 1000)
+                              : new Date(evt.end.dateTime);
+                            const reason = evt.showAs === 'oof' ? t('reasonOutOfOffice') : (evt.subject || t('absence'));
+                            const last = mergedRanges[mergedRanges.length - 1];
 
-                          // Date format based on context
-                          const dateFormat = isDifferentYear
-                            ? ({ day: 'numeric', month: 'short', year: 'numeric' } as const)
-                            : ({ day: 'numeric', month: 'short' } as const);
+                            // Merge if ranges overlap or are adjacent (within 1 day)
+                            if (last && evtStart.getTime() <= last.end.getTime() + 86400000) {
+                              if (evtEnd > last.end) last.end = evtEnd;
+                              last.reasons.add(reason);
+                            } else {
+                              mergedRanges.push({ start: evtStart, end: evtEnd, reasons: new Set([reason]) });
+                            }
+                          }
 
-                          const timeFormat = { hour: '2-digit', minute: '2-digit' } as const;
+                          // Build display string for date ranges
+                          const rangeStrings = mergedRanges.map(range => {
+                            const isSingleDay = range.start.toDateString() === range.end.toDateString();
+                            if (isSingleDay) {
+                              return range.start.toLocaleDateString(locale, dateFormat);
+                            }
+                            return `${range.start.toLocaleDateString(locale, dateFormat)} → ${range.end.toLocaleDateString(locale, dateFormat)}`;
+                          });
+
+                          // Collect unique reasons
+                          const allReasons = new Set<string>();
+                          mergedRanges.forEach(r => r.reasons.forEach(reason => allReasons.add(reason)));
+                          const reasonText = Array.from(allReasons).join(', ');
 
                           return (
-                            <div key={`${user.id}-${index}`} className="flex items-center justify-between p-2.5 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg">
+                            <div key={user.id} className="flex items-center justify-between p-2.5 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg">
                               <div className="flex items-center space-x-2.5 flex-1 min-w-0">
                                 <Avatar className="w-8 h-8 flex-shrink-0">
                                   <AvatarFallback className="text-xs bg-gradient-to-br from-orange-500 to-amber-600 text-white">
@@ -2421,40 +2527,20 @@ useEffect(() => {
                                 <div className="min-w-0 flex-1">
                                   <p className="text-sm font-semibold text-slate-800 truncate">{user.firstName} {user.lastName}</p>
                                   <p className="text-xs text-slate-600 truncate">
-                                    {event.subject || t('absence')}
+                                    {reasonText}
                                   </p>
                                 </div>
                               </div>
-                              {isSingleDay ? (
-                                <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-2 px-2.5 py-1 bg-orange-100 rounded-md">
-                                  <div className="flex items-center gap-1.5">
+                              <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-2">
+                                {rangeStrings.map((rangeStr, idx) => (
+                                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-100 rounded-md">
                                     <Calendar className="w-3.5 h-3.5 text-orange-600" />
-                                    <span className="text-xs font-medium text-orange-700">
-                                      {startDate.toLocaleDateString(locale, dateFormat)}
+                                    <span className="text-xs font-medium text-orange-700 whitespace-nowrap">
+                                      {rangeStr}
                                     </span>
                                   </div>
-                                  {!event.isAllDay && (
-                                    <span className="text-xs text-orange-600">
-                                      {startDate.toLocaleTimeString(locale, timeFormat)} - {displayEndDate.toLocaleTimeString(locale, timeFormat)}
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5 flex-shrink-0 ml-2 px-3 py-1.5 bg-orange-100 rounded-md">
-                                  <Calendar className="w-3.5 h-3.5 text-orange-600" />
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-xs font-medium text-orange-700 whitespace-nowrap">
-                                      {startDate.toLocaleDateString(locale, dateFormat)}
-                                      {!event.isAllDay && ` ${startDate.toLocaleTimeString(locale, timeFormat)}`}
-                                    </span>
-                                    <span className="text-xs text-orange-500">→</span>
-                                    <span className="text-xs font-medium text-orange-700 whitespace-nowrap">
-                                      {displayEndDate.toLocaleDateString(locale, dateFormat)}
-                                      {!event.isAllDay && ` ${displayEndDate.toLocaleTimeString(locale, timeFormat)}`}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
+                                ))}
+                              </div>
                             </div>
                           );
                         });
