@@ -49,7 +49,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(backups);
   } catch (error) {
-    console.error('Error listing backups:', error);
     return NextResponse.json(
       { error: 'Error listing backups' },
       { status: 500 }
@@ -139,7 +138,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error creating backup:', error);
     return NextResponse.json(
       { error: 'Error creating backup' },
       { status: 500 }

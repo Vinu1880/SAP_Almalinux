@@ -57,7 +57,6 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('Error:', error);
     return NextResponse.json(
       { error: 'Error during download' },
       { status: 500 }

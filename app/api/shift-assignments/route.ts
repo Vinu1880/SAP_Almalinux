@@ -87,7 +87,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(filteredAssignments);
   } catch (error) {
-    console.error('Error fetching shift assignments:', error);
     return NextResponse.json(
       { error: 'Failed to fetch shift assignments' },
       { status: 500 }
@@ -165,11 +164,9 @@ export async function POST(request: NextRequest) {
       assignments: createdAssignments
     }, { status: 201 });
   } catch (error) {
-    console.error('Error creating shift assignments:', error);
     return NextResponse.json(
       {
-        error: 'Failed to create shift assignments',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to create shift assignments'
       },
       { status: 500 }
     );

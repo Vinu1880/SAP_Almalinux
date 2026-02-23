@@ -55,7 +55,6 @@ export async function DELETE(
     });
 
   } catch (error) {
-    console.error('Error:', error);
     return NextResponse.json(
       { error: 'Error during deletion' },
       { status: 500 }

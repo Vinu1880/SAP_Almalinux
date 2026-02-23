@@ -37,7 +37,6 @@ export async function GET(
 
     return NextResponse.json(shift);
   } catch (error) {
-    console.error('Error fetching shift:', error);
     return NextResponse.json(
       { error: 'Failed to fetch shift' },
       { status: 500 }
@@ -106,9 +105,8 @@ export async function PUT(
 
     return NextResponse.json(shift);
   } catch (error) {
-    console.error('Error updating shift:', error);
     return NextResponse.json(
-      { error: 'Failed to update shift', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to update shift' },
       { status: 500 }
     );
   }
@@ -161,9 +159,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, deleted: shift });
   } catch (error) {
-    console.error('Error deleting shift:', error);
     return NextResponse.json(
-      { error: 'Failed to delete shift: ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Failed to delete shift' },
       { status: 500 }
     );
   }

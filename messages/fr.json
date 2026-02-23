@@ -239,7 +239,9 @@
     "noShiftFound": "Aucun shift ne correspond à votre recherche",
     "noShiftConfigured": "Aucun shift configuré",
     "tryModifySearch": "Essayez de modifier vos critères de recherche ou filtres.",
-    "createFirstShift": "Créez votre premier shift pour commencer."
+    "createFirstShift": "Créez votre premier shift pour commencer.",
+    "shiftCount": "{count, plural, =0 {0 shift} one {1 shift} other {# shifts}}",
+    "pikettCount": "{count, plural, =0 {0 pikett} one {1 pikett} other {# piketts}}"
   },
   "users": {
     "title": "Gestion des Utilisateurs & Équipes",

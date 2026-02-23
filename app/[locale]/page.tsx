@@ -35,7 +35,6 @@ export default function HomePage() {
       await loginWithSSO();
       // Redirection will be managed by useEffect
     } catch (err) {
-      console.error('SSO connection error:', err);
       setError(t('loginError'));
     } finally {
       setIsLoading(false);

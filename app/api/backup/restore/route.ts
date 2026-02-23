@@ -333,9 +333,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error restoring backup:', error);
     return NextResponse.json(
-      { error: 'Error during restore: ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Failed to restore backup' },
       { status: 500 }
     );
   }

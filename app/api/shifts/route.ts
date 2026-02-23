@@ -31,7 +31,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(shifts);
   } catch (error) {
-    console.error('Error fetching shifts:', error);
     return NextResponse.json(
       { error: 'Failed to fetch shifts' },
       { status: 500 }
@@ -88,9 +87,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(shift, { status: 201 });
   } catch (error) {
-    console.error('Error creating shift:', error);
     return NextResponse.json(
-      { error: 'Failed to create shift', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to create shift' },
       { status: 500 }
     );
   }

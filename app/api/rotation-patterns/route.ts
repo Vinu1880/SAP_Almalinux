@@ -21,7 +21,6 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(patterns);
   } catch (error) {
-    console.error('Error fetching rotation patterns:', error);
     return NextResponse.json({ error: 'Failed to fetch rotation patterns' }, { status: 500 });
   }
 }
@@ -63,7 +62,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(pattern);
   } catch (error) {
-    console.error('Error creating rotation pattern:', error);
     return NextResponse.json({ error: 'Failed to create rotation pattern' }, { status: 500 });
   }
 }

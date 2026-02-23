@@ -44,7 +44,6 @@ export async function GET(
 
     return NextResponse.json(team);
   } catch (error) {
-    console.error('Error fetching team:', error);
     return NextResponse.json(
       { error: 'Failed to fetch team' },
       { status: 500 }
@@ -92,7 +91,6 @@ export async function PUT(
         if (userExists) {
           updateData.leadId = validation.data.leadId;
         } else {
-          console.warn(`User with id ${validation.data.leadId} not found, updating team without lead`);
           updateData.leadId = null;
         }
       }
@@ -167,9 +165,8 @@ export async function PUT(
 
     return NextResponse.json(team);
   } catch (error) {
-    console.error('Error updating team:', error);
     return NextResponse.json(
-      { error: 'Failed to update team', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to update team' },
       { status: 500 }
     );
   }
@@ -244,9 +241,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, deleted: team });
   } catch (error) {
-    console.error('Error deleting team:', error);
     return NextResponse.json(
-      { error: 'Failed to delete team', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to delete team' },
       { status: 500 }
     );
   }

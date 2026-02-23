@@ -163,7 +163,7 @@ const {
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
-  const [randomSeed, setRandomSeed] = useState(0);
+  const [randomSeed, setRandomSeed] = useState(() => Date.now());
   const [expandedCalendar, setExpandedCalendar] = useState(false);
   const [showConfiguration, setShowConfiguration] = useState(true);
   const [showWeekendDays, setShowWeekendDays] = useState(true);
@@ -205,7 +205,7 @@ const {
         setDbAssignments(data);
       }
     } catch (err) {
-      console.error('Error fetching DB assignments:', err);
+      // DB assignment fetch error - badges will not show
     }
   };
 
@@ -243,7 +243,7 @@ const {
     try {
       return JSON.parse(savedSettings);
     } catch (e) {
-      console.error('Error loading settings:', e);
+      // Settings parse error - fallback to defaults
     }
   }
   return {
@@ -435,35 +435,35 @@ const getUserCantonFromLocation = (location: string): string => {
     };
   };
 
-  // IMPROVED SHUFFLE FUNCTION - Uses global randomSeed + date + shift
+  // Shuffle function using mulberry32 PRNG (good distribution, deterministic per seed)
   const shuffleArray = <T,>(array: T[], seed: number, additionalSeed: string = ''): T[] => {
     const shuffled = [...array];
     let currentIndex = shuffled.length;
-    
-    // Combine the global seed with a hash of the additional string
+
+    // Hash string to number (djb2)
     const hashCode = (str: string): number => {
-      let hash = 0;
+      let hash = 5381;
       for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
+        hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
       }
       return Math.abs(hash);
     };
-    
-    const combinedSeed = seed + hashCode(additionalSeed);
-    
-    const random = (index: number) => {
-      const x = Math.sin(combinedSeed + index) * 10000;
-      return x - Math.floor(x);
+
+    // Mulberry32 PRNG - fast, good distribution
+    let state = (seed + hashCode(additionalSeed)) | 0;
+    const random = () => {
+      state = (state + 0x6D2B79F5) | 0;
+      let t = Math.imul(state ^ (state >>> 15), 1 | state);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
-    
+
     while (currentIndex !== 0) {
-      const randomIndex = Math.floor(random(currentIndex) * currentIndex);
+      const randomIndex = Math.floor(random() * currentIndex);
       currentIndex--;
       [shuffled[currentIndex], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[currentIndex]];
     }
-    
+
     return shuffled;
   };
 
@@ -497,7 +497,7 @@ const getUserCantonFromLocation = (location: string): string => {
       return allUsers;
       
     } catch (error) {
-      console.error('Error:', error);
+      // Graph API error - fallback to DB users
       const dbUsers = users.map(dbUser => ({
         id: dbUser.id,
         email: dbUser.email,
@@ -619,7 +619,6 @@ const getUserCantonFromLocation = (location: string): string => {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        console.error('No authentication token available');
         return [];
       }
 
@@ -660,7 +659,7 @@ const getUserCantonFromLocation = (location: string): string => {
         });
 
         if (!scheduleResponse.ok) {
-          console.error('Error fetching schedule:', scheduleResponse.status);
+          // getSchedule failed - fallback to own calendar method
           // Fallback: try the old method with /me/calendars
           return await fetchOutOfOfficeFromOwnCalendar();
         }
@@ -698,7 +697,6 @@ const getUserCantonFromLocation = (location: string): string => {
 
       return allOutOfOfficeEvents;
     } catch (error) {
-      console.error('Error fetching schedules:', error);
       return [];
     }
   };
@@ -747,12 +745,11 @@ const getUserCantonFromLocation = (location: string): string => {
             });
           }
         } catch (error) {
-          console.error('Error for calendar:', error);
+          // Calendar fetch error - skip this calendar
         }
       }
       return allOutOfOfficeEvents;
     } catch (error) {
-      console.error('Error fetching own calendar:', error);
       return [];
     }
   };
@@ -889,6 +886,17 @@ const processShiftAssignments = async () => {
     const assignments: ShiftAssignment[] = [];
     const userShiftsTracking: { [userId: string]: { [shiftId: string]: number } } = {};
     const userAvailableDays: { [userId: string]: { [shiftId: string]: number } } = {};
+    // Track weekly assignments to avoid same user twice in one week
+    const weeklyAssignments: { [weekKey: string]: { [shiftId: string]: Set<string> } } = {};
+    const getWeekKey = (dateStr: string) => {
+      const d = new Date(dateStr);
+      const tmp = new Date(d.valueOf());
+      const dayNum = tmp.getUTCDay() || 7;
+      tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+      return `${tmp.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
+    };
     
     // PART 1: Process selected PIKETTS
     if (selectedPiketts.length > 0) {
@@ -1104,6 +1112,10 @@ const processShiftAssignments = async () => {
         });
       }
       
+      // Track which week we're in to re-shuffle each week
+      const shiftWeekQueues: { [key: string]: any[] } = {};
+      const shiftWeekPointers: { [key: string]: number } = {};
+
       for (const date of dates) {
         const dailyAssignments: { [userId: string]: string[] } = {};
 
@@ -1334,26 +1346,57 @@ const processShiftAssignments = async () => {
           let noAssignmentReason: string | undefined = undefined;
 
           if (availableForThisDate.length > 0) {
-            const seedString = `${shiftId}-${date}`;
-            let candidateUsers = shuffleArray(availableForThisDate, randomSeed, seedString);
+            const weekKey = getWeekKey(date);
+            const weekShiftKey = `${weekKey}-${shiftId}`;
 
-            if (settings.balanceShifts) {
-              // Use ratio (shifts assigned / days available) instead of absolute count
-              // This prevents penalizing users returning from vacation
-              candidateUsers.sort((a, b) => {
-                const aCount = (userShiftsTracking[a.id]?.[shiftId] || 0);
-                const bCount = (userShiftsTracking[b.id]?.[shiftId] || 0);
-                const aDays = (userAvailableDays[a.id]?.[shiftId] || 1);
-                const bDays = (userAvailableDays[b.id]?.[shiftId] || 1);
-                const aRatio = aCount / aDays;
-                const bRatio = bCount / bDays;
-                if (aRatio !== bRatio) return aRatio - bRatio;
-                return 0;
-              });
+            // Create a new shuffled queue for each week+shift combination
+            // This ensures different weekday assignments each week
+            if (!shiftWeekQueues[weekShiftKey]) {
+              const weekIndex = Object.keys(shiftWeekQueues).filter(k => k.endsWith(`-${shiftId}`)).length;
+              shiftWeekQueues[weekShiftKey] = shuffleArray(
+                getEligibleUsersForShift(shift),
+                randomSeed,
+                `${shiftId}-week${weekIndex}`
+              );
+              shiftWeekPointers[weekShiftKey] = 0;
             }
-            
-            const selectedUser = candidateUsers[0];
-            
+
+            const queue = shiftWeekQueues[weekShiftKey];
+            const weekSet = weeklyAssignments[weekKey]?.[shiftId] || new Set<string>();
+            const availableIds = new Set(availableForThisDate.map(u => u.id));
+
+            // Pick next user from queue who is available today and not yet assigned this week
+            let selectedUser: any = null;
+
+            // Pass 1: find someone not yet assigned this week
+            for (let i = 0; i < queue.length; i++) {
+              const idx = (shiftWeekPointers[weekShiftKey] + i) % queue.length;
+              const user = queue[idx];
+              if (availableIds.has(user.id) && !weekSet.has(user.id)) {
+                selectedUser = availableForThisDate.find(u => u.id === user.id);
+                shiftWeekPointers[weekShiftKey] = (idx + 1) % queue.length;
+                break;
+              }
+            }
+
+            // Pass 2: if all available users already assigned this week, pick by ratio
+            if (!selectedUser) {
+              let candidateUsers = [...availableForThisDate];
+              if (settings.balanceShifts) {
+                candidateUsers.sort((a, b) => {
+                  const aRatio = (userShiftsTracking[a.id]?.[shiftId] || 0) / (userAvailableDays[a.id]?.[shiftId] || 1);
+                  const bRatio = (userShiftsTracking[b.id]?.[shiftId] || 0) / (userAvailableDays[b.id]?.[shiftId] || 1);
+                  return aRatio - bRatio;
+                });
+              }
+              selectedUser = candidateUsers[0];
+            }
+
+            // Track weekly assignment
+            if (!weeklyAssignments[weekKey]) weeklyAssignments[weekKey] = {};
+            if (!weeklyAssignments[weekKey][shiftId]) weeklyAssignments[weekKey][shiftId] = new Set();
+            weeklyAssignments[weekKey][shiftId].add(selectedUser.id);
+
             if (!userShiftsTracking[selectedUser.id]) {
               userShiftsTracking[selectedUser.id] = {};
             }
@@ -1415,7 +1458,6 @@ const processShiftAssignments = async () => {
     setShiftAssignments(assignments);
     
   } catch (error) {
-    console.error('Error:', error);
     alert(t('processingError'));
   } finally {
     setIsProcessingShifts(false);
@@ -1562,12 +1604,9 @@ const processShiftAssignments = async () => {
                   shiftName: assignment.shift.name
                 });
               } else {
-                const error = await outlookResponse.json();
-                console.error(`Outlook error for ${user.email}:`, error);
                 outlookErrors++;
               }
             } catch (error) {
-              console.error(`Error sending to ${user.email}:`, error);
               outlookErrors++;
             }
           }
@@ -1635,7 +1674,6 @@ const processShiftAssignments = async () => {
       setSendingInvitations(false);
 
     } catch (error) {
-      console.error('Error sending shift invitations:', error);
       setSendingInvitations(false);
       alert(`${t('errorSendingInvitations')}\n${error instanceof Error ? error.message : t('unknownError')}`);
     }

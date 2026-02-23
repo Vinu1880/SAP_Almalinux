@@ -55,7 +55,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(normalizedUsers);
   } catch (error) {
-    console.error('Error fetching users:', error);
     return NextResponse.json(
       { error: 'Failed to fetch users' },
       { status: 500 }
@@ -131,8 +130,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
-    console.error('Error creating user:', error);
-
     // Detect duplicate email (Prisma unique constraint violation)
     if (error instanceof Error && error.message.includes('Unique constraint failed on the fields: (`email`)')) {
       return NextResponse.json(
@@ -142,7 +139,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: 'Failed to create user', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to create user' },
       { status: 500 }
     );
   }

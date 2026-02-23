@@ -44,7 +44,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(filteredHolidays);
   } catch (error) {
-    console.error('Error fetching holidays:', error);
     return NextResponse.json(
       { error: 'Failed to fetch holidays' },
       { status: 500 }
@@ -91,9 +90,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(holiday, { status: 201 });
   } catch (error) {
-    console.error('Error creating holiday:', error);
     return NextResponse.json(
-      { error: 'Failed to create holiday', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to create holiday' },
       { status: 500 }
     );
   }

@@ -239,7 +239,9 @@
     "noShiftFound": "No shift matches your search",
     "noShiftConfigured": "No shift configured",
     "tryModifySearch": "Try modifying your search criteria or filters.",
-    "createFirstShift": "Create your first shift to get started."
+    "createFirstShift": "Create your first shift to get started.",
+    "shiftCount": "{count, plural, =0 {0 shifts} one {1 shift} other {# shifts}}",
+    "pikettCount": "{count, plural, =0 {0 piketts} one {1 pikett} other {# piketts}}"
   },
   "users": {
     "title": "User & Team Management",

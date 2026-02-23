@@ -809,7 +809,7 @@ const UsersPage = () => {
                                   } as any);
                                   setEditingPattern(null);
                                 } catch (err) {
-                                  console.error('Error updating pattern:', err);
+                                  // Pattern update error - handled by UI
                                 } finally {
                                   setSavingPattern(false);
                                 }
@@ -1060,8 +1060,6 @@ const UsersPage = () => {
       });
       setWorkType('full');
     } catch (error: any) {
-      console.error('Error during creation:', error);
-
       // Display the specific API error message
       if (error.response?.data?.error) {
         showError(error.response.data.error);
@@ -1118,8 +1116,6 @@ const UsersPage = () => {
       setSelectedUser(null);
       setEditWorkType('full');
     } catch (error: any) {
-      console.error('Error during update:', error);
-
       // Display the specific API error message
       if (error.response?.data?.error) {
         showError(error.response.data.error);
@@ -1141,7 +1137,6 @@ const UsersPage = () => {
       setIsDeleteUserDialogOpen(false);
       setDeleteUserId(null);
     } catch (error) {
-      console.error('Error:', error);
       showError(error instanceof Error ? error.message : t('deleteUserError'));
     }
   };
@@ -1167,7 +1162,6 @@ const UsersPage = () => {
       });
       refetchTeams();
     } catch (error) {
-      console.error('Error:', error);
       showError(t('createTeamError'));
     } finally {
       setIsSubmitting(false);
@@ -1204,7 +1198,6 @@ const UsersPage = () => {
       setIsEditTeamDialogOpen(false);
       setSelectedTeam(null);
     } catch (error) {
-      console.error('Error:', error);
       showError(t('updateTeamError'));
     } finally {
       setIsSubmitting(false);
@@ -1220,7 +1213,6 @@ const UsersPage = () => {
       setIsDeleteTeamDialogOpen(false);
       setDeleteTeamId(null);
     } catch (error) {
-      console.error('Error:', error);
       showError(error instanceof Error ? error.message : t('deleteTeamError'));
     }
   };

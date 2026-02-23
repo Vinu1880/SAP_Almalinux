@@ -27,7 +27,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(piketts);
   } catch (error) {
-    console.error('Error fetching piketts:', error);
     return NextResponse.json(
       { error: 'Failed to fetch piketts' },
       { status: 500 }
@@ -82,7 +81,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(pikett, { status: 201 });
   } catch (error) {
-    console.error('Error creating pikett:', error);
     return NextResponse.json(
       { error: 'Failed to create pikett' },
       { status: 500 }

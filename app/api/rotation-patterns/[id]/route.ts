@@ -32,7 +32,6 @@ export async function GET(
 
     return NextResponse.json(pattern);
   } catch (error) {
-    console.error('Error fetching rotation pattern:', error);
     return NextResponse.json(
       { error: 'Failed to fetch rotation pattern' },
       { status: 500 }
@@ -83,7 +82,6 @@ export async function PUT(
 
     return NextResponse.json(pattern);
   } catch (error) {
-    console.error('Error updating rotation pattern:', error);
     return NextResponse.json(
       { error: 'Failed to update rotation pattern' },
       { status: 500 }
@@ -121,7 +119,6 @@ export async function DELETE(
 
     return NextResponse.json(pattern);
   } catch (error) {
-    console.error('Error deleting rotation pattern:', error);
     return NextResponse.json(
       { error: 'Failed to delete rotation pattern' },
       { status: 500 }

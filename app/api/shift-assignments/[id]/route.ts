@@ -43,7 +43,6 @@ export async function GET(
 
     return NextResponse.json(assignment);
   } catch (error) {
-    console.error('Error fetching shift assignment:', error);
     return NextResponse.json(
       { error: 'Failed to fetch shift assignment' },
       { status: 500 }
@@ -118,7 +117,6 @@ export async function PUT(
 
     return NextResponse.json(assignment);
   } catch (error) {
-    console.error('Error updating shift assignment:', error);
     return NextResponse.json(
       { error: 'Failed to update shift assignment' },
       { status: 500 }
@@ -174,7 +172,6 @@ export async function PATCH(
 
     return NextResponse.json(assignment);
   } catch (error) {
-    console.error('Error patching shift assignment:', error);
     return NextResponse.json(
       { error: 'Failed to patch shift assignment' },
       { status: 500 }
@@ -212,7 +209,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, deleted: assignment });
   } catch (error) {
-    console.error('Error deleting shift assignment:', error);
     return NextResponse.json(
       { error: 'Failed to delete shift assignment' },
       { status: 500 }

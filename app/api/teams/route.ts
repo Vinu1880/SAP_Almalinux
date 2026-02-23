@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(teams);
   } catch (error) {
-    console.error('Error fetching teams:', error);
     return NextResponse.json(
       { error: 'Failed to fetch teams' },
       { status: 500 }
@@ -73,7 +72,6 @@ export async function POST(request: NextRequest) {
       if (userExists) {
         teamData.leadId = validation.data.leadId;
       } else {
-        console.warn(`User with id ${validation.data.leadId} not found, creating team without lead`);
       }
     }
 
@@ -100,9 +98,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(team, { status: 201 });
   } catch (error) {
-    console.error('Error creating team:', error);
     return NextResponse.json(
-      { error: 'Failed to create team', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to create team' },
       { status: 500 }
     );
   }

@@ -61,7 +61,6 @@ export async function PUT(
 
     return NextResponse.json(pikett);
   } catch (error) {
-    console.error('Error updating pikett:', error);
     return NextResponse.json(
       { error: 'Failed to update pikett' },
       { status: 500 }
@@ -99,7 +98,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting pikett:', error);
     return NextResponse.json(
       { error: 'Failed to delete pikett' },
       { status: 500 }

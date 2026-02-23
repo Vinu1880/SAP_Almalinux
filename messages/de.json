@@ -239,7 +239,9 @@
     "noShiftFound": "Keine Schicht entspricht Ihrer Suche",
     "noShiftConfigured": "Keine Schicht konfiguriert",
     "tryModifySearch": "Versuchen Sie, Ihre Suchkriterien oder Filter anzupassen.",
-    "createFirstShift": "Erstellen Sie Ihre erste Schicht, um loszulegen."
+    "createFirstShift": "Erstellen Sie Ihre erste Schicht, um loszulegen.",
+    "shiftCount": "{count, plural, =0 {0 Schichten} one {1 Schicht} other {# Schichten}}",
+    "pikettCount": "{count, plural, =0 {0 Piketts} one {1 Pikett} other {# Piketts}}"
   },
   "users": {
     "title": "Benutzer- & Teamverwaltung",

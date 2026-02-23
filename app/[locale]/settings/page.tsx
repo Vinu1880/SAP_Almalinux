@@ -98,13 +98,13 @@ const SettingsPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // États pour les dialogs de confirmation de suppression
+  // Delete confirmation dialog states
   const [deleteBackupFileName, setDeleteBackupFileName] = useState<string | null>(null);
   const [isDeleteBackupDialogOpen, setIsDeleteBackupDialogOpen] = useState(false);
   const [deleteHolidayId, setDeleteHolidayId] = useState<string | null>(null);
   const [isDeleteHolidayDialogOpen, setIsDeleteHolidayDialogOpen] = useState(false);
 
-  // États pour les jours fériés
+  // Holiday states
   const currentYear = new Date().getFullYear();
   const { 
     holidays, 
@@ -143,7 +143,7 @@ const SettingsPage = () => {
         setBackups(data);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des sauvegardes:', error);
+      // Error loading backups - notification shown to user
       showNotification(t('loadBackupsError'), 'error');
     } finally {
       setIsLoadingBackups(false);
@@ -259,13 +259,13 @@ const SettingsPage = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Vérifier que c'est un fichier JSON
+    // Validate JSON file type
     if (!file.name.endsWith('.json')) {
       showNotification(t('fileMustBeJSON'), 'error');
       return;
     }
 
-    // Demander confirmation
+    // Ask for confirmation
     if (!confirm(t('confirmRestoreBackup'))) {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -275,11 +275,11 @@ const SettingsPage = () => {
 
     setIsUploading(true);
     try {
-      // Lire le contenu du fichier
+      // Read file content
       const fileContent = await file.text();
       const backupData = JSON.parse(fileContent);
 
-      // Utiliser la même API que pour restaurer depuis la liste
+      // Use the same API as restoring from the list
       const response = await authFetch('/api/backup/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -302,14 +302,14 @@ const SettingsPage = () => {
       );
     } finally {
       setIsUploading(false);
-      // Réinitialiser l'input file
+      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   };
 
-  // Fonctions pour la gestion des jours fériés
+  // Holiday management functions
   const handleCreateHoliday = async () => {
     if (!newHoliday.name || !newHoliday.date || newHoliday.cantons.length === 0) {
       showNotification(t('fillAllFields'), 'error');

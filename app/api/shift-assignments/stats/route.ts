@@ -112,7 +112,6 @@ export async function GET(request: NextRequest) {
       teamStats: Object.values(teamStats)
     });
   } catch (error) {
-    console.error('Error fetching shift assignment stats:', error);
     return NextResponse.json(
       { error: 'Failed to fetch stats' },
       { status: 500 }

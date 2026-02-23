@@ -59,7 +59,6 @@ export async function GET(
       availability: normalizedAvailability
     });
   } catch (error) {
-    console.error('Error fetching user:', error);
     return NextResponse.json(
       { error: 'Failed to fetch user' },
       { status: 500 }
@@ -142,8 +141,6 @@ export async function PUT(
 
     return NextResponse.json(user);
   } catch (error) {
-    console.error('Error updating user:', error);
-
     // Detect duplicate email (Prisma unique constraint violation)
     if (error instanceof Error && error.message.includes('Unique constraint failed on the fields: (`email`)')) {
       return NextResponse.json(
@@ -153,7 +150,7 @@ export async function PUT(
     }
 
     return NextResponse.json(
-      { error: 'Failed to update user', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to update user' },
       { status: 500 }
     );
   }
@@ -227,9 +224,8 @@ export async function DELETE(
 
     return NextResponse.json(user);
   } catch (error) {
-    console.error('Error deleting user:', error);
     return NextResponse.json(
-      { error: 'Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Failed to delete user' },
       { status: 500 }
     );
   }

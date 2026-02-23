@@ -81,7 +81,6 @@ export async function POST(request: NextRequest) {
     const cronSecret = process.env.CRON_SECRET;
 
     if (!cronSecret || cronSecret === 'dev-secret-change-in-production') {
-      console.error('[SYNC] CRON_SECRET is not configured');
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
@@ -155,8 +154,6 @@ export async function POST(request: NextRequest) {
           if (eventResponse.status === 404) {
             continue;
           }
-          const errorText = await eventResponse.text();
-          console.error(`[SYNC] Failed to fetch event for assignment ${id}: ${eventResponse.statusText}`, errorText);
           throw new Error(`Failed to fetch event: ${eventResponse.statusText}`);
         }
 
@@ -201,11 +198,9 @@ export async function POST(request: NextRequest) {
               });
 
               if (!deleteResponse.ok && deleteResponse.status !== 204) {
-                const errorText = await deleteResponse.text();
-                console.error(`[SYNC] Error deleting Outlook event: ${deleteResponse.status}`, errorText);
+                // Event deletion failed but we continue
               }
             } catch (deleteError) {
-              console.error(`[SYNC] Error deleting Outlook event:`, deleteError);
               // Continue even if deletion fails
             }
           }
@@ -242,12 +237,11 @@ export async function POST(request: NextRequest) {
 
       } catch (error) {
         errorCount++;
-        console.error(`[SYNC] Error processing assignment ${assignment.id}:`, error);
         results.push({
           success: false,
           assignmentId: assignment.id,
           userEmail: assignment.user.email,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: 'Failed to process assignment'
         });
       }
     }
@@ -262,11 +256,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('[SYNC] Error during synchronization:', error);
     return NextResponse.json(
       {
-        error: 'Synchronization failed',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Synchronization failed'
       },
       { status: 500 }
     );
@@ -306,11 +298,9 @@ export async function GET(request: NextRequest) {
       lastSync: recentSyncLogs[0]?.createdAt || null
     });
   } catch (error) {
-    console.error('[SYNC] Error checking sync status:', error);
     return NextResponse.json(
       {
-        error: 'Failed to check sync status',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to check sync status'
       },
       { status: 500 }
     );

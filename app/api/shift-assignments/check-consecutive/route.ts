@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error checking consecutive shifts:', error);
     return NextResponse.json(
       { error: 'Error checking consecutive shifts' },
       { status: 500 }

@@ -48,24 +48,24 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Import des hooks pour les vraies données
+// Hooks for real data
 import { useShifts } from '@/lib/hooks/useShifts';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { useUsers } from '@/lib/hooks/useUsers';
 import { usePiketts } from '@/lib/hooks/usePiketts';
 
-// Couleurs disponibles pour les shifts (10 couleurs distinctes)
+// Available colors for shifts (10 distinct colors)
 const SHIFT_COLORS = [
-  '#ef4444', // Rouge
-  '#3b82f6', // Bleu
-  '#10b981', // Vert
-  '#eab308', // Jaune
-  '#8b5cf6', // Violet
+  '#ef4444', // Red
+  '#3b82f6', // Blue
+  '#10b981', // Green
+  '#eab308', // Yellow
+  '#8b5cf6', // Purple
   '#f97316', // Orange
-  '#92400e', // Brun
+  '#92400e', // Brown
   '#06b6d4', // Turquoise
-  '#ec4899', // Rose
-  '#6b7280', // Gris
+  '#ec4899', // Pink
+  '#6b7280', // Gray
 ];
 
 const ShiftsPage = () => {
@@ -88,7 +88,7 @@ const ShiftsPage = () => {
   const [deletePikettId, setDeletePikettId] = useState<string | null>(null);
   const [isDeletePikettDialogOpen, setIsDeletePikettDialogOpen] = useState(false);
 
-  // Utilisation du hook pour les piketts
+  // Piketts hook
   const {
     piketts,
     loading: pikettsLoading,
@@ -99,7 +99,7 @@ const ShiftsPage = () => {
     refetch: refetchPiketts
   } = usePiketts();
 
-  // Utilisation des hooks pour les vraies données
+  // Shifts hook
   const { 
     shifts, 
     loading: shiftsLoading, 
@@ -192,7 +192,6 @@ const ShiftsPage = () => {
         daysOfWeek: [1, 2, 3, 4, 5]
       });
     } catch (error) {
-      console.error('Erreur lors de la création:', error);
       alert(t('shiftCreateError'));
     } finally {
       setIsSubmitting(false);
@@ -236,7 +235,6 @@ const ShiftsPage = () => {
         daysOfWeek: [0, 1, 2, 3, 4, 5, 6]
       });
     } catch (error) {
-      console.error('Erreur lors de la création du pikett:', error);
       alert(t('pikettCreateError'));
     } finally {
       setIsSubmitting(false);
@@ -274,7 +272,6 @@ const ShiftsPage = () => {
       setIsEditPikettDialogOpen(false);
       setSelectedPikett(null);
     } catch (error) {
-      console.error('Erreur lors de la modification du pikett:', error);
       alert(t('pikettEditError'));
     } finally {
       setIsSubmitting(false);
@@ -289,7 +286,6 @@ const ShiftsPage = () => {
       setIsDeletePikettDialogOpen(false);
       setDeletePikettId(null);
     } catch (error) {
-      console.error('Erreur lors de la suppression du pikett:', error);
       alert(error instanceof Error ? error.message : t('pikettDeleteError'));
     }
   };
@@ -329,7 +325,6 @@ const ShiftsPage = () => {
       setIsEditDialogOpen(false);
       setSelectedShift(null);
     } catch (error) {
-      console.error('Erreur lors de la modification:', error);
       alert(error instanceof Error ? error.message : t('shiftEditError'));
     } finally {
       setIsSubmitting(false);
@@ -344,7 +339,6 @@ const ShiftsPage = () => {
       setIsDeleteShiftDialogOpen(false);
       setDeleteShiftId(null);
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
       alert(error instanceof Error ? error.message : t('shiftDeleteError'));
     }
   };
@@ -365,7 +359,6 @@ const ShiftsPage = () => {
         excludedUserIds: shift.excludedUserIds || [],
       });
     } catch (error) {
-      console.error('Erreur lors de la duplication:', error);
       alert(t('shiftDuplicateError'));
     }
   };
@@ -396,7 +389,7 @@ const ShiftsPage = () => {
     return Math.round(duration / 60 * 10) / 10;
   };
 
-  // Composant pour sélectionner les jours de la semaine
+  // Day-of-week selector component
   const DaysOfWeekSelector = ({ 
     selectedDays, 
     onChange 
@@ -454,7 +447,7 @@ const ShiftsPage = () => {
     );
   };
 
-  // Composant pour gérer les membres du shift
+  // Shift members management component
   const MembersSelector = ({ 
     selectedUserIds, 
     excludedUserIds,
@@ -710,7 +703,7 @@ const ShiftsPage = () => {
   const PikettCard = ({ pikett }: { pikett: any }) => {
     const team = teams.find(t => t.id === pikett.teamId);
     
-    // Obtenir les utilisateurs éligibles
+    // Get eligible users
     const eligibleUsers = [
       ...users.filter(u => u.teamId === pikett.teamId && u.status === 'ACTIVE' && !pikett.excludedUserIds?.includes(u.id)),
       ...users.filter(u => pikett.includedUserIds?.includes(u.id) && u.status === 'ACTIVE')
@@ -869,7 +862,7 @@ const ShiftsPage = () => {
                 size="lg"
               >
                 <Clock className="w-5 h-5 mr-2" />
-                Shifts
+                {t("shifts")}
                 <Badge variant="secondary" className="ml-2">
                   {shifts.length}
                 </Badge>
@@ -881,7 +874,7 @@ const ShiftsPage = () => {
                 size="lg"
               >
                 <Shield className="w-5 h-5 mr-2" />
-                Piketts
+                {t("piketts")}
                 <Badge variant="secondary" className="ml-2">
                   {piketts.length}
                 </Badge>
@@ -1274,7 +1267,7 @@ const ShiftsPage = () => {
                   )}
                   
                   <div className="space-y-2">
-                    <Label>Status</Label>
+                    <Label>{tCommon("status")}</Label>
                     <Select 
                       value={selectedShift.status} 
                       onValueChange={(value) => setSelectedShift({...selectedShift, status: value})}
@@ -1385,16 +1378,16 @@ const ShiftsPage = () => {
               
               <div className="flex items-center space-x-2 text-sm text-slate-600">
                 <span>
-                  {viewType === 'shifts' 
-                    ? `${filteredShifts.length} shift${filteredShifts.length > 1 ? 's' : ''}`
-                    : `${filteredPiketts.length} pikett${filteredPiketts.length > 1 ? 's' : ''}`}
+                  {viewType === 'shifts'
+                    ? t('shiftCount', { count: filteredShifts.length })
+                    : t('pikettCount', { count: filteredPiketts.length })}
                 </span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Contenu selon le type de vue */}
+        {/* Content based on view type */}
         {viewType === 'shifts' ? (
           filteredShifts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

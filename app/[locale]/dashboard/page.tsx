@@ -184,7 +184,6 @@ const DashboardPage = () => {
 
       return allOutOfOfficeEvents;
     } catch (error) {
-      console.error('Error fetching OOF events:', error);
       return [];
     }
   };
@@ -312,7 +311,6 @@ const DashboardPage = () => {
         }
       }
     } catch (error) {
-      console.error('Error checking consecutive shifts:', error);
     }
 
     return { available: true };
@@ -400,7 +398,7 @@ const DashboardPage = () => {
 
         setUsersAvailability({ available, alreadyAssigned, unavailable });
       } catch (error) {
-        console.error('Error calculating availability:', error);
+        // Error calculating availability - handled by UI state
       } finally {
         setCheckingAvailability(false);
       }
@@ -541,7 +539,7 @@ const DashboardPage = () => {
             }
           });
         } catch (deleteError) {
-          console.error('Error deleting old event:', deleteError);
+          // Failed to delete old event - continue with resend
         }
       }
 
@@ -559,7 +557,7 @@ const DashboardPage = () => {
       setSelectedNewUser(null);
 
     } catch (error) {
-      console.error('Error during resend:', error);
+      // Resend error - notification shown to user
       setSyncMessage({
         type: 'error',
         text: error instanceof Error ? error.message : t('resendError')
@@ -579,7 +577,7 @@ const DashboardPage = () => {
       const response = await fetch('/api/cron/sync-outlook-responses', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'dev-secret-change-in-production'}`,
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET}`,
           'Content-Type': 'application/json'
         }
       });
@@ -602,7 +600,7 @@ const DashboardPage = () => {
       // Hide message after 5 seconds
       setTimeout(() => setSyncMessage(null), 5000);
     } catch (err) {
-      console.error('Error syncing with Outlook:', err);
+      // Sync error - notification shown to user
       setSyncMessage({
         type: 'error',
         text: t('syncError')

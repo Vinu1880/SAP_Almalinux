@@ -93,8 +93,7 @@ async function validateAssignmentAgainstHolidays(
 
     return { valid: true };
   } catch (error) {
-    console.error('Error validating holiday:', error);
-    // In case of error, allow assignment but log the error
+    // In case of error, allow assignment
     return { valid: true };
   }
 }
@@ -209,7 +208,6 @@ export async function POST(request: NextRequest) {
             }
           });
         } catch (error) {
-          console.error('Error creating assignment:', error);
           return null;
         }
       })
@@ -245,7 +243,6 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error) {
-    console.error('Error creating assignments:', error);
     return NextResponse.json(
       { error: 'Failed to create assignments' },
       { status: 500 }
@@ -298,7 +295,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(assignments);
   } catch (error) {
-    console.error('Error fetching assignments:', error);
     return NextResponse.json(
       { error: 'Failed to fetch assignments' },
       { status: 500 }

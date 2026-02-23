@@ -50,7 +50,6 @@ export async function PUT(
 
     return NextResponse.json(holiday);
   } catch (error) {
-    console.error('Error updating holiday:', error);
     return NextResponse.json(
       { error: 'Failed to update holiday' },
       { status: 500 }
@@ -88,7 +87,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting holiday:', error);
     return NextResponse.json(
       { error: 'Failed to delete holiday' },
       { status: 500 }
