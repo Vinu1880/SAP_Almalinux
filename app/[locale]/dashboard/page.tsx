@@ -296,62 +296,6 @@ const DashboardPage = () => {
     return dayAvailability.morning === true || dayAvailability.afternoon === true;
   };
 
-  // Function to check all constraints for a user
-  const checkUserAvailability = async (
-    user: any,
-    shift: any,
-    date: string,
-    currentAssignmentId?: string,
-    oofEventsOverride?: any[]
-  ): Promise<{ available: boolean; reason?: string }> => {
-    // Check public holidays
-    const canton = user.location || 'BE';
-    if (isUserOnHoliday(date, canton)) {
-      const holidayForDate = holidays.find(h => {
-        const holidayDate = new Date(h.date).toISOString().split('T')[0];
-        return holidayDate === date && h.cantons.includes(canton);
-      });
-      return {
-        available: false,
-        reason: holidayForDate ? t('reasonHolidayWithName', { name: holidayForDate.name }) : t('reasonHoliday')
-      };
-    }
-
-    // Check if user works this day
-    if (!isUserWorkingOnDay(user, date, shift?.startTime)) {
-      return { available: false, reason: t('reasonNotWorkingToday') };
-    }
-
-    // Check Out of Office (use override if provided, else state)
-    const oofToCheck = oofEventsOverride ?? outOfOfficeEvents;
-    if (oofToCheck.length > 0) {
-      const availability = isUserAvailable(user, date, oofToCheck, shift);
-      if (!availability.available) {
-        return { available: false, reason: t('reasonOutOfOffice') };
-      }
-    }
-
-    // Check consecutive shifts
-    try {
-      const response = await authFetch('/api/shift-assignments/check-consecutive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, date })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.hasConsecutiveShift) {
-          const shiftNames = data.consecutiveAssignments.map((a: any) => a.shiftName).join(', ');
-          return { available: false, reason: t('reasonConsecutiveShift', { shifts: shiftNames }) };
-        }
-      }
-    } catch (error) {
-    }
-
-    return { available: true };
-  };
-
   // Function to get eligible users for a shift
   const getEligibleUsersForShift = (shift: any, excludeUserId?: string): any[] => {
     if (!users) return [];
@@ -395,8 +339,10 @@ const DashboardPage = () => {
         const d = new Date(rawDate);
         const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+        const shift = resendingAssignment.shift;
+
         const eligibleUsers = getEligibleUsersForShift(
-          resendingAssignment.shift,
+          shift,
           resendingAssignment.userId
         );
 
@@ -405,43 +351,85 @@ const DashboardPage = () => {
         const oofEvents = await fetchOutOfOfficeForDate(dateStr, eligibleEmails);
         setOutOfOfficeEvents(oofEvents);
 
-        // Check which users are already assigned that day
-        const assignedToday = assignments.filter(
-          a => a.date === resendingAssignment.date && a.id !== resendingAssignment.id
-        );
+        // Check which users are already assigned that day (normalize dates for comparison)
+        const normalizeDate = (dateVal: string | Date) => {
+          const dt = new Date(dateVal);
+          return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+        };
+        const assignmentDateNorm = normalizeDate(resendingAssignment.date);
+        const assignedToday = assignments.filter(a => {
+          return normalizeDate(a.date) === assignmentDateNorm && a.id !== resendingAssignment.id;
+        });
 
         const available: any[] = [];
         const alreadyAssigned: any[] = [];
         const unavailable: Array<{ user: any; reason: string }> = [];
 
         for (const user of eligibleUsers) {
-          // Check if already assigned today
+          // 1. Check if already assigned today
           const hasOtherShift = assignedToday.some(a => a.userId === user.id);
-
           if (hasOtherShift) {
             alreadyAssigned.push(user);
             continue;
           }
 
-          // Check other constraints (pass oofEvents directly since state isn't updated yet)
-          const availability = await checkUserAvailability(
-            user,
-            resendingAssignment.shift,
-            dateStr,
-            resendingAssignment.id,
-            oofEvents
-          );
-
-          if (availability.available) {
-            available.push(user);
-          } else {
-            unavailable.push({ user, reason: availability.reason || t('notAvailable') });
+          // 2. Check public holidays
+          const canton = user.location || 'BE';
+          if (isUserOnHoliday(dateStr, canton)) {
+            const holidayForDate = holidays.find(h => {
+              const hd = new Date(h.date);
+              const hDateStr = `${hd.getFullYear()}-${String(hd.getMonth() + 1).padStart(2, '0')}-${String(hd.getDate()).padStart(2, '0')}`;
+              return hDateStr === dateStr && h.cantons.includes(canton);
+            });
+            unavailable.push({
+              user,
+              reason: holidayForDate ? t('reasonHolidayWithName', { name: holidayForDate.name }) : t('reasonHoliday')
+            });
+            continue;
           }
+
+          // 3. Check if user works this day
+          if (!isUserWorkingOnDay(user, dateStr, shift?.startTime)) {
+            unavailable.push({ user, reason: t('reasonNotWorkingToday') });
+            continue;
+          }
+
+          // 4. Check Out of Office (use fetched oofEvents directly)
+          if (oofEvents.length > 0) {
+            const oofCheck = isUserAvailable(user, dateStr, oofEvents, shift);
+            if (!oofCheck.available) {
+              unavailable.push({ user, reason: t('reasonOutOfOffice') });
+              continue;
+            }
+          }
+
+          // 5. Check consecutive shifts via API
+          try {
+            const response = await authFetch('/api/shift-assignments/check-consecutive', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: user.id, date: dateStr })
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.hasConsecutiveShift) {
+                const shiftNames = data.consecutiveAssignments.map((a: any) => a.shiftName).join(', ');
+                unavailable.push({ user, reason: t('reasonConsecutiveShift', { shifts: shiftNames }) });
+                continue;
+              }
+            }
+          } catch {
+            // Skip consecutive check on error
+          }
+
+          // 6. All checks passed
+          available.push(user);
         }
 
         setUsersAvailability({ available, alreadyAssigned, unavailable });
       } catch (error) {
-        // Error calculating availability - handled by UI state
+        // Error calculating availability
       } finally {
         setCheckingAvailability(false);
       }
@@ -511,7 +499,7 @@ const DashboardPage = () => {
           }
         ],
         location: {
-          displayName: shift.location || newUser.location || t('notSpecified')
+          displayName: ''
         },
         isReminderOn: true,
         reminderMinutesBeforeStart: 1440,

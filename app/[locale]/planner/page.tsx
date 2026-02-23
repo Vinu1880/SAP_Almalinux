@@ -1616,7 +1616,7 @@ const processShiftAssignments = async () => {
                   }
                 ],
                 location: {
-                  displayName: assignment.shift.location || user.location || t('notSpecified')
+                  displayName: ''
                 },
                 isReminderOn: true,
                 reminderMinutesBeforeStart: 1440, // 24h before
@@ -2525,16 +2525,18 @@ useEffect(() => {
                       <AlertCircle className="w-4 h-4 mr-2 text-orange-600" />
                       {t('outOfOffice')} ({(() => {
                         const usersOOF = new Set<string>();
-                        outOfOfficeEvents.forEach((event: OutlookEvent) => {
-                          const eventStart = new Date(event.start.dateTime);
-                          const eventEnd = new Date(event.end.dateTime);
-                          const periodStart = new Date(startDate);
-                          const periodEnd = new Date(endDate);
+                        outOfOfficeEvents
+                          .filter((e: OutlookEvent) => e.showAs === 'oof')
+                          .forEach((event: OutlookEvent) => {
+                            const eventStart = new Date(event.start.dateTime);
+                            const eventEnd = new Date(event.end.dateTime);
+                            const periodStart = new Date(startDate);
+                            const periodEnd = new Date(endDate);
 
-                          if (eventStart <= periodEnd && eventEnd >= periodStart) {
-                            usersOOF.add(event.organizer?.emailAddress?.address || '');
-                          }
-                        });
+                            if (eventStart <= periodEnd && eventEnd >= periodStart) {
+                              usersOOF.add(event.organizer?.emailAddress?.address || '');
+                            }
+                          });
                         return usersOOF.size;
                       })()})
                     </CardTitle>
@@ -2545,27 +2547,30 @@ useEffect(() => {
                         // Group events by user
                         const userEventsMap = new Map<string, { user: any; events: OutlookEvent[] }>();
 
-                        outOfOfficeEvents.forEach((event: OutlookEvent) => {
-                          const eventStart = new Date(event.start.dateTime);
-                          const eventEnd = new Date(event.end.dateTime);
-                          const periodStart = new Date(startDate);
-                          const periodEnd = new Date(endDate);
+                        // Only show real OOF events (not busy from shifts)
+                        outOfOfficeEvents
+                          .filter((e: OutlookEvent) => e.showAs === 'oof')
+                          .forEach((event: OutlookEvent) => {
+                            const eventStart = new Date(event.start.dateTime);
+                            const eventEnd = new Date(event.end.dateTime);
+                            const periodStart = new Date(startDate);
+                            const periodEnd = new Date(endDate);
 
-                          if (eventStart <= periodEnd && eventEnd >= periodStart) {
-                            const userEmail = event.organizer?.emailAddress?.address?.toLowerCase();
-                            if (userEmail) {
-                              const user = availableUsers.find(u => u.email?.toLowerCase() === userEmail);
-                              if (user) {
-                                const existing = userEventsMap.get(user.id);
-                                if (existing) {
-                                  existing.events.push(event);
-                                } else {
-                                  userEventsMap.set(user.id, { user, events: [event] });
+                            if (eventStart <= periodEnd && eventEnd >= periodStart) {
+                              const userEmail = event.organizer?.emailAddress?.address?.toLowerCase();
+                              if (userEmail) {
+                                const user = availableUsers.find(u => u.email?.toLowerCase() === userEmail);
+                                if (user) {
+                                  const existing = userEventsMap.get(user.id);
+                                  if (existing) {
+                                    existing.events.push(event);
+                                  } else {
+                                    userEventsMap.set(user.id, { user, events: [event] });
+                                  }
                                 }
                               }
                             }
-                          }
-                        });
+                          });
 
                         const groupedUsers = Array.from(userEventsMap.values());
 
