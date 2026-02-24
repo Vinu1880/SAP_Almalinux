@@ -29,7 +29,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Trash2
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -75,7 +76,8 @@ const DashboardPage = () => {
   const [resendingAssignment, setResendingAssignment] = useState<any | null>(null);
   const [selectedNewUser, setSelectedNewUser] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
-  const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
+  const [deletingAssignment, setDeletingAssignment] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Additional filters
   const [selectedUser, setSelectedUser] = useState<string>('all');
@@ -573,20 +575,20 @@ const DashboardPage = () => {
     }
   };
 
-  const handleDeleteAssignment = async (assignment: any) => {
-    if (!confirm(t('deleteConfirm'))) return;
+  const confirmDelete = async () => {
+    if (!deletingAssignment) return;
 
-    setDeletingAssignmentId(assignment.id);
+    setDeleting(true);
     try {
-      if (assignment.outlookEventId) {
+      if (deletingAssignment.outlookEventId) {
         const graphToken = await getAccessToken();
         if (graphToken) {
-          const mailbox = assignment.shift?.senderMailbox || 'me';
+          const mailbox = deletingAssignment.shift?.senderMailbox || 'me';
           try {
             await authFetch('/api/outlook/send-event', {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
-              body: JSON.stringify({ mailbox, eventId: assignment.outlookEventId })
+              body: JSON.stringify({ mailbox, eventId: deletingAssignment.outlookEventId })
             });
           } catch {
             // Outlook event deletion failed - continue with DB deletion
@@ -594,10 +596,11 @@ const DashboardPage = () => {
         }
       }
 
-      const res = await authFetch(`/api/shift-assignments/${assignment.id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/shift-assignments/${deletingAssignment.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(t('deleteError'));
 
       await refresh();
+      setDeletingAssignment(null);
       setSyncMessage({ type: 'success', text: t('deleteSuccess') });
       setTimeout(() => setSyncMessage(null), 5000);
     } catch (error) {
@@ -607,7 +610,7 @@ const DashboardPage = () => {
       });
       setTimeout(() => setSyncMessage(null), 5000);
     } finally {
-      setDeletingAssignmentId(null);
+      setDeleting(false);
     }
   };
 
@@ -1195,15 +1198,10 @@ const DashboardPage = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleDeleteAssignment(assignment)}
-                                    disabled={deletingAssignmentId === assignment.id}
+                                    onClick={() => setDeletingAssignment(assignment)}
                                     className="hover:bg-red-50 hover:text-red-600 hover:border-red-300"
                                   >
-                                    {deletingAssignmentId === assignment.id ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="w-4 h-4" />
-                                    )}
+                                    <Trash2 className="w-4 h-4" />
                                   </Button>
                                 </div>
                               </td>
@@ -1626,6 +1624,63 @@ const DashboardPage = () => {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation modal */}
+      <Dialog open={!!deletingAssignment} onOpenChange={(open) => {
+        if (!open && !deleting) {
+          setDeletingAssignment(null);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              {t('deleteTitle')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-slate-700">
+              {t('deleteDescription')}
+            </p>
+            {deletingAssignment && (
+              <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                <p className="font-medium text-red-800">
+                  {deletingAssignment.shift?.name} — {deletingAssignment.user?.firstName} {deletingAssignment.user?.lastName}
+                </p>
+                <p className="text-sm text-red-600 mt-1">
+                  {new Date(deletingAssignment.date).toLocaleDateString('fr-FR')}
+                  {deletingAssignment.outlookEventId && ` • ${t('deleteWarningOutlook')}`}
+                </p>
+                <p className="text-sm text-red-600 mt-1">
+                  {t('deleteWarningDb')}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end space-x-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeletingAssignment(null)}
+              disabled={deleting}
+              className="hover:bg-secondary/20"
+            >
+              {tCommon('cancel')}
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              {tCommon('delete')}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
