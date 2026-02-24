@@ -9,7 +9,17 @@ declare global {
 }
 
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  // PrismaPg uses the native pg driver which treats sslmode=prefer as verify-full,
+  // causing failures when PostgreSQL has no SSL certificate (e.g. Docker containers).
+  // Remove sslmode=prefer to let pg use its default (no SSL for local connections).
+  let connectionString = process.env.DATABASE_URL || '';
+  connectionString = connectionString.replace(/[?&]sslmode=prefer/g, (match) =>
+    match.startsWith('?') ? '?' : ''
+  );
+  // Clean up trailing ? or && after removal
+  connectionString = connectionString.replace(/\?&/, '?').replace(/\?$/, '');
+
+  const adapter = new PrismaPg({ connectionString });
   return new PrismaClient({ adapter });
 }
 

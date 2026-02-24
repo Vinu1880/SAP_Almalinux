@@ -4,7 +4,9 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import fs from 'fs';
 import path from 'path';
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+// Remove sslmode=prefer which pg driver treats as verify-full (fails without certs)
+let connStr = (process.env.DATABASE_URL || '').replace(/[?&]sslmode=prefer/g, (m) => m.startsWith('?') ? '?' : '').replace(/\?&/, '?').replace(/\?$/, '');
+const adapter = new PrismaPg({ connectionString: connStr });
 const prisma = new PrismaClient({ adapter });
 
 async function backup() {
