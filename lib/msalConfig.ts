@@ -49,7 +49,7 @@ export const msalConfig: Configuration = {
   },
 };
 
-// Scopes requested during login (Microsoft Graph: profile + calendar)
+// Scopes requested during login (Microsoft Graph: profile + calendar + mail)
 export const loginRequest: PopupRequest = {
   scopes: [
     'openid',
@@ -59,6 +59,8 @@ export const loginRequest: PopupRequest = {
     'Calendars.Read',
     'Calendars.ReadWrite',
     'Calendars.ReadWrite.Shared',
+    'Mail.Send.Shared',
+    'Mail.Read.Shared',
   ],
 };
 
@@ -69,5 +71,7 @@ export const tokenRequest = {
     'Calendars.Read',
     'Calendars.ReadWrite',
     'Calendars.ReadWrite.Shared',
+    'Mail.Send.Shared',
+    'Mail.Read.Shared',
   ],
 };

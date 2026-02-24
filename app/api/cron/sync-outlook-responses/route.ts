@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       try {
         const { outlookEventId, user, shift, id } = assignment;
 
-        if (!outlookEventId) {
+        if (!outlookEventId || outlookEventId.startsWith('mime-uid:')) {
           continue;
         }
 
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
         const mailbox = shift.senderMailbox || process.env.SYNC_ADMIN_EMAIL || 'me';
         const eventUrl = mailbox === 'me'
           ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
-          : `https://graph.microsoft.com/v1.0/users/${mailbox}/events/${outlookEventId}`;
+          : `https://graph.microsoft.com/v1.0/users/${mailbox}/calendar/events/${outlookEventId}`;
 
         const eventResponse = await fetch(eventUrl, {
           headers: {
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
             try {
               const deleteUrl = mailbox === 'me'
                 ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
-                : `https://graph.microsoft.com/v1.0/users/${mailbox}/events/${outlookEventId}`;
+                : `https://graph.microsoft.com/v1.0/users/${mailbox}/calendar/events/${outlookEventId}`;
               const deleteResponse = await fetch(deleteUrl, {
                 method: 'DELETE',
                 headers: {
