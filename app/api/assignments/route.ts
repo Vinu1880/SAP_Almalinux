@@ -1,4 +1,5 @@
 // app/api/assignments/route.ts
+// Legacy assignment creation with holiday validation per canton
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -6,7 +7,6 @@ import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, createAssignmentsSchema } from '@/lib/validation';
 
-// Helper function to map location to canton code
 function getUserCantonFromLocation(location: string): string {
   if (!location || typeof location !== 'string') {
     return 'BE';
@@ -20,13 +20,12 @@ function getUserCantonFromLocation(location: string): string {
   return 'BE';
 }
 
-// Helper function to validate assignment against holidays
+// Checks if a user's canton has a holiday on the given date
 async function validateAssignmentAgainstHolidays(
   userId: string,
   date: Date
 ): Promise<{ valid: boolean; reason?: string; holidayName?: string }> {
   try {
-    // Fetch user with location
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { location: true, firstName: true, lastName: true }
@@ -36,7 +35,6 @@ async function validateAssignmentAgainstHolidays(
       return { valid: false, reason: 'User not found' };
     }
 
-    // Fetch holidays for this specific date
     const dateStart = new Date(date);
     dateStart.setHours(0, 0, 0, 0);
     const dateEnd = new Date(date);
@@ -55,12 +53,9 @@ async function validateAssignmentAgainstHolidays(
       return { valid: true };
     }
 
-    // Get user's canton
     const userCanton = getUserCantonFromLocation(user.location || '');
 
-    // Check if any holiday applies to this user
     for (const holiday of holidays) {
-      // Check if holiday applies to all cantons
       if (holiday.cantons.includes('ALL')) {
         return {
           valid: false,
@@ -69,7 +64,6 @@ async function validateAssignmentAgainstHolidays(
         };
       }
 
-      // If user has no location, only federal holidays apply
       if (!user.location || user.location === '') {
         if (holiday.type === 'FEDERAL') {
           return {
@@ -81,7 +75,6 @@ async function validateAssignmentAgainstHolidays(
         continue;
       }
 
-      // Check if user's canton matches holiday canton
       if (holiday.cantons.includes(userCanton)) {
         return {
           valid: false,
@@ -93,12 +86,11 @@ async function validateAssignmentAgainstHolidays(
 
     return { valid: true };
   } catch (error) {
-    // In case of error, allow assignment
     return { valid: true };
   }
 }
 
-// POST - Create shift assignments (bulk)
+// POST - Create assignments with holiday validation, upserts on conflict
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -113,7 +105,6 @@ export async function POST(request: NextRequest) {
     }
     const { shiftId, assignments } = validation.data;
 
-    // Verify that the shift exists
     const shift = await prisma.shift.findUnique({
       where: { id: shiftId }
     });
@@ -125,7 +116,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate all assignments against holidays first
     const validationResults = await Promise.all(
       assignments.map(async (assignment: any) => {
         const validation = await validateAssignmentAgainstHolidays(
@@ -139,10 +129,8 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Check for any validation failures
     const failures = validationResults.filter(r => !r.validation.valid);
     if (failures.length > 0) {
-      // Get user details for error message
       const failureDetails = await Promise.all(
         failures.map(async f => {
           const user = await prisma.user.findUnique({
@@ -171,11 +159,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create assignments in bulk (only if all validations passed)
     const createdAssignments = await Promise.all(
       assignments.map(async (assignment: any) => {
         try {
-          // Check if the assignment already exists
           const existing = await prisma.shiftAssignment.findUnique({
             where: {
               date_shiftId_userId: {
@@ -187,7 +173,6 @@ export async function POST(request: NextRequest) {
           });
 
           if (existing) {
-            // Update if it exists
             return await prisma.shiftAssignment.update({
               where: { id: existing.id },
               data: {
@@ -197,7 +182,6 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          // Create a new assignment
           return await prisma.shiftAssignment.create({
             data: {
               date: new Date(assignment.date),
@@ -213,10 +197,8 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Filter out null assignments (errors)
     const successfulAssignments = createdAssignments.filter(a => a !== null);
 
-    // Update the shift usage counter
     await prisma.shift.update({
       where: { id: shiftId },
       data: {
@@ -225,7 +207,6 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'CREATE',
@@ -250,7 +231,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Retrieve assignments
+// GET - Retrieve assignments with optional filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

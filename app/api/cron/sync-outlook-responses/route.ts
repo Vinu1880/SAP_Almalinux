@@ -1,11 +1,13 @@
 // app/api/cron/sync-outlook-responses/route.ts
+// Automated cron job to sync Outlook attendee responses
+// Authenticates via CRON_SECRET, uses refresh token or client credentials for Graph API
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { logSecurityEvent } from '@/lib/securityLogger';
 
-// Get a valid access token
+// Acquires a Graph API token via refresh token or client credentials flow
 async function getAccessToken(): Promise<string> {
   const clientId = process.env.AZURE_AD_CLIENT_ID!;
   const clientSecret = process.env.AZURE_AD_CLIENT_SECRET!;
@@ -13,7 +15,6 @@ async function getAccessToken(): Promise<string> {
   const refreshToken = process.env.MICROSOFT_GRAPH_REFRESH_TOKEN;
 
   if (refreshToken) {
-    // Use the refresh token to obtain a new access token
     const tokenResponse = await fetch(
       `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
       {
@@ -36,7 +37,6 @@ async function getAccessToken(): Promise<string> {
     const tokenData = await tokenResponse.json();
     return tokenData.access_token;
   } else {
-    // Use Client Credentials (application permissions)
     const tokenResponse = await fetch(
       `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
       {
@@ -60,7 +60,6 @@ async function getAccessToken(): Promise<string> {
   }
 }
 
-// Map Outlook responses to our statuses
 function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'REFUSED' | 'PENDING' {
   switch (response?.toLowerCase()) {
     case 'accepted':
@@ -73,10 +72,9 @@ function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'REFUSED' | 
   }
 }
 
-// POST - Synchronize Outlook responses
+// POST - Sync pending assignments with Outlook event responses
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
@@ -101,7 +99,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Retrieve all PENDING assignments with an outlookEventId
     const pendingAssignments = await prisma.shiftAssignment.findMany({
       where: {
         status: 'PENDING',
@@ -134,13 +131,11 @@ export async function POST(request: NextRequest) {
       try {
         const { outlookEventId, user, shift, id } = assignment;
 
-        if (!outlookEventId || outlookEventId.startsWith('mime-uid:')) {
+        if (!outlookEventId) {
           continue;
         }
 
-        // Fetch event details from Microsoft Graph
-        // Events created via shared mailbox calendar are stored under the shared mailbox
-        // Events created via /me/events are stored under the admin user
+        // Resolve event URL based on shared mailbox or personal calendar
         const mailbox = shift.senderMailbox || process.env.SYNC_ADMIN_EMAIL || 'me';
         const eventUrl = mailbox === 'me'
           ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
@@ -162,23 +157,17 @@ export async function POST(request: NextRequest) {
 
         const event = await eventResponse.json();
 
-        // Find the user's response in the attendees
         const attendee = event.attendees?.find(
           (a: any) => a.emailAddress.address.toLowerCase() === user.email.toLowerCase()
         );
 
-        if (!attendee) {
-          continue;
-        }
-
-        if (!attendee.status) {
+        if (!attendee?.status) {
           continue;
         }
 
         const responseStatus = attendee.status.response;
         const newStatus = mapOutlookResponseToStatus(responseStatus);
 
-        // Only update if the status has changed and is not PENDING
         if (newStatus !== 'PENDING' && newStatus !== assignment.status) {
           await prisma.shiftAssignment.update({
             where: { id },
@@ -188,7 +177,7 @@ export async function POST(request: NextRequest) {
             }
           });
 
-          // If the shift is refused, delete the Outlook event from the sender's calendar
+          // Delete the calendar event when declined
           if (newStatus === 'REFUSED' && outlookEventId) {
             try {
               const deleteUrl = mailbox === 'me'
@@ -210,7 +199,6 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Create an audit log
           await prisma.auditLog.create({
             data: {
               action: 'UPDATE',
@@ -271,7 +259,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Check synchronization status
+// GET - Check sync status
 export async function GET(request: NextRequest) {
   try {
     const pendingCount = await prisma.shiftAssignment.count({

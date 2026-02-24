@@ -55,16 +55,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    // Prepare data excluding leadId if it is empty, null or 'none'
     const teamData: any = {
       name: validation.data.name,
       description: validation.data.description || null,
       color: validation.data.color || '#3b82f6'
     };
 
-    // Only add leadId if it exists and is not 'none'
     if (validation.data.leadId && validation.data.leadId !== 'none' && validation.data.leadId !== '') {
-      // Verify that the user exists
       const userExists = await prisma.user.findUnique({
         where: { id: validation.data.leadId }
       });
@@ -85,7 +82,6 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'CREATE',

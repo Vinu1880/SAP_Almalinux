@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 
-// GET - Retrieve shift assignment statistics
+// GET - Aggregate assignment statistics by status, user, and team
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -14,10 +14,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const dateFilter = searchParams.get('dateFilter'); // '24h', '7d', '30d', '90d', '180d'
+    const dateFilter = searchParams.get('dateFilter');
     const teamId = searchParams.get('teamId');
 
-    // Calculate start date based on filter
     const where: any = {};
 
     if (dateFilter) {
@@ -39,7 +38,6 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Retrieve all assignments for the filter
     const allAssignments = await prisma.shiftAssignment.findMany({
       where,
       include: {
@@ -51,20 +49,17 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Filter by team if specified
     let assignments = allAssignments;
     if (teamId) {
       assignments = allAssignments.filter(a => a.shift.teamId === teamId);
     }
 
-    // Count by status
     const accepted = assignments.filter(a => a.status === 'ACCEPTED').length;
     const refused = assignments.filter(a => a.status === 'REFUSED').length;
     const pending = assignments.filter(a => a.status === 'PENDING').length;
     const cancelled = assignments.filter(a => a.status === 'CANCELLED').length;
     const total = assignments.length;
 
-    // Statistics per user
     const userStats: any = {};
     assignments.forEach(assignment => {
       const userId = assignment.userId;
@@ -82,7 +77,6 @@ export async function GET(request: NextRequest) {
       userStats[userId][assignment.status.toLowerCase()]++;
     });
 
-    // Statistics per team
     const teamStats: any = {};
     allAssignments.forEach(assignment => {
       const teamId = assignment.shift.teamId;

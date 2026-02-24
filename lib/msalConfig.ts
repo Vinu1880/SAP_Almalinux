@@ -3,16 +3,9 @@ import { Configuration, PopupRequest } from '@azure/msal-browser';
 // MSAL configuration for Azure AD SSO (SPA)
 export const msalConfig: Configuration = {
   auth: {
-    // Required - Azure AD application client ID
     clientId: process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID!,
-
-    // Azure AD tenant authority
     authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID}`,
-
-    // MSAL SPA redirect URI (base app URL, not /api/auth/*)
     redirectUri: process.env.NEXT_PUBLIC_AZURE_AD_REDIRECT_URI!,
-
-    // Post-logout redirect
     postLogoutRedirectUri: process.env.NEXT_PUBLIC_AZURE_AD_REDIRECT_URI!,
   },
 
@@ -49,7 +42,7 @@ export const msalConfig: Configuration = {
   },
 };
 
-// Scopes requested during login (Microsoft Graph: profile + calendar + mail)
+// Login scopes: profile + shared calendar access
 export const loginRequest: PopupRequest = {
   scopes: [
     'openid',
@@ -59,19 +52,15 @@ export const loginRequest: PopupRequest = {
     'Calendars.Read',
     'Calendars.ReadWrite',
     'Calendars.ReadWrite.Shared',
-    'Mail.Send.Shared',
-    'Mail.Read.Shared',
   ],
 };
 
-// Scopes for silent token acquisition
+// Silent token acquisition scopes
 export const tokenRequest = {
   scopes: [
     'User.Read',
     'Calendars.Read',
     'Calendars.ReadWrite',
     'Calendars.ReadWrite.Shared',
-    'Mail.Send.Shared',
-    'Mail.Read.Shared',
   ],
 };

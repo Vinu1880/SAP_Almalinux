@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, createBulkShiftAssignmentsSchema } from '@/lib/validation';
 
-// GET - Retrieve all shift assignments with filters
+// GET - Retrieve shift assignments with filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -15,14 +15,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const dateFilter = searchParams.get('dateFilter'); // '24h', '7d', '30d', '90d', '180d'
+    const dateFilter = searchParams.get('dateFilter');
     const teamId = searchParams.get('teamId');
     const userId = searchParams.get('userId');
     const status = searchParams.get('status');
     const rangeStart = searchParams.get('startDate');
     const rangeEnd = searchParams.get('endDate');
 
-    // Calculate start date based on filter
     let filterStartDate = new Date();
     if (dateFilter === '24h') {
       filterStartDate.setHours(filterStartDate.getHours() - 24);
@@ -36,11 +35,9 @@ export async function GET(request: NextRequest) {
       filterStartDate.setDate(filterStartDate.getDate() - 180);
     }
 
-    // Build filters
     const where: any = {};
 
     if (rangeStart && rangeEnd) {
-      // Date range filter on the assignment date field
       where.date = {
         gte: new Date(rangeStart),
         lte: new Date(rangeEnd)
@@ -59,7 +56,6 @@ export async function GET(request: NextRequest) {
       where.userId = userId;
     }
 
-    // Retrieve assignments with relations
     const assignments = await prisma.shiftAssignment.findMany({
       where,
       include: {
@@ -79,7 +75,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Filter by team if specified (after retrieval because team is in shift)
+    // Team filter applied post-query since team is nested in shift
     let filteredAssignments = assignments;
     if (teamId) {
       filteredAssignments = assignments.filter(a => a.shift.teamId === teamId);
@@ -94,7 +90,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create multiple shift assignments
+// POST - Bulk create shift assignments
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -109,7 +105,6 @@ export async function POST(request: NextRequest) {
     }
     const { assignments } = validation.data;
 
-    // Create all assignments using createMany
     const result = await prisma.shiftAssignment.createMany({
       data: assignments.map((a: any) => ({
         date: new Date(a.date),
@@ -118,10 +113,9 @@ export async function POST(request: NextRequest) {
         status: a.status || 'PENDING',
         reason: a.reason || null
       })),
-      skipDuplicates: true // Avoid duplicates thanks to the unique constraint
+      skipDuplicates: true
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'CREATE_BULK',
@@ -131,7 +125,6 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Retrieve the created assignments to return them
     const createdAssignments = await prisma.shiftAssignment.findMany({
       where: {
         date: {

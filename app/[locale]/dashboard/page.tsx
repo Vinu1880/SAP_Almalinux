@@ -417,8 +417,6 @@ const DashboardPage = () => {
       const newUser = users?.find(u => u.id === selectedNewUser);
       if (!newUser) throw new Error(t('userNotFound'));
 
-      // 1. Create the Outlook event via server-side API (application permissions)
-      // so the organizer is the shared mailbox, not the admin user
       const shift = resendingAssignment.shift;
       const date = new Date(resendingAssignment.date);
 
@@ -438,7 +436,7 @@ const DashboardPage = () => {
       const mailbox = shift.senderMailbox || 'me';
 
       const event = {
-        subject: shift.name,
+        subject: `${shift.name} - ${newUser.firstName} ${newUser.lastName}`,
         body: {
           contentType: 'HTML',
           content: `
@@ -478,7 +476,6 @@ const DashboardPage = () => {
         categories: ['Shift', shift.name]
       };
 
-      // Send via server-side API route (uses delegated Graph token)
       const graphToken = await getAccessToken();
       if (!graphToken) throw new Error('No Graph access token');
 
@@ -495,7 +492,6 @@ const DashboardPage = () => {
 
       const createdEvent = await outlookResponse.json();
 
-      // 2. Mark the old assignment as "resent"
       const patchResponse = await authFetch(`/api/shift-assignments/${resendingAssignment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -509,7 +505,6 @@ const DashboardPage = () => {
         throw new Error(t('updateError'));
       }
 
-      // 3. Create the new assignment in the DB
       const createResponse = await authFetch('/api/shift-assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -527,7 +522,6 @@ const DashboardPage = () => {
         throw new Error(t('createError'));
       }
 
-      // 3b. Set the outlookEventId on the new assignment
       const createResult = await createResponse.json();
       const newAssignment = createResult.assignments?.find((a: any) => a.userId === newUser.id);
       if (newAssignment) {
@@ -538,7 +532,6 @@ const DashboardPage = () => {
         });
       }
 
-      // 4. Delete the old Outlook event if it exists via server-side API
       if (resendingAssignment.outlookEventId) {
         try {
           await authFetch('/api/outlook/send-event', {
@@ -554,7 +547,6 @@ const DashboardPage = () => {
         }
       }
 
-      // Refresh data
       await refresh();
 
       setSyncMessage({

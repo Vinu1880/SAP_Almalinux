@@ -6,7 +6,6 @@ import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, updateAssignmentSchema } from '@/lib/validation';
 
-// GET - Retrieve a specific assignment
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -50,7 +49,7 @@ export async function GET(
   }
 }
 
-// PUT - Update an assignment (typically the status)
+// PUT - Full update (records respondedAt on status change)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -72,8 +71,6 @@ export async function PUT(
 
     if (body.status !== undefined) {
       updateData.status = body.status;
-
-      // If the status changes to ACCEPTED or REFUSED, record the response date
       if (body.status === 'ACCEPTED' || body.status === 'REFUSED') {
         updateData.respondedAt = new Date();
       }
@@ -104,7 +101,6 @@ export async function PUT(
       }
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'UPDATE',
@@ -124,7 +120,7 @@ export async function PUT(
   }
 }
 
-// PATCH - Partially update an assignment (e.g., outlookEventId)
+// PATCH - Partial update
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -159,7 +155,6 @@ export async function PATCH(
       }
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'PATCH',
@@ -179,7 +174,6 @@ export async function PATCH(
   }
 }
 
-// DELETE - Delete an assignment
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -196,7 +190,6 @@ export async function DELETE(
       where: { id }
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         action: 'DELETE',

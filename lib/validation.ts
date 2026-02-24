@@ -1,14 +1,12 @@
 // lib/validation.ts - Zod schemas for API input validation
 import { z } from 'zod';
 
-// Shared schemas
 const cuidSchema = z.string().min(1).max(30);
 const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const timeFormatSchema = z.string().regex(/^\d{2}:\d{2}$/);
 const weekFormatSchema = z.string().regex(/^\d{4}-W\d{2}$/);
 const dayOfWeekSchema = z.number().int().min(0).max(6);
 
-// User
 export const createUserSchema = z.object({
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
@@ -29,7 +27,6 @@ export const createUserSchema = z.object({
 });
 export const updateUserSchema = createUserSchema.partial();
 
-// Team
 export const createTeamSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).nullable().optional(),
@@ -40,7 +37,6 @@ export const updateTeamSchema = createTeamSchema.partial().extend({
   memberIds: z.array(cuidSchema).optional(),
 });
 
-// Shift
 export const createShiftSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).nullable().optional(),
@@ -58,7 +54,6 @@ export const createShiftSchema = z.object({
 });
 export const updateShiftSchema = createShiftSchema.partial();
 
-// Pikett
 export const createPikettSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).nullable().optional(),
@@ -75,7 +70,7 @@ export const createPikettSchema = z.object({
 });
 export const updatePikettSchema = createPikettSchema.partial();
 
-// Assignment (legacy)
+// Assignment (legacy endpoint)
 export const createAssignmentsSchema = z.object({
   shiftId: cuidSchema,
   assignments: z.array(z.object({
@@ -94,7 +89,6 @@ export const updateAssignmentSchema = z.object({
   resentAt: z.string().nullable().optional(),
 });
 
-// Shift-Assignment bulk
 export const createBulkShiftAssignmentsSchema = z.object({
   assignments: z.array(z.object({
     date: z.string(),
@@ -110,7 +104,6 @@ export const checkConsecutiveSchema = z.object({
   date: z.string(),
 });
 
-// Rotation Pattern
 export const createRotationPatternSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).nullable().optional(),
@@ -120,7 +113,6 @@ export const createRotationPatternSchema = z.object({
 });
 export const updateRotationPatternSchema = createRotationPatternSchema.partial();
 
-// Holiday
 export const createHolidaySchema = z.object({
   name: z.string().min(1).max(100),
   date: z.string(),
@@ -135,14 +127,12 @@ export const importHolidaysSchema = z.object({
   cantons: z.array(z.string().max(5)).min(1),
 });
 
-// Backup
 export const restoreBackupSchema = z.object({
   fileName: z.string().max(200).optional(),
   confirmed: z.boolean().optional(),
   data: z.any().optional(),
 });
 
-// Helper function
 export function validateBody<T>(schema: z.ZodType<T>, data: unknown): { success: boolean; data: T; error: string } {
   const result = schema.safeParse(data);
   if (!result.success) {

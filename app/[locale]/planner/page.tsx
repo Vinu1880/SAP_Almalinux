@@ -1641,7 +1641,7 @@ const processShiftAssignments = async () => {
               }
 
               const event = {
-                subject: `${assignment.shift.name}${assignment.isPikett ? ` 🛡️ ${t('pikett').toUpperCase()}` : ''}`,
+                subject: `${assignment.shift.name} - ${user.displayName || `${user.firstName} ${user.lastName}`}${assignment.isPikett ? ` 🛡️ ${t('pikett').toUpperCase()}` : ''}`,
                 body: {
                   contentType: 'HTML',
                   content: `

@@ -1,18 +1,15 @@
 // app/api/outlook/sync/route.ts
-// Sync Outlook responses using multiple strategies:
-// 1) Check tracking event attendees on shared mailbox
-// 2) Search attendee's calendar (works for accepted, not for declined since event is removed)
-// 3) Search shared mailbox inbox for accept/decline response messages
+// Syncs Outlook attendee responses back to DB assignments
+// Reads attendee accept/decline status from shared mailbox calendar events
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 
-function mapResponseToStatus(responseType: string): 'ACCEPTED' | 'REFUSED' | 'PENDING' {
-  switch (responseType?.toLowerCase()) {
+function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'REFUSED' | 'PENDING' {
+  switch (response?.toLowerCase()) {
     case 'accepted':
-    case 'organizer':
     case 'tentativelyaccepted':
       return 'ACCEPTED';
     case 'declined':
@@ -22,6 +19,7 @@ function mapResponseToStatus(responseType: string): 'ACCEPTED' | 'REFUSED' | 'PE
   }
 }
 
+// POST - Sync all pending assignments with their Outlook event responses
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -48,119 +46,37 @@ export async function POST(request: NextRequest) {
 
     let updatedCount = 0;
     let errorCount = 0;
-    const details: any[] = [];
 
     for (const assignment of pendingAssignments) {
       try {
         const { outlookEventId, user, shift, id } = assignment;
-        if (!outlookEventId || outlookEventId.startsWith('mime-uid:')) continue;
+        if (!outlookEventId) continue;
 
         const mailbox = shift.senderMailbox || 'me';
-        let newStatus: 'ACCEPTED' | 'REFUSED' | 'PENDING' = 'PENDING';
-        let source = '';
-
-        // Strategy 1: Check the tracking event on the organizer's calendar
         const eventUrl = mailbox === 'me'
           ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
           : `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/calendar/events/${outlookEventId}`;
 
-        try {
-          const eventRes = await fetch(eventUrl, {
-            headers: { 'Authorization': `Bearer ${graphToken}` }
-          });
-          if (eventRes.ok) {
-            const event = await eventRes.json();
-            const att = event.attendees?.find(
-              (a: any) => a.emailAddress?.address?.toLowerCase() === user.email.toLowerCase()
-            );
-            if (att?.status?.response) {
-              const mapped = mapResponseToStatus(att.status.response);
-              if (mapped !== 'PENDING') {
-                newStatus = mapped;
-                source = 'tracking-event';
-              }
-            }
-          }
-        } catch { /* continue */ }
+        const eventResponse = await fetch(eventUrl, {
+          headers: { 'Authorization': `Bearer ${graphToken}` }
+        });
 
-        // Strategy 2: Search attendee's calendar (finds accepted events)
-        if (newStatus === 'PENDING') {
-          try {
-            const assignDate = assignment.date instanceof Date ? assignment.date : new Date(assignment.date);
-            const dateStr = assignDate.toISOString().split('T')[0];
-            const dayStart = `${dateStr}T00:00:00.000Z`;
-            const dayEnd = `${dateStr}T23:59:59.999Z`;
-
-            const searchRes = await fetch(
-              `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(user.email)}/calendarView?startDateTime=${encodeURIComponent(dayStart)}&endDateTime=${encodeURIComponent(dayEnd)}&$select=id,subject,responseStatus&$top=50`,
-              {
-                headers: {
-                  'Authorization': `Bearer ${graphToken}`,
-                  'Prefer': 'outlook.timezone="Europe/Zurich"',
-                }
-              }
-            );
-
-            if (searchRes.ok) {
-              const searchData = await searchRes.json();
-              const matchingEvent = searchData.value?.find(
-                (e: any) => e.subject?.includes(shift.name)
-              );
-              if (matchingEvent?.responseStatus?.response) {
-                const mapped = mapResponseToStatus(matchingEvent.responseStatus.response);
-                if (mapped !== 'PENDING') {
-                  newStatus = mapped;
-                  source = 'user-calendar';
-                }
-              }
-            }
-          } catch { /* continue */ }
+        if (!eventResponse.ok) {
+          if (eventResponse.status === 404) continue;
+          errorCount++;
+          continue;
         }
 
-        // Strategy 3: Search shared mailbox inbox for decline/accept response messages
-        // When a user declines, Outlook sends a "Declined: <subject>" message to the organizer
-        if (newStatus === 'PENDING' && mailbox !== 'me') {
-          try {
-            // Search for response messages from this user about this shift
-            const filterParts = [
-              `from/emailAddress/address eq '${user.email.toLowerCase()}'`,
-              `contains(subject, '${shift.name.replace(/'/g, "''")}')`,
-            ];
-            const filter = filterParts.join(' and ');
+        const event = await eventResponse.json();
 
-            const messagesRes = await fetch(
-              `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages?$filter=${encodeURIComponent(filter)}&$select=subject,from,receivedDateTime,itemClass&$top=10&$orderby=receivedDateTime desc`,
-              {
-                headers: { 'Authorization': `Bearer ${graphToken}` }
-              }
-            );
+        const attendee = event.attendees?.find(
+          (a: any) => a.emailAddress?.address?.toLowerCase() === user.email.toLowerCase()
+        );
 
-            if (messagesRes.ok) {
-              const messagesData = await messagesRes.json();
-              for (const msg of messagesData.value || []) {
-                const itemClass = (msg.itemClass || '').toLowerCase();
-                const subjectLower = (msg.subject || '').toLowerCase();
+        if (!attendee?.status?.response) continue;
 
-                // Check itemClass for meeting responses
-                if (itemClass.includes('ipm.schedule.meeting.resp.neg') || subjectLower.startsWith('declined:') || subjectLower.startsWith('refusé:') || subjectLower.startsWith('abgelehnt:')) {
-                  newStatus = 'REFUSED';
-                  source = 'inbox-decline';
-                  break;
-                }
-                if (itemClass.includes('ipm.schedule.meeting.resp.pos') || subjectLower.startsWith('accepted:') || subjectLower.startsWith('accepté:') || subjectLower.startsWith('akzeptiert:')) {
-                  newStatus = 'ACCEPTED';
-                  source = 'inbox-accept';
-                  break;
-                }
-                if (itemClass.includes('ipm.schedule.meeting.resp.tent') || subjectLower.startsWith('tentative:') || subjectLower.startsWith('tentativement:') || subjectLower.startsWith('mit vorbehalt:')) {
-                  newStatus = 'ACCEPTED';
-                  source = 'inbox-tentative';
-                  break;
-                }
-              }
-            }
-          } catch { /* continue */ }
-        }
+        const responseStatus = attendee.status.response;
+        const newStatus = mapOutlookResponseToStatus(responseStatus);
 
         if (newStatus !== 'PENDING' && newStatus !== assignment.status) {
           await prisma.shiftAssignment.update({
@@ -168,13 +84,17 @@ export async function POST(request: NextRequest) {
             data: { status: newStatus, respondedAt: new Date() }
           });
 
-          // If refused, delete the tracking event from shared mailbox calendar
+          // Cancel the calendar event when the shift is declined
           if (newStatus === 'REFUSED' && outlookEventId) {
             try {
-              await fetch(eventUrl, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${graphToken}` }
+              const cancelRes = await fetch(`${eventUrl}/cancel`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${graphToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ comment: 'Shift declined' }),
               });
+              if (!cancelRes.ok && cancelRes.status !== 202) {
+                await fetch(eventUrl, { method: 'DELETE', headers: { 'Authorization': `Bearer ${graphToken}` } });
+              }
             } catch { /* continue */ }
           }
 
@@ -184,11 +104,16 @@ export async function POST(request: NextRequest) {
               entity: 'SHIFT_ASSIGNMENT',
               entityId: id,
               userId: auth.user.id,
-              data: { source: `outlook-sync-${source}`, oldStatus: assignment.status, newStatus }
+              data: {
+                source: 'outlook-sync',
+                oldStatus: assignment.status,
+                newStatus,
+                outlookResponse: responseStatus,
+                outlookEventDeleted: newStatus === 'REFUSED'
+              }
             }
           });
 
-          details.push({ user: user.email, shift: shift.name, oldStatus: assignment.status, newStatus, source });
           updatedCount++;
         }
       } catch {
@@ -201,8 +126,7 @@ export async function POST(request: NextRequest) {
       message: 'Synchronization completed',
       checked: pendingAssignments.length,
       updated: updatedCount,
-      errors: errorCount,
-      details,
+      errors: errorCount
     });
 
   } catch {
