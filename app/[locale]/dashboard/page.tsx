@@ -28,7 +28,8 @@ import {
   FilterX,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,7 @@ const DashboardPage = () => {
   const [resendingAssignment, setResendingAssignment] = useState<any | null>(null);
   const [selectedNewUser, setSelectedNewUser] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
 
   // Additional filters
   const [selectedUser, setSelectedUser] = useState<string>('all');
@@ -568,6 +570,44 @@ const DashboardPage = () => {
       setTimeout(() => setSyncMessage(null), 5000);
     } finally {
       setResending(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (assignment: any) => {
+    if (!confirm(t('deleteConfirm'))) return;
+
+    setDeletingAssignmentId(assignment.id);
+    try {
+      if (assignment.outlookEventId) {
+        const graphToken = await getAccessToken();
+        if (graphToken) {
+          const mailbox = assignment.shift?.senderMailbox || 'me';
+          try {
+            await authFetch('/api/outlook/send-event', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
+              body: JSON.stringify({ mailbox, eventId: assignment.outlookEventId })
+            });
+          } catch {
+            // Outlook event deletion failed - continue with DB deletion
+          }
+        }
+      }
+
+      const res = await authFetch(`/api/shift-assignments/${assignment.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(t('deleteError'));
+
+      await refresh();
+      setSyncMessage({ type: 'success', text: t('deleteSuccess') });
+      setTimeout(() => setSyncMessage(null), 5000);
+    } catch (error) {
+      setSyncMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : t('deleteError')
+      });
+      setTimeout(() => setSyncMessage(null), 5000);
+    } finally {
+      setDeletingAssignmentId(null);
     }
   };
 
@@ -1136,21 +1176,36 @@ const DashboardPage = () => {
                                 {getStatusBadge(assignment.status)}
                               </td>
                               <td className="py-4 px-2">
-                                {assignment.resent ? (
-                                  <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs px-3 py-1.5">
-                                    ✓ {t('resent')}
-                                  </Badge>
-                                ) : (
+                                <div className="flex items-center gap-2">
+                                  {assignment.resent ? (
+                                    <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs px-3 py-1.5">
+                                      ✓ {t('resent')}
+                                    </Badge>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setResendingAssignment(assignment)}
+                                      className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+                                    >
+                                      <Send className="w-4 h-4 mr-2" />
+                                      {t('resend')}
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setResendingAssignment(assignment)}
-                                    className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+                                    onClick={() => handleDeleteAssignment(assignment)}
+                                    disabled={deletingAssignmentId === assignment.id}
+                                    className="hover:bg-red-50 hover:text-red-600 hover:border-red-300"
                                   >
-                                    <Send className="w-4 h-4 mr-2" />
-                                    {t('resend')}
+                                    {deletingAssignmentId === assignment.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
                                   </Button>
-                                )}
+                                </div>
                               </td>
                             </tr>
                             );
