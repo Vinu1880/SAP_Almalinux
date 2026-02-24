@@ -1,0 +1,83 @@
+# =============================================
+# GitLab CI/CD - ShiftAutoPlanner
+# Build Docker image + Deploy to AlmaLinux
+# =============================================
+
+stages:
+  - build
+  - deploy
+
+variables:
+  IMAGE_NAME: sap-app
+  IMAGE_TAG: latest
+
+# =============================================
+# Stage 1: Build Docker image & push to registry
+# =============================================
+build:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - echo "Building Docker image..."
+    - >
+      docker build
+      --build-arg NEXT_PUBLIC_AZURE_AD_CLIENT_ID="$NEXT_PUBLIC_AZURE_AD_CLIENT_ID"
+      --build-arg NEXT_PUBLIC_AZURE_AD_TENANT_ID="$NEXT_PUBLIC_AZURE_AD_TENANT_ID"
+      --build-arg NEXT_PUBLIC_AZURE_AD_REDIRECT_URI="$NEXT_PUBLIC_AZURE_AD_REDIRECT_URI"
+      --build-arg NEXT_PUBLIC_CRON_SECRET="$NEXT_PUBLIC_CRON_SECRET"
+      -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
+      -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+      .
+    - echo "Pushing to GitLab registry..."
+    - docker push "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+  only:
+    - main
+
+# =============================================
+# Stage 2: Deploy to AlmaLinux production server
+# =============================================
+deploy:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - echo "Deploying to production server..."
+    # Login to GitLab registry on remote server
+    - >
+      ssh "$SSH_USER@$SSH_HOST"
+      "docker login -u '$CI_REGISTRY_USER' -p '$CI_REGISTRY_PASSWORD' '$CI_REGISTRY'"
+    # Pull the new image
+    - >
+      ssh "$SSH_USER@$SSH_HOST"
+      "docker pull $CI_REGISTRY_IMAGE:$IMAGE_TAG"
+    # Tag image as sap-app:latest (used by docker-compose)
+    - >
+      ssh "$SSH_USER@$SSH_HOST"
+      "docker tag $CI_REGISTRY_IMAGE:$IMAGE_TAG sap-app:latest"
+    # Restart the app container
+    - >
+      ssh "$SSH_USER@$SSH_HOST"
+      "cd $DEPLOY_PATH && docker compose up -d app"
+    # Verify deployment
+    - >
+      ssh "$SSH_USER@$SSH_HOST"
+      "sleep 5 && curl -sf -o /dev/null http://localhost:3000/en && echo 'Deployment OK!' || echo 'WARNING: Health check failed'"
+  only:
+    - main
+  when: on_success
+  environment:
+    name: production
+    url: $NEXT_PUBLIC_URL
