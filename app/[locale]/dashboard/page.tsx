@@ -162,7 +162,7 @@ const DashboardPage = () => {
               dateTime: date + 'T23:59:59',
               timeZone: 'Europe/Zurich'
             },
-            availabilityViewInterval: 1440
+            availabilityViewInterval: 60
           })
         });
 

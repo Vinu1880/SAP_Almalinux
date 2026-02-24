@@ -847,6 +847,20 @@ const getUserCantonFromLocation = (location: string): string => {
     return [...teamUsers, ...includedUsers];
   };
 
+  // Get INACTIVE users that would be eligible for a shift (same team logic but status != ACTIVE)
+  const getInactiveUsersForShift = (shift: any): any[] => {
+    const teamUsers = availableUsers.filter(u =>
+      u.teamId === shift.teamId &&
+      u.status !== 'ACTIVE' && u.status !== 'active' &&
+      !(shift.excludedUserIds || []).includes(u.id)
+    );
+    const includedUsers = availableUsers.filter(u =>
+      (shift.includedUserIds || []).includes(u.id) &&
+      u.status !== 'ACTIVE' && u.status !== 'active'
+    );
+    return [...teamUsers, ...includedUsers];
+  };
+
   // Get all user IDs that are members of the currently selected shifts/piketts
   const getSelectedShiftsMemberIds = (): Set<string> => {
     const memberIds = new Set<string>();
@@ -1252,10 +1266,20 @@ const processShiftAssignments = async () => {
           }
 
           const eligibleUsers = getEligibleUsersForShift(shift);
-          
+
           const availableForThisDate: any[] = [];
           const unavailableUsers: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
-          
+
+          // Add inactive users to unavailable list
+          const inactiveUsers = getInactiveUsersForShift(shift);
+          for (const user of inactiveUsers) {
+            unavailableUsers.push({
+              user,
+              reason: t('reasonInactive'),
+              conflictEvents: []
+            });
+          }
+
           for (const user of eligibleUsers) {
           // ========================================
           // PRIORITY 1: PUBLIC HOLIDAYS (ALWAYS FIRST)
@@ -2877,23 +2901,12 @@ useEffect(() => {
                                         const usersWithOOF: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
                                         const usersWithConsecutiveShifts: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
                                         const usersNotWorkingToday: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
-                                        const usersInactive: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
                                         const available: any[] = [];
 
                                         for (const user of eligibleUsers) {
                                           // Do not process the currently assigned user
                                           if (assignment.assignedUsers.length > 0 &&
                                               assignment.assignedUsers[0].id === user.id) {
-                                            continue;
-                                          }
-
-                                          // 0. Check if user is INACTIVE
-                                          if (user.status && user.status !== 'ACTIVE' && user.status !== 'active') {
-                                            usersInactive.push({
-                                              user,
-                                              reason: t('reasonInactive'),
-                                              conflictEvents: []
-                                            });
                                             continue;
                                           }
 
@@ -2949,7 +2962,6 @@ useEffect(() => {
 
                                         // Combine all constraints for display
                                         const currentlyUnavailable = [
-                                          ...usersInactive,
                                           ...usersWithOOF,
                                           ...usersWithConsecutiveShifts,
                                           ...usersNotWorkingToday
