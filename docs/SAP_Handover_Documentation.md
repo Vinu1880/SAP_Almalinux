@@ -554,6 +554,118 @@ docker compose up -d app
 
 PostgreSQL and Nginx are not rebuilt - only the app container is replaced.
 
+## 6.5 Updating Dependencies (npm packages)
+
+All dependencies are defined in `package.json`. To update them:
+
+### Step 1: Check for outdated packages (on your development machine)
+
+```bash
+npm outdated
+```
+
+This shows a table of current vs. latest versions.
+
+### Step 2: Update minor/patch versions (safe)
+
+```bash
+npm update
+```
+
+This updates packages within the ranges defined in `package.json` (e.g. `^16.1.6` allows 16.x.x).
+
+### Step 3: Update major versions (breaking changes - test carefully)
+
+```bash
+# Update a specific package to latest major
+npm install next@latest
+
+# Or update all to latest (review changes carefully)
+npx npm-check-updates -u
+npm install
+```
+
+### Step 4: Verify the build
+
+```bash
+npm run build
+```
+
+### Step 5: Test in Docker
+
+```bash
+docker compose build --no-cache app
+docker compose up -d app
+# Verify the app works at http://localhost:3000
+```
+
+### Step 6: Commit and deploy
+
+```bash
+git add package.json package-lock.json
+git commit -m "Update dependencies"
+git push
+```
+
+### Key packages and how to update them
+
+| Package | Current | Update command | Impact |
+|---------|---------|----------------|--------|
+| **Next.js** | 16.1.6 | `npm install next@latest eslint-config-next@latest` | High - test all pages |
+| **React** | 19.2.4 | `npm install react@latest react-dom@latest` | High - test all UI |
+| **Prisma** | 7.4.1 | `npm install prisma@latest @prisma/client@latest @prisma/adapter-pg@latest` then `npx prisma generate` | High - test all DB operations |
+| **MSAL** | 4.29 / 3.0.27 | `npm install @azure/msal-browser@latest @azure/msal-react@latest` | Medium - test login flow |
+| **next-intl** | 4.8.3 | `npm install next-intl@latest` | Medium - test i18n routing |
+| **Tailwind CSS** | 4.2.1 | `npm install tailwindcss@latest @tailwindcss/postcss@latest` | Low - visual check |
+| **Radix UI** | Various | `npm install @radix-ui/react-dialog@latest @radix-ui/react-select@latest ...` | Low - test dialogs/dropdowns |
+| **Zod** | 4.3.6 | `npm install zod@latest` | Low - test form validation |
+| **TypeScript** | 5.x | `npm install typescript@latest @types/node@latest @types/react@latest` | Low - build check |
+
+### Updating Node.js version (Docker container)
+
+The app runs on `node:20-alpine` inside Docker. To update Node.js:
+
+1. Edit `Dockerfile` - change the base image on all 3 stages:
+   ```dockerfile
+   FROM node:22-alpine AS deps   # Change 20 to 22 (or any LTS version)
+   FROM node:22-alpine AS builder
+   FROM node:22-alpine AS runner
+   ```
+2. Rebuild: `docker compose build --no-cache app`
+3. Test thoroughly before deploying
+
+**Recommendation:** Stay on Node.js LTS versions (even numbers: 20, 22, 24...).
+
+### Updating PostgreSQL version
+
+1. **Create a backup first** via the Settings page or CLI
+2. Edit `docker-compose.yml`:
+   ```yaml
+   sap-postgres:
+     image: postgres:17-alpine  # Change from 16 to 17
+   ```
+3. Stop and remove the old container + volume:
+   ```bash
+   docker compose down
+   docker volume rm sap_almalinux_postgres-data
+   ```
+4. Start fresh and restore:
+   ```bash
+   docker compose up -d
+   # Restore via the Settings page (upload your backup file)
+   ```
+
+**Warning:** Changing the PostgreSQL major version requires deleting the data volume. Always backup first.
+
+### Updating Nginx
+
+Edit `docker-compose.yml`:
+```yaml
+nginx:
+  image: nginx:1.27   # Change from nginx:stable to a specific version
+```
+Then: `docker compose pull nginx && docker compose up -d nginx`
+
 \newpage
 
 # 7. CI/CD Pipeline (GitLab)
