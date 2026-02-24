@@ -59,11 +59,13 @@ import { useTeams } from '@/lib/hooks/useTeams';
 import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useShifts } from '@/lib/hooks/useShifts';
 import { useAuthFetch } from '@/lib/hooks/useAuthFetch';
+import { useAuth } from '@/contexts/AuthContext';
 
 const DashboardPage = () => {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
   const authFetch = useAuthFetch();
+  const { getAccessToken } = useAuth();
   const [dateFilter, setDateFilter] = useState<'7d' | '30d' | '90d' | '180d' | 'all'>('7d');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedView, setSelectedView] = useState<'shifts' | 'users'>('shifts');
@@ -125,31 +127,91 @@ const DashboardPage = () => {
   }>({ available: [], alreadyAssigned: [], refused: [], unavailable: [] });
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
-  // Function to check which users are OOF/busy on a specific date
-  // Uses server-side API with application permissions (more reliable than client-side delegated)
+  // Function to check which users are OOF/busy on a specific date using getSchedule API
+  // Same logic as planner's fetchOutOfOfficeForPeriod - uses delegated permissions
   const fetchUnavailableUsersForDate = async (date: string, userEmails: string[]): Promise<Map<string, string>> => {
     const unavailableMap = new Map<string, string>();
 
     try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        console.warn('[OOF Check] No access token available');
+        return unavailableMap;
+      }
       if (userEmails.length === 0) return unavailableMap;
 
-      const response = await authFetch('/api/outlook/check-schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails: userEmails, date })
-      });
+      // Use getSchedule API with delegated permissions (same as planner)
+      const batchSize = 20;
+      for (let i = 0; i < userEmails.length; i += batchSize) {
+        const batch = userEmails.slice(i, i + batchSize);
 
-      if (!response.ok) return unavailableMap;
+        const scheduleResponse = await fetch('https://graph.microsoft.com/v1.0/me/calendar/getSchedule', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'outlook.timezone="Europe/Zurich"'
+          },
+          body: JSON.stringify({
+            schedules: batch,
+            startTime: {
+              dateTime: date + 'T00:00:00',
+              timeZone: 'Europe/Zurich'
+            },
+            endTime: {
+              dateTime: date + 'T23:59:59',
+              timeZone: 'Europe/Zurich'
+            },
+            availabilityViewInterval: 1440
+          })
+        });
 
-      const data = await response.json();
+        if (!scheduleResponse.ok) {
+          console.warn('[OOF Check] getSchedule failed:', scheduleResponse.status, await scheduleResponse.text().catch(() => ''));
+          continue;
+        }
 
-      if (data.unavailable) {
-        for (const [email, status] of Object.entries(data.unavailable)) {
-          unavailableMap.set(email.toLowerCase(), status as string);
+        const scheduleData = await scheduleResponse.json();
+
+        if (!scheduleData.value) {
+          console.warn('[OOF Check] No value in schedule response');
+          continue;
+        }
+
+        for (const userSchedule of scheduleData.value) {
+          const userEmail = (userSchedule.scheduleId || '').toLowerCase();
+
+          // Method 1: Check availabilityView (most reliable)
+          // Codes: 0=free, 1=tentative, 2=busy, 3=oof, 4=workingElsewhere
+          if (userSchedule.availabilityView) {
+            const viewCodes = userSchedule.availabilityView.split('');
+            if (viewCodes.some((c: string) => c === '3')) {
+              unavailableMap.set(userEmail, 'oof');
+              continue;
+            }
+            if (viewCodes.some((c: string) => c === '2')) {
+              unavailableMap.set(userEmail, 'busy');
+              continue;
+            }
+          }
+
+          // Method 2: Check scheduleItems as fallback
+          if (userSchedule.scheduleItems) {
+            for (const item of userSchedule.scheduleItems) {
+              if (item.status === 'oof') {
+                unavailableMap.set(userEmail, 'oof');
+                break;
+              }
+              if (item.status === 'busy') {
+                unavailableMap.set(userEmail, 'busy');
+                break;
+              }
+            }
+          }
         }
       }
-    } catch {
-      // check-schedule failed - return empty
+    } catch (error) {
+      console.warn('[OOF Check] Error:', error);
     }
 
     return unavailableMap;
@@ -416,10 +478,13 @@ const DashboardPage = () => {
         categories: ['Shift', shift.name]
       };
 
-      // Send via server-side API route (uses application permissions)
+      // Send via server-side API route (uses delegated Graph token)
+      const graphToken = await getAccessToken();
+      if (!graphToken) throw new Error('No Graph access token');
+
       const outlookResponse = await authFetch('/api/outlook/send-event', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
         body: JSON.stringify({ mailbox, event })
       });
 
@@ -478,7 +543,7 @@ const DashboardPage = () => {
         try {
           await authFetch('/api/outlook/send-event', {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
             body: JSON.stringify({
               mailbox,
               eventId: resendingAssignment.outlookEventId
@@ -520,11 +585,14 @@ const DashboardPage = () => {
     setSyncMessage(null);
 
     try {
-      // Call the server-side cron sync route which uses application permissions
-      // This can read events from shared mailboxes via /users/{mailbox}/events
+      // Call the server-side sync route with delegated Graph token
+      const graphToken = await getAccessToken();
       const syncResponse = await authFetch('/api/outlook/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          ...(graphToken ? { 'X-Graph-Token': graphToken } : {})
+        }
       });
 
       if (!syncResponse.ok) {

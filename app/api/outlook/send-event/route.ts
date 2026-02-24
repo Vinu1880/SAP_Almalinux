@@ -1,41 +1,19 @@
 // app/api/outlook/send-event/route.ts
-// Server-side route that creates Outlook events using application permissions
-// so the organizer is the shared mailbox (not the logged-in admin user)
+// Server-side proxy that creates/deletes Outlook events using the user's delegated Graph token
+// The user must have Calendars.ReadWrite.Shared to create events on the shared mailbox
+// With delegated + "Send As" permissions, the organizer will be the shared mailbox
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 
-// Get application-level access token using client credentials
-async function getAppAccessToken(): Promise<string> {
-  const clientId = process.env.AZURE_AD_CLIENT_ID!;
-  const clientSecret = process.env.AZURE_AD_CLIENT_SECRET!;
-  const tenantId = process.env.AZURE_AD_TENANT_ID!;
-
-  const tokenResponse = await fetch(
-    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        scope: 'https://graph.microsoft.com/.default',
-        client_secret: clientSecret,
-        grant_type: 'client_credentials'
-      })
-    }
-  );
-
-  if (!tokenResponse.ok) {
-    const err = await tokenResponse.text();
-    throw new Error(`Failed to get app access token: ${err}`);
-  }
-
-  const tokenData = await tokenResponse.json();
-  return tokenData.access_token;
+// Extract the Graph access token from the request header
+function getGraphToken(request: NextRequest): string | null {
+  const header = request.headers.get('X-Graph-Token');
+  return header || null;
 }
 
-// POST - Create an Outlook event via the shared mailbox using application permissions
+// POST - Create an Outlook event via the shared mailbox using delegated permissions
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -43,6 +21,14 @@ export async function POST(request: NextRequest) {
   if (rl) return rl;
 
   try {
+    const graphToken = getGraphToken(request);
+    if (!graphToken) {
+      return NextResponse.json(
+        { error: 'Missing Graph access token' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { mailbox, event } = body;
 
@@ -53,15 +39,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const accessToken = await getAppAccessToken();
-
-    // Use /users/{mailbox}/events so the organizer IS the shared mailbox
+    // Use /users/{mailbox}/events with delegated token
+    // Requires Calendars.ReadWrite.Shared + "Send As" permission on the shared mailbox
     const graphUrl = `https://graph.microsoft.com/v1.0/users/${mailbox}/events`;
 
     const outlookResponse = await fetch(graphUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${graphToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(event)
@@ -102,6 +87,14 @@ export async function DELETE(request: NextRequest) {
   if (rl) return rl;
 
   try {
+    const graphToken = getGraphToken(request);
+    if (!graphToken) {
+      return NextResponse.json(
+        { error: 'Missing Graph access token' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { mailbox, eventId } = body;
 
@@ -112,14 +105,12 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const accessToken = await getAppAccessToken();
-
     const graphUrl = `https://graph.microsoft.com/v1.0/users/${mailbox}/events/${eventId}`;
 
     const deleteResponse = await fetch(graphUrl, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${accessToken}`
+        'Authorization': `Bearer ${graphToken}`
       }
     });
 

@@ -1574,6 +1574,14 @@ const processShiftAssignments = async () => {
     setSendingInvitations(true);
 
     try {
+      // Get Graph token for delegated API calls
+      const graphToken = await getAccessToken();
+      if (!graphToken) {
+        alert('Unable to get Graph access token. Please refresh and try again.');
+        setSendingInvitations(false);
+        return;
+      }
+
       // STEP 1: Send Outlook invitations first
       let outlookSuccess = 0;
       let outlookErrors = 0;
@@ -1655,11 +1663,11 @@ const processShiftAssignments = async () => {
 
               const mailbox = assignment.shift.senderMailbox || 'me';
 
-              // Send via server-side API route (uses application permissions)
-              // so the organizer is the shared mailbox, not the admin user
+              // Send via server-side API route with delegated Graph token
+              // The admin user must have "Send As" on the shared mailbox
               const outlookResponse = await authFetch('/api/outlook/send-event', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
                 body: JSON.stringify({ mailbox, event })
               });
 

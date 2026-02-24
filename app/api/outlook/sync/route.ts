@@ -1,39 +1,12 @@
 // app/api/outlook/sync/route.ts
-// Server-side sync route that reads Outlook event responses using application permissions
+// Server-side sync route that reads Outlook event responses using delegated permissions
+// The client passes the Graph token via X-Graph-Token header
 // Uses /users/{mailbox}/events/{eventId} to read attendee responses
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
-
-// Get application-level access token using client credentials
-async function getAppAccessToken(): Promise<string> {
-  const clientId = process.env.AZURE_AD_CLIENT_ID!;
-  const clientSecret = process.env.AZURE_AD_CLIENT_SECRET!;
-  const tenantId = process.env.AZURE_AD_TENANT_ID!;
-
-  const tokenResponse = await fetch(
-    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        scope: 'https://graph.microsoft.com/.default',
-        client_secret: clientSecret,
-        grant_type: 'client_credentials'
-      })
-    }
-  );
-
-  if (!tokenResponse.ok) {
-    throw new Error('Failed to get app access token');
-  }
-
-  const tokenData = await tokenResponse.json();
-  return tokenData.access_token;
-}
 
 // Map Outlook responses to our statuses
 function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'REFUSED' | 'PENDING' {
@@ -56,6 +29,14 @@ export async function POST(request: NextRequest) {
   if (rl) return rl;
 
   try {
+    const graphToken = request.headers.get('X-Graph-Token');
+    if (!graphToken) {
+      return NextResponse.json(
+        { error: 'Missing Graph access token' },
+        { status: 401 }
+      );
+    }
+
     // Retrieve all PENDING assignments with an outlookEventId
     const pendingAssignments = await prisma.shiftAssignment.findMany({
       where: {
@@ -77,8 +58,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const accessToken = await getAppAccessToken();
-
     let updatedCount = 0;
     let errorCount = 0;
 
@@ -87,15 +66,15 @@ export async function POST(request: NextRequest) {
         const { outlookEventId, user, shift, id } = assignment;
         if (!outlookEventId) continue;
 
-        // Use /users/{mailbox}/events/{eventId} with application permissions
-        const mailbox = shift.senderMailbox || process.env.SYNC_ADMIN_EMAIL || 'me';
+        // Use /users/{mailbox}/events/{eventId} with delegated token
+        const mailbox = shift.senderMailbox || 'me';
         const eventUrl = mailbox === 'me'
           ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
           : `https://graph.microsoft.com/v1.0/users/${mailbox}/events/${outlookEventId}`;
 
         const eventResponse = await fetch(eventUrl, {
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            'Authorization': `Bearer ${graphToken}`,
             'Content-Type': 'application/json'
           }
         });
@@ -137,7 +116,7 @@ export async function POST(request: NextRequest) {
               await fetch(deleteUrl, {
                 method: 'DELETE',
                 headers: {
-                  'Authorization': `Bearer ${accessToken}`
+                  'Authorization': `Bearer ${graphToken}`
                 }
               });
             } catch {
