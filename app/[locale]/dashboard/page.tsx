@@ -25,7 +25,10 @@ import {
   AlertCircle,
   Building2,
   X,
-  FilterX
+  FilterX,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,13 +59,11 @@ import { useTeams } from '@/lib/hooks/useTeams';
 import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useShifts } from '@/lib/hooks/useShifts';
 import { useAuthFetch } from '@/lib/hooks/useAuthFetch';
-import { useAuth } from '@/contexts/AuthContext';
 
 const DashboardPage = () => {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
   const authFetch = useAuthFetch();
-  const { getAccessToken } = useAuth();
   const [dateFilter, setDateFilter] = useState<'7d' | '30d' | '90d' | '180d' | 'all'>('7d');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedView, setSelectedView] = useState<'shifts' | 'users'>('shifts');
@@ -119,157 +120,39 @@ const DashboardPage = () => {
   const [usersAvailability, setUsersAvailability] = useState<{
     available: any[];
     alreadyAssigned: any[];
+    refused: any[];
     unavailable: Array<{ user: any; reason: string }>;
-  }>({ available: [], alreadyAssigned: [], unavailable: [] });
+  }>({ available: [], alreadyAssigned: [], refused: [], unavailable: [] });
   const [checkingAvailability, setCheckingAvailability] = useState(false);
-  const [outOfOfficeEvents, setOutOfOfficeEvents] = useState<any[]>([]);
 
-  // Function to fetch Out of Office events for a specific date using getSchedule API
-  const fetchOutOfOfficeForDate = async (date: string, userEmails?: string[]): Promise<any[]> => {
+  // Function to check which users are OOF/busy on a specific date
+  // Uses server-side API with application permissions (more reliable than client-side delegated)
+  const fetchUnavailableUsersForDate = async (date: string, userEmails: string[]): Promise<Map<string, string>> => {
+    const unavailableMap = new Map<string, string>();
+
     try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) return [];
+      if (userEmails.length === 0) return unavailableMap;
 
-      // Collect emails to check
-      const emails = userEmails || users?.filter((u: any) => u.email && (u.status === 'ACTIVE' || u.status === 'active')).map((u: any) => u.email) || [];
-      if (emails.length === 0) return [];
+      const response = await authFetch('/api/outlook/check-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails: userEmails, date })
+      });
 
-      const allOutOfOfficeEvents: any[] = [];
+      if (!response.ok) return unavailableMap;
 
-      // Use getSchedule API (same as planner) - batches of 20
-      const batchSize = 20;
-      for (let i = 0; i < emails.length; i += batchSize) {
-        const batch = emails.slice(i, i + batchSize);
+      const data = await response.json();
 
-        const scheduleResponse = await fetch('https://graph.microsoft.com/v1.0/me/calendar/getSchedule', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'outlook.timezone="Europe/Zurich"'
-          },
-          body: JSON.stringify({
-            schedules: batch,
-            startTime: {
-              dateTime: date + 'T00:00:00',
-              timeZone: 'Europe/Zurich'
-            },
-            endTime: {
-              dateTime: date + 'T23:59:59',
-              timeZone: 'Europe/Zurich'
-            },
-            availabilityViewInterval: 1440
-          })
-        });
-
-        if (!scheduleResponse.ok) continue;
-
-        const scheduleData = await scheduleResponse.json();
-
-        for (const userSchedule of scheduleData.value) {
-          const userEmail = userSchedule.scheduleId?.toLowerCase() || '';
-          let hasScheduleItem = false;
-
-          // Check scheduleItems first (detailed events)
-          if (userSchedule.scheduleItems && userSchedule.scheduleItems.length > 0) {
-            for (const item of userSchedule.scheduleItems) {
-              if (item.status === 'oof' || item.status === 'busy') {
-                hasScheduleItem = true;
-                const endDt = new Date(item.end.dateTime);
-                endDt.setDate(endDt.getDate() - 1);
-                const adjustedEnd = `${endDt.getFullYear()}-${String(endDt.getMonth() + 1).padStart(2, '0')}-${String(endDt.getDate()).padStart(2, '0')}T23:59:59`;
-
-                allOutOfOfficeEvents.push({
-                  id: `schedule-${userEmail}-${item.start.dateTime}`,
-                  subject: item.subject || (item.status === 'oof' ? 'Out of Office' : 'Busy'),
-                  start: { dateTime: item.start.dateTime },
-                  end: { dateTime: adjustedEnd },
-                  showAs: item.status,
-                  isAllDay: false,
-                  organizer: { emailAddress: { address: userEmail, name: '' } },
-                  attendees: [{ emailAddress: { address: userEmail, name: '' } }]
-                });
-              }
-            }
-          }
-
-          // Fallback: check availabilityView if no scheduleItems were found
-          // availabilityView codes: 0=free, 1=tentative, 2=busy, 3=oof, 4=workingElsewhere
-          if (!hasScheduleItem && userSchedule.availabilityView) {
-            const viewCodes = userSchedule.availabilityView.split('');
-            const hasOof = viewCodes.some((c: string) => c === '3');
-            const hasBusy = viewCodes.some((c: string) => c === '2');
-
-            if (hasOof || hasBusy) {
-              allOutOfOfficeEvents.push({
-                id: `availability-${userEmail}-${date}`,
-                subject: hasOof ? 'Out of Office' : 'Busy',
-                start: { dateTime: date + 'T00:00:00' },
-                end: { dateTime: date + 'T23:59:59' },
-                showAs: hasOof ? 'oof' : 'busy',
-                isAllDay: true,
-                organizer: { emailAddress: { address: userEmail, name: '' } },
-                attendees: [{ emailAddress: { address: userEmail, name: '' } }]
-              });
-            }
-          }
+      if (data.unavailable) {
+        for (const [email, status] of Object.entries(data.unavailable)) {
+          unavailableMap.set(email.toLowerCase(), status as string);
         }
       }
-
-      return allOutOfOfficeEvents;
-    } catch (error) {
-      return [];
-    }
-  };
-
-  // Function to check if a user is available (not OOF)
-  const isUserAvailable = (user: any, date: string, oofEvents: any[], shift?: any) => {
-    const userEmail = user.email.toLowerCase();
-
-    let dateStart: Date;
-    let dateEnd: Date;
-
-    if (shift?.startTime && shift?.endTime) {
-      const normalizeTime = (time: string) => {
-        const parts = time.split(':');
-        return `${parts[0]}:${parts[1]}`;
-      };
-
-      const startTime = normalizeTime(shift.startTime);
-      const endTime = normalizeTime(shift.endTime);
-
-      dateStart = new Date(date + `T${startTime}:00`);
-      dateEnd = new Date(date + `T${endTime}:00`);
-    } else {
-      dateStart = new Date(date + 'T00:00:00');
-      dateEnd = new Date(date + 'T23:59:59');
+    } catch {
+      // check-schedule failed - return empty
     }
 
-    const conflicts = oofEvents.filter(event => {
-      const eventStart = new Date(event.start.dateTime);
-      const eventEnd = new Date(event.end.dateTime);
-      const organizerEmail = event.organizer?.emailAddress?.address?.toLowerCase() || '';
-
-      const isUserInvolved = organizerEmail === userEmail ||
-        event.attendees?.some((attendee: any) =>
-          attendee.emailAddress?.address?.toLowerCase() === userEmail);
-
-      if (!isUserInvolved) return false;
-
-      let adjustedEventEnd = eventEnd;
-      if (event.isAllDay) {
-        adjustedEventEnd = new Date(eventEnd.getTime() - 1000);
-      }
-
-      const hasOverlap = eventStart < dateEnd && adjustedEventEnd > dateStart;
-
-      return hasOverlap;
-    });
-
-    return {
-      available: conflicts.length === 0,
-      conflictEvents: conflicts
-    };
+    return unavailableMap;
   };
 
   // Function to check if a user works on a given day
@@ -326,8 +209,7 @@ const DashboardPage = () => {
   // Follows the same logic as the planner dropdown (which works correctly)
   React.useEffect(() => {
     if (!resendingAssignment) {
-      setUsersAvailability({ available: [], alreadyAssigned: [], unavailable: [] });
-      setOutOfOfficeEvents([]);
+      setUsersAvailability({ available: [], alreadyAssigned: [], refused: [], unavailable: [] });
       return;
     }
 
@@ -343,20 +225,13 @@ const DashboardPage = () => {
         const dateStr = normalizeDate(resendingAssignment.date);
         const shift = resendingAssignment.shift;
 
-        // Get eligible users for the shift (same logic as planner)
-        const eligibleUsers = getEligibleUsersForShift(
-          shift,
-          resendingAssignment.userId // exclude the user who refused
-        );
+        // Get eligible users for the shift (don't exclude anyone - let them be categorized)
+        const eligibleUsers = getEligibleUsersForShift(shift);
 
-        // Fetch Out of Office using getSchedule API
+        // Fetch OOF/busy status using getSchedule API
+        // Returns a Map of email -> 'oof' | 'busy'
         const eligibleEmails = eligibleUsers.filter(u => u.email).map(u => u.email);
-        const oofEvents = await fetchOutOfOfficeForDate(dateStr, eligibleEmails);
-        setOutOfOfficeEvents(oofEvents);
-
-        // Get all assignments for this date from DB (not just local state)
-        // This ensures we have the latest status (ACCEPTED, REFUSED, etc.)
-        const assignmentDateNorm = dateStr;
+        const unavailableUsersMap = await fetchUnavailableUsersForDate(dateStr, eligibleEmails);
 
         // Calculate prev/next dates for consecutive shift check
         const assignmentDate = new Date(dateStr);
@@ -370,13 +245,26 @@ const DashboardPage = () => {
         // Categorize each eligible user (same as planner)
         const available: any[] = [];
         const alreadyAssigned: any[] = [];
+        const refused: any[] = [];
         const unavailable: Array<{ user: any; reason: string }> = [];
 
         for (const user of eligibleUsers) {
-          // 1. Check if user has an ACTIVE (non-refused) assignment on this date
-          //    REFUSED assignments should NOT block the user
+          // 1. Check if user has REFUSED this specific shift on this date
+          const refusedAssignment = assignments.find(a =>
+            normalizeDate(a.date) === dateStr &&
+            a.userId === user.id &&
+            a.shiftId === resendingAssignment.shiftId &&
+            a.status === 'REFUSED'
+          );
+
+          if (refusedAssignment) {
+            refused.push(user);
+            continue;
+          }
+
+          // 2. Check if user has an ACTIVE (PENDING/ACCEPTED) assignment on this date
           const activeAssignmentToday = assignments.find(a =>
-            normalizeDate(a.date) === assignmentDateNorm &&
+            normalizeDate(a.date) === dateStr &&
             a.userId === user.id &&
             a.id !== resendingAssignment.id &&
             a.status !== 'REFUSED' &&
@@ -388,7 +276,7 @@ const DashboardPage = () => {
             continue;
           }
 
-          // 2. Check public holidays
+          // 3. Check public holidays
           const canton = user.location || 'BE';
           if (isUserOnHoliday(dateStr, canton)) {
             const holidayForDate = holidays.find(h => {
@@ -402,21 +290,25 @@ const DashboardPage = () => {
             continue;
           }
 
-          // 3. Check if user works this day (same as planner isUserWorkingOnDay)
+          // 4. Check if user works this day
           if (!isUserWorkingOnDay(user, dateStr, shift?.startTime)) {
             unavailable.push({ user, reason: t('reasonNotWorkingToday') });
             continue;
           }
 
-          // 4. Check Out of Office (always check, even if oofEvents is empty the function handles it)
-          const oofCheck = isUserAvailable(user, dateStr, oofEvents, shift);
-          if (!oofCheck.available) {
-            unavailable.push({ user, reason: t('reasonOutOfOffice') });
+          // 5. Check Out of Office / Busy using the Map from getSchedule
+          // If user passed steps 1-2 (not refused, not already assigned) but
+          // getSchedule says they're oof or busy, they have a conflict
+          const userOofStatus = unavailableUsersMap.get(user.email?.toLowerCase());
+          if (userOofStatus === 'oof' || userOofStatus === 'busy') {
+            unavailable.push({
+              user,
+              reason: userOofStatus === 'oof' ? t('reasonOutOfOffice') : t('reasonOutOfOffice')
+            });
             continue;
           }
 
-          // 5. Check consecutive shifts (same logic as planner: check prev/next day)
-          //    Use DB assignments instead of API call for consistency
+          // 6. Check consecutive shifts (same logic as planner: check prev/next day)
           const hasConsecutiveShift = assignments.some(a => {
             const aDateNorm = normalizeDate(a.date);
             return (aDateNorm === prevDateStr || aDateNorm === nextDateStr) &&
@@ -426,7 +318,6 @@ const DashboardPage = () => {
           });
 
           if (hasConsecutiveShift) {
-            // Find shift names for the constraint message
             const consecutiveAssignments = assignments.filter(a => {
               const aDateNorm = normalizeDate(a.date);
               return (aDateNorm === prevDateStr || aDateNorm === nextDateStr) &&
@@ -439,11 +330,11 @@ const DashboardPage = () => {
             continue;
           }
 
-          // 6. All checks passed - user is available
+          // 7. All checks passed - user is available
           available.push(user);
         }
 
-        setUsersAvailability({ available, alreadyAssigned, unavailable });
+        setUsersAvailability({ available, alreadyAssigned, refused, unavailable });
       } catch (error) {
         // Error calculating availability
       } finally {
@@ -515,7 +406,7 @@ const DashboardPage = () => {
           }
         ],
         location: {
-          displayName: ''
+          displayName: 'Office'
         },
         isReminderOn: true,
         reminderMinutesBeforeStart: 1440,
@@ -1131,14 +1022,14 @@ const DashboardPage = () => {
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('user')}</th>
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('shift')}</th>
                             <th
-                              className="text-left text-slate-600 font-medium py-3 px-2 cursor-pointer select-none hover:text-slate-900 transition-colors"
+                              className="text-left text-slate-600 font-medium py-3 px-2 cursor-pointer select-none group"
                               onClick={() => setSortByDate(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc')}
                             >
-                              <span className="inline-flex items-center gap-1">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 -mx-2 -my-1 rounded-md hover:bg-slate-100 transition-colors">
                                 {t('date')}
-                                {sortByDate === 'asc' && <span className="text-blue-600">↑</span>}
-                                {sortByDate === 'desc' && <span className="text-blue-600">↓</span>}
-                                {!sortByDate && <span className="text-slate-400">↕</span>}
+                                {sortByDate === 'asc' && <ArrowUp className="w-3.5 h-3.5 text-blue-600" />}
+                                {sortByDate === 'desc' && <ArrowDown className="w-3.5 h-3.5 text-blue-600" />}
+                                {!sortByDate && <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500" />}
                               </span>
                             </th>
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('status')}</th>
@@ -1380,6 +1271,7 @@ const DashboardPage = () => {
                 {/* No eligible users */}
                 {usersAvailability.available.length === 0 &&
                  usersAvailability.alreadyAssigned.length === 0 &&
+                 usersAvailability.refused.length === 0 &&
                  usersAvailability.unavailable.length === 0 && (
                   <div className="text-center py-8">
                     <AlertCircle className="w-12 h-12 mx-auto mb-3 text-orange-400" />
@@ -1482,6 +1374,55 @@ const DashboardPage = () => {
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Users who refused this shift (still selectable in case they change their mind) */}
+                {usersAvailability.refused.length > 0 && (
+                  <div>
+                    <div className="border-t pt-3">
+                      <h4 className="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-2">
+                        <XCircle className="w-4 h-4 text-slate-500" />
+                        {t('refusedThisShift', { count: usersAvailability.refused.length })}
+                      </h4>
+                      <div className="space-y-2">
+                        {usersAvailability.refused.map(user => (
+                          <div
+                            key={user.id}
+                            onClick={() => setSelectedNewUser(user.id)}
+                            className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                              selectedNewUser === user.id
+                                ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                : 'border-slate-200 bg-slate-50 hover:border-blue-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 flex-1">
+                                <Avatar className="w-8 h-8">
+                                  <AvatarFallback className="text-xs bg-slate-500 text-white">
+                                    {user.firstName[0]}{user.lastName[0]}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                  <p className="font-medium text-slate-700">
+                                    {user.firstName} {user.lastName}
+                                  </p>
+                                  <p className="text-xs text-slate-400">
+                                    {user.team?.name || tCommon('noTeam')}
+                                  </p>
+                                </div>
+                                <Badge variant="outline" className="text-xs bg-white text-slate-500">
+                                  {t('refused')}
+                                </Badge>
+                              </div>
+                              {selectedNewUser === user.id && (
+                                <CheckCircle className="w-5 h-5 text-blue-600 ml-2" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

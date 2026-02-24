@@ -847,6 +847,30 @@ const getUserCantonFromLocation = (location: string): string => {
     return [...teamUsers, ...includedUsers];
   };
 
+  // Get all user IDs that are members of the currently selected shifts/piketts
+  const getSelectedShiftsMemberIds = (): Set<string> => {
+    const memberIds = new Set<string>();
+    for (const shiftId of selectedShifts) {
+      const shift = shifts.find(s => s.id === shiftId);
+      if (!shift) continue;
+      availableUsers.forEach(u => {
+        const inTeam = u.teamId === shift.teamId && !(shift.excludedUserIds || []).includes(u.id);
+        const included = (shift.includedUserIds || []).includes(u.id);
+        if (inTeam || included) memberIds.add(u.id);
+      });
+    }
+    for (const pikettId of selectedPiketts) {
+      const pikett = piketts.find(p => p.id === pikettId);
+      if (!pikett) continue;
+      availableUsers.forEach(u => {
+        const inTeam = u.teamId === pikett.teamId && !(pikett.excludedUserIds || []).includes(u.id);
+        const included = (pikett.includedUserIds || []).includes(u.id);
+        if (inTeam || included) memberIds.add(u.id);
+      });
+    }
+    return memberIds;
+  };
+
   const hasConsecutiveShift = (userId: string, date: string, currentAssignments: ShiftAssignment[]): boolean => {
     const currentDate = new Date(date);
     const prevDate = new Date(currentDate);
@@ -1616,7 +1640,7 @@ const processShiftAssignments = async () => {
                   }
                 ],
                 location: {
-                  displayName: ''
+                  displayName: 'Office'
                 },
                 isReminderOn: true,
                 reminderMinutesBeforeStart: 1440, // 24h before
@@ -2414,16 +2438,12 @@ useEffect(() => {
                 <div className="mt-4 pt-4 border-t">
                   <div className="flex flex-wrap items-center gap-4 text-xs">
                     <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-green-100 rounded"></div>
-                      <span className="text-slate-600">{t('assignedLegend')}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-orange-100 rounded"></div>
-                      <span className="text-slate-600">{t('unfilledLegend')}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <RotateCw className="w-3 h-3 text-purple-600" />
+                      <RotateCw className="w-3 h-3 text-orange-600" />
                       <span className="text-slate-600">{t('automaticRotation')}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 text-violet-600" />
+                      <span className="text-slate-600">{t('outOfOffice')}</span>
                     </div>
                     <div className="border-l pl-4 flex items-center gap-4">
                       <div className="flex items-center gap-1">
@@ -2446,26 +2466,28 @@ useEffect(() => {
 
             {/* Compact grid: Users with rotation + Out of Office */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Users with rotation */}
-              {availableUsers.filter(u => u.rotationConfig?.patternId).length > 0 && (
+              {/* Users with rotation (only members of selected shifts) */}
+              {(() => {
+                const memberIds = getSelectedShiftsMemberIds();
+                const rotationUsers = availableUsers.filter(u => u.rotationConfig?.patternId && memberIds.has(u.id));
+                return rotationUsers.length > 0 ? (
                 <Card className="bg-white border-0 shadow-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base font-semibold text-slate-800 flex items-center">
-                      <RotateCw className="w-4 h-4 mr-2 text-purple-600" />
-                      {t('usersWithRotationCount', { count: availableUsers.filter(u => u.rotationConfig?.patternId).length })}
+                      <RotateCw className="w-4 h-4 mr-2 text-orange-600" />
+                      {t('usersWithRotationCount', { count: rotationUsers.length })}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="max-h-[280px] overflow-y-auto pr-2 space-y-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
-                      {availableUsers
-                        .filter(u => u.rotationConfig?.patternId)
+                      {rotationUsers
                         .map(user => {
                           const pattern = rotationPatterns.find(p => p.id === user.rotationConfig.patternId);
                           return (
-                            <div key={user.id} className="flex items-center justify-between p-2.5 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg">
+                            <div key={user.id} className="flex items-center justify-between p-2.5 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg">
                               <div className="flex items-center space-x-2.5">
                                 <Avatar className="w-8 h-8">
-                                  <AvatarFallback className="text-xs bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
+                                  <AvatarFallback className="text-xs bg-gradient-to-br from-orange-500 to-amber-600 text-white">
                                     {user.firstName?.[0]}{user.lastName?.[0]}
                                   </AvatarFallback>
                                 </Avatar>
@@ -2515,14 +2537,16 @@ useEffect(() => {
                     </div>
                   </CardContent>
                 </Card>
-              )}
+              ) : null})()}
 
-              {/* Users Out of Office */}
-              {startDate && endDate && (
+              {/* Users Out of Office (only members of selected shifts) */}
+              {startDate && endDate && ((() => {
+                const memberIds = getSelectedShiftsMemberIds();
+                return (
                 <Card className="bg-white border-0 shadow-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base font-semibold text-slate-800 flex items-center">
-                      <AlertCircle className="w-4 h-4 mr-2 text-orange-600" />
+                      <AlertCircle className="w-4 h-4 mr-2 text-violet-600" />
                       {t('outOfOffice')} ({(() => {
                         const usersOOF = new Set<string>();
                         outOfOfficeEvents
@@ -2534,7 +2558,11 @@ useEffect(() => {
                             const periodEnd = new Date(endDate);
 
                             if (eventStart <= periodEnd && eventEnd >= periodStart) {
-                              usersOOF.add(event.organizer?.emailAddress?.address || '');
+                              const userEmail = event.organizer?.emailAddress?.address?.toLowerCase();
+                              const user = availableUsers.find(u => u.email?.toLowerCase() === userEmail);
+                              if (user && memberIds.has(user.id)) {
+                                usersOOF.add(userEmail || '');
+                              }
                             }
                           });
                         return usersOOF.size;
@@ -2560,7 +2588,7 @@ useEffect(() => {
                               const userEmail = event.organizer?.emailAddress?.address?.toLowerCase();
                               if (userEmail) {
                                 const user = availableUsers.find(u => u.email?.toLowerCase() === userEmail);
-                                if (user) {
+                                if (user && memberIds.has(user.id)) {
                                   const existing = userEventsMap.get(user.id);
                                   if (existing) {
                                     existing.events.push(event);
@@ -2632,10 +2660,10 @@ useEffect(() => {
                           const reasonText = Array.from(allReasons).join(', ');
 
                           return (
-                            <div key={user.id} className="flex items-center justify-between p-2.5 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg">
+                            <div key={user.id} className="flex items-center justify-between p-2.5 bg-gradient-to-r from-violet-50 to-purple-50 rounded-lg">
                               <div className="flex items-center space-x-2.5 flex-1 min-w-0">
                                 <Avatar className="w-8 h-8 flex-shrink-0">
-                                  <AvatarFallback className="text-xs bg-gradient-to-br from-orange-500 to-amber-600 text-white">
+                                  <AvatarFallback className="text-xs bg-gradient-to-br from-violet-500 to-purple-600 text-white">
                                     {user.firstName?.[0]}{user.lastName?.[0]}
                                   </AvatarFallback>
                                 </Avatar>
@@ -2648,9 +2676,9 @@ useEffect(() => {
                               </div>
                               <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-2">
                                 {rangeStrings.map((rangeStr, idx) => (
-                                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-100 rounded-md">
-                                    <Calendar className="w-3.5 h-3.5 text-orange-600" />
-                                    <span className="text-xs font-medium text-orange-700 whitespace-nowrap">
+                                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-100 rounded-md">
+                                    <Calendar className="w-3.5 h-3.5 text-violet-600" />
+                                    <span className="text-xs font-medium text-violet-700 whitespace-nowrap">
                                       {rangeStr}
                                     </span>
                                   </div>
@@ -2663,7 +2691,7 @@ useEffect(() => {
                     </div>
                   </CardContent>
                 </Card>
-              )}
+              )})())}
             </div>
           </div>
         </div>
@@ -2841,12 +2869,23 @@ useEffect(() => {
                                         const usersWithOOF: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
                                         const usersWithConsecutiveShifts: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
                                         const usersNotWorkingToday: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
+                                        const usersInactive: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
                                         const available: any[] = [];
 
                                         for (const user of eligibleUsers) {
                                           // Do not process the currently assigned user
                                           if (assignment.assignedUsers.length > 0 &&
                                               assignment.assignedUsers[0].id === user.id) {
+                                            continue;
+                                          }
+
+                                          // 0. Check if user is INACTIVE
+                                          if (user.status && user.status !== 'ACTIVE' && user.status !== 'active') {
+                                            usersInactive.push({
+                                              user,
+                                              reason: t('reasonInactive'),
+                                              conflictEvents: []
+                                            });
                                             continue;
                                           }
 
@@ -2902,6 +2941,7 @@ useEffect(() => {
 
                                         // Combine all constraints for display
                                         const currentlyUnavailable = [
+                                          ...usersInactive,
                                           ...usersWithOOF,
                                           ...usersWithConsecutiveShifts,
                                           ...usersNotWorkingToday
