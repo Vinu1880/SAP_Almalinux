@@ -37,9 +37,6 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   outputFileTracingRoot: __dirname,
   webpack: (config, { isServer, webpack }) => {
     // Fix pour Windows - limiter les chemins de recherche

@@ -1,5 +1,6 @@
 // lib/prisma.ts
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 // Global declaration to avoid multiple instances in development
 declare global {
@@ -7,8 +8,13 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
+function createPrismaClient() {
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  return new PrismaClient({ adapter });
+}
+
 // Create a single PrismaClient instance
-const prisma = global.prisma || new PrismaClient();
+const prisma = global.prisma || createPrismaClient();
 
 // In development, save the instance globally to avoid reconnections
 if (process.env.NODE_ENV !== 'production') {

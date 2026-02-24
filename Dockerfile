@@ -1,5 +1,5 @@
 # =============================================
-# Dockerfile Multi-Stage pour Next.js + Prisma
+# Dockerfile Multi-Stage pour Next.js + Prisma 7
 # Compatible Windows, Linux (AlmaLinux), macOS
 # =============================================
 
@@ -11,9 +11,10 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 
 RUN npm ci --legacy-peer-deps
-RUN ./node_modules/.bin/prisma generate
+RUN npx prisma generate
 
 # =============================================
 # Stage 2: Builder
@@ -23,6 +24,7 @@ RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/generated ./generated
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -38,7 +40,6 @@ ENV NEXT_PUBLIC_AZURE_AD_TENANT_ID=${NEXT_PUBLIC_AZURE_AD_TENANT_ID}
 ENV NEXT_PUBLIC_AZURE_AD_REDIRECT_URI=${NEXT_PUBLIC_AZURE_AD_REDIRECT_URI}
 ENV NEXT_PUBLIC_CRON_SECRET=${NEXT_PUBLIC_CRON_SECRET}
 
-RUN ./node_modules/.bin/prisma generate
 RUN npm run build
 
 # =============================================
@@ -63,11 +64,11 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma CLI for migrations + generated client
+# Prisma CLI for migrations + config
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # i18n files (next-intl)
 COPY --from=builder /app/messages ./messages

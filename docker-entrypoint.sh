@@ -10,18 +10,25 @@ echo "Autoplanner - Démarrage du conteneur"
 echo "==================================="
 
 # Attendre que la base de données soit prête
-echo "[1/3] Vérification de la connexion à la base de données..."
+echo "[1/4] Vérification de la connexion à la base de données..."
 
 max_retries=30
 retry_count=0
 
+# Extract host and port from DATABASE_URL for pg_isready-style check
+DB_HOST=$(echo "$DATABASE_URL" | sed -n 's|.*@\([^:/]*\).*|\1|p')
+DB_PORT=$(echo "$DATABASE_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
+DB_HOST="${DB_HOST:-sap-postgres}"
+DB_PORT="${DB_PORT:-5432}"
+
 while [ $retry_count -lt $max_retries ]; do
     if node -e "
-        const { PrismaClient } = require('@prisma/client');
-        const prisma = new PrismaClient();
-        prisma.\$connect()
-            .then(() => { console.log('DB connectée'); process.exit(0); })
-            .catch(() => process.exit(1));
+        const net = require('net');
+        const s = new net.Socket();
+        s.setTimeout(2000);
+        s.connect($DB_PORT, '$DB_HOST', () => { s.destroy(); process.exit(0); });
+        s.on('error', () => process.exit(1));
+        s.on('timeout', () => { s.destroy(); process.exit(1); });
     " 2>/dev/null; then
         echo "Base de données connectée!"
         break
@@ -38,7 +45,7 @@ if [ $retry_count -eq $max_retries ]; then
 fi
 
 # Exécuter les migrations Prisma
-echo "[2/3] Application des migrations Prisma..."
+echo "[2/4] Application des migrations Prisma..."
 npx prisma migrate deploy 2>/dev/null || {
     echo "Note: Pas de nouvelles migrations à appliquer ou première exécution"
     echo "Synchronisation du schéma..."
