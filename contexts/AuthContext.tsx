@@ -14,7 +14,6 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   loginWithSSO: () => Promise<void>;
-  loginWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;
 }
@@ -85,39 +84,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * TEMPORARY - Email/password login
-   */
-  const loginWithEmail = async (email: string, password: string) => {
-    try {
-      setIsLoading(true);
-
-      const tempAccount: AccountInfo = {
-        homeAccountId: 'temp-' + Date.now(),
-        environment: 'local',
-        tenantId: 'local',
-        username: email,
-        localAccountId: 'temp-' + Date.now(),
-        name: email.split('@')[0],
-      };
-
-      setAccount(tempAccount);
-      setIsAuthenticated(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /**
    * Logout
    */
   const logout = async () => {
     try {
       setIsLoading(true);
 
-      if (msalInstance && account?.homeAccountId.startsWith('temp-')) {
-        setAccount(null);
-        setIsAuthenticated(false);
-      } else if (msalInstance && account) {
+      if (msalInstance && account) {
         await msalInstance.logoutPopup({ account });
         setAccount(null);
         setIsAuthenticated(false);
@@ -157,7 +130,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated,
         isLoading,
         loginWithSSO,
-        loginWithEmail,
         logout,
         getAccessToken,
       }}

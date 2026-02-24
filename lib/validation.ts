@@ -70,16 +70,6 @@ export const createPikettSchema = z.object({
 });
 export const updatePikettSchema = createPikettSchema.partial();
 
-// Assignment (legacy endpoint)
-export const createAssignmentsSchema = z.object({
-  shiftId: cuidSchema,
-  assignments: z.array(z.object({
-    userId: cuidSchema,
-    date: z.string(),
-    status: z.enum(['PENDING', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional().default('PENDING'),
-    reason: z.string().max(500).nullable().optional(),
-  })).min(1).max(500),
-});
 export const updateAssignmentSchema = z.object({
   status: z.enum(['PENDING', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional(),
   reason: z.string().max(500).nullable().optional(),
@@ -99,11 +89,6 @@ export const createBulkShiftAssignmentsSchema = z.object({
     outlookEventId: z.string().max(255).nullable().optional(),
   })).min(1).max(1000),
 });
-export const checkConsecutiveSchema = z.object({
-  userId: cuidSchema,
-  date: z.string(),
-});
-
 export const createRotationPatternSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).nullable().optional(),
