@@ -30,7 +30,9 @@ import {
   ArrowUp,
   ArrowDown,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,19 +62,21 @@ import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useShifts } from '@/lib/hooks/useShifts';
-import { useAuthFetch } from '@/lib/hooks/useAuthFetch';
+import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAutoSync } from '@/contexts/AutoSyncContext';
 
 const DashboardPage = () => {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
   const authFetch = useAuthFetch();
+  const isReady = useAuthReady();
   const { getAccessToken } = useAuth();
   const [dateFilter, setDateFilter] = useState<'7d' | '30d' | '90d' | '180d' | 'all'>('7d');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
-  const [selectedView, setSelectedView] = useState<'shifts' | 'users'>('shifts');
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [selectedView, setSelectedView] = useState<'shifts' | 'users' | 'calendar'>('shifts');
+  const { nextSyncIn, syncing, syncMessage, triggerSync, clearSyncMessage } = useAutoSync();
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [resendingAssignment, setResendingAssignment] = useState<any | null>(null);
   const [selectedNewUser, setSelectedNewUser] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
@@ -89,6 +93,14 @@ const DashboardPage = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Calendar state
+  const now = new Date();
+  const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
+  const [calendarYear, setCalendarYear] = useState(now.getFullYear());
+  const [calendarAssignments, setCalendarAssignments] = useState<any[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
 
   // Function to reset all filters
   const resetFilters = () => {
@@ -120,6 +132,67 @@ const DashboardPage = () => {
 
   const { users, loading: usersLoading } = useUsers();
   const { teams, loading: teamsLoading } = useTeams();
+
+  // Calendar helpers & fetch
+  const generateCalendarDays = (): (Date | null)[] => {
+    const firstDay = new Date(calendarYear, calendarMonth, 1);
+    const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+    const startPadding = (firstDay.getDay() + 6) % 7; // Monday = 0
+    const days: (Date | null)[] = Array(startPadding).fill(null);
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      days.push(new Date(calendarYear, calendarMonth, d));
+    }
+    while (days.length % 7 !== 0) days.push(null);
+    return days;
+  };
+
+  const calendarByDate = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    calendarAssignments.forEach(a => {
+      const key = new Date(a.date).toISOString().split('T')[0];
+      (map[key] ||= []).push(a);
+    });
+    return map;
+  }, [calendarAssignments]);
+
+  const statusDotColor = (status: string) => {
+    switch (status) {
+      case 'ACCEPTED': return 'bg-green-500';
+      case 'REFUSED': return 'bg-red-500';
+      case 'PENDING': return 'bg-blue-500';
+      case 'TENTATIVE': return 'bg-orange-500';
+      case 'CANCELLED': return 'bg-gray-400';
+      default: return 'bg-slate-300';
+    }
+  };
+
+  const fetchCalendarAssignments = React.useCallback(async () => {
+    setCalendarLoading(true);
+    try {
+      const firstDay = new Date(calendarYear, calendarMonth, 1);
+      const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+      const startDate = firstDay.toISOString().split('T')[0];
+      const endDate = lastDay.toISOString().split('T')[0];
+      const params = new URLSearchParams({ startDate, endDate });
+      if (selectedTeam !== 'all') params.append('teamId', selectedTeam);
+      const res = await authFetch(`/api/shift-assignments?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarAssignments(data);
+      }
+    } catch {
+      // Calendar fetch error
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [calendarMonth, calendarYear, selectedTeam, authFetch]);
+
+  React.useEffect(() => {
+    if (isReady && selectedView === 'calendar') {
+      fetchCalendarAssignments();
+    }
+  }, [isReady, selectedView, fetchCalendarAssignments]);
+
   const { holidays, isUserOnHoliday } = useHolidays();
   const { shifts, loading: shiftsLoading } = useShifts();
 
@@ -551,13 +624,13 @@ const DashboardPage = () => {
         }
       }
 
-      await refresh();
+      await refresh(); fetchCalendarAssignments();
 
-      setSyncMessage({
+      setActionMessage({
         type: 'success',
         text: t('resendSuccess', { name: `${newUser.firstName} ${newUser.lastName}` })
       });
-      setTimeout(() => setSyncMessage(null), 5000);
+      setTimeout(() => setActionMessage(null), 5000);
 
       // Close the modal
       setResendingAssignment(null);
@@ -565,11 +638,11 @@ const DashboardPage = () => {
 
     } catch (error) {
       // Resend error - notification shown to user
-      setSyncMessage({
+      setActionMessage({
         type: 'error',
         text: error instanceof Error ? error.message : t('resendError')
       });
-      setTimeout(() => setSyncMessage(null), 5000);
+      setTimeout(() => setActionMessage(null), 5000);
     } finally {
       setResending(false);
     }
@@ -599,61 +672,25 @@ const DashboardPage = () => {
       const res = await authFetch(`/api/shift-assignments/${deletingAssignment.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(t('deleteError'));
 
-      await refresh();
+      await refresh(); fetchCalendarAssignments();
       setDeletingAssignment(null);
-      setSyncMessage({ type: 'success', text: t('deleteSuccess') });
-      setTimeout(() => setSyncMessage(null), 5000);
+      setActionMessage({ type: 'success', text: t('deleteSuccess') });
+      setTimeout(() => setActionMessage(null), 5000);
     } catch (error) {
-      setSyncMessage({
+      setActionMessage({
         type: 'error',
         text: error instanceof Error ? error.message : t('deleteError')
       });
-      setTimeout(() => setSyncMessage(null), 5000);
+      setTimeout(() => setActionMessage(null), 5000);
     } finally {
       setDeleting(false);
     }
   };
 
-  // Function to sync with Outlook via server-side cron route (uses application permissions)
+  // Sync handler: uses global auto-sync + refreshes dashboard data
   const syncOutlook = async () => {
-    setSyncing(true);
-    setSyncMessage(null);
-
-    try {
-      // Call the server-side sync route with delegated Graph token
-      const graphToken = await getAccessToken();
-      const syncResponse = await authFetch('/api/outlook/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(graphToken ? { 'X-Graph-Token': graphToken } : {})
-        }
-      });
-
-      if (!syncResponse.ok) {
-        const errorBody = await syncResponse.json().catch(() => ({}));
-        throw new Error(errorBody?.error || 'Sync failed');
-      }
-
-      const result = await syncResponse.json();
-
-      // Refresh dashboard data
-      await refresh();
-
-      setSyncMessage({
-        type: 'success',
-        text: t('syncSuccess', { count: result.updated || 0 })
-      });
-      setTimeout(() => setSyncMessage(null), 5000);
-    } catch (err) {
-      setSyncMessage({
-        type: 'error',
-        text: `${t('syncError')}: ${err instanceof Error ? err.message : ''}`
-      });
-      setTimeout(() => setSyncMessage(null), 10000);
-    } finally {
-      setSyncing(false);
-    }
+    triggerSync();
+    await refresh(); fetchCalendarAssignments();
   };
 
   // Calculate user statistics with all details
@@ -840,23 +877,26 @@ const DashboardPage = () => {
       <Navigation />
 
       <main className="p-6 space-y-6">
-        {/* Sync message */}
-        {syncMessage && (
-          <Card className={`border-0 ${syncMessage.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                {syncMessage.type === 'success' ? (
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-red-600" />
-                )}
-                <p className={`text-sm font-medium ${syncMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-                  {syncMessage.text}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Sync / action message */}
+        {(syncMessage || actionMessage) && (() => {
+          const msg = actionMessage || syncMessage;
+          return (
+            <Card className={`border-0 ${msg!.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  {msg!.type === 'success' ? (
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-red-600" />
+                  )}
+                  <p className={`text-sm font-medium ${msg!.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+                    {msg!.text}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Connection/data error banner */}
         {error && !loading && (
@@ -889,20 +929,25 @@ const DashboardPage = () => {
               </TabsList>
             </Tabs>
 
-            <Button
-              variant="default"
-              size="sm"
-              onClick={syncOutlook}
-              disabled={syncing || loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {syncing ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4 mr-2" />
-              )}
-              {syncing ? t('syncing') : t('sync')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={syncOutlook}
+                disabled={syncing || loading}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {syncing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                {syncing ? t('syncing') : t('sync')}
+              </Button>
+              <span className="text-xs text-slate-400">
+                {Math.floor(nextSyncIn / 60)}:{String(nextSyncIn % 60).padStart(2, '0')}
+              </span>
+            </div>
 
             <Button variant="outline" size="sm" onClick={handleExport} className="hover:bg-secondary/20">
               <Download className="w-4 h-4 mr-2" />
@@ -999,6 +1044,10 @@ const DashboardPage = () => {
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               {t('byUser')}
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              {t('calendarView')}
             </TabsTrigger>
           </TabsList>
 
@@ -1355,8 +1404,148 @@ const DashboardPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Calendar View */}
+          <TabsContent value="calendar">
+            <Card className="bg-white border-0 shadow-sm">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl font-semibold text-slate-800">
+                    {t('calendarView')}
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={() => {
+                      if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); }
+                      else setCalendarMonth(m => m - 1);
+                    }}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm font-medium text-slate-700 min-w-[140px] text-center">
+                      {new Date(calendarYear, calendarMonth).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                    </span>
+                    <Button variant="outline" size="icon" onClick={() => {
+                      if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); }
+                      else setCalendarMonth(m => m + 1);
+                    }}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      const today = new Date();
+                      setCalendarMonth(today.getMonth());
+                      setCalendarYear(today.getFullYear());
+                    }}>
+                      {t('today')}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div className="flex items-center gap-4 mt-3 text-xs text-slate-600">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> {t('statusAccepted')}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> {t('statusRefused')}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> {t('statusNoAnswer')}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> {t('statusTentative')}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400 inline-block" /> {t('statusCancelled')}</span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {calendarLoading ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-blue-600" />
+                    <p className="text-slate-500">{t('loadingShifts')}</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Day headers */}
+                    <div className="grid grid-cols-7 mb-1">
+                      {[t('mon'), t('tue'), t('wed'), t('thu'), t('fri'), t('sat'), t('sun')].map(day => (
+                        <div key={day} className="text-center text-xs font-medium text-slate-500 py-2">{day}</div>
+                      ))}
+                    </div>
+                    {/* Calendar grid */}
+                    <div className="grid grid-cols-7 border-t border-l">
+                      {generateCalendarDays().map((day, idx) => {
+                        if (!day) {
+                          return <div key={`empty-${idx}`} className="border-b border-r bg-slate-50/50 min-h-[100px]" />;
+                        }
+                        const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+                        const dayAssignments = calendarByDate[dateStr] || [];
+                        const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                        const isToday = dateStr === new Date().toISOString().split('T')[0];
+                        const maxVisible = 3;
+
+                        return (
+                          <div
+                            key={dateStr}
+                            className={`border-b border-r min-h-[100px] p-1 cursor-pointer hover:bg-blue-50/50 transition-colors ${isWeekend ? 'bg-slate-50' : ''}`}
+                            onClick={() => dayAssignments.length > 0 && setSelectedCalendarDay(dateStr)}
+                          >
+                            <div className={`text-xs font-medium mb-1 ${isToday ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center' : 'text-slate-600 px-1'}`}>
+                              {day.getDate()}
+                            </div>
+                            <div className="space-y-0.5">
+                              {dayAssignments.slice(0, maxVisible).map((a: any) => (
+                                <div key={a.id} className="flex items-center gap-1 text-[10px] leading-tight truncate">
+                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotColor(a.status)}`} />
+                                  <span className="truncate text-slate-700">
+                                    {a.shift?.name} — {a.user?.firstName} {a.user?.lastName?.[0]}.
+                                  </span>
+                                </div>
+                              ))}
+                              {dayAssignments.length > maxVisible && (
+                                <div className="text-[10px] text-blue-600 font-medium px-1">
+                                  {t('moreAssignments', { count: dayAssignments.length - maxVisible })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </main>
+
+      {/* Day detail dialog */}
+      <Dialog open={!!selectedCalendarDay} onOpenChange={(open) => { if (!open) setSelectedCalendarDay(null); }}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>
+              {t('dayDetail', { date: selectedCalendarDay ? new Date(selectedCalendarDay + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '' })}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[500px] pr-4">
+            {selectedCalendarDay && (calendarByDate[selectedCalendarDay] || []).length === 0 ? (
+              <div className="text-center py-8 text-slate-500">{t('noAssignmentsDay')}</div>
+            ) : (
+              <div className="space-y-2">
+                {selectedCalendarDay && (calendarByDate[selectedCalendarDay] || []).map((a: any) => (
+                  <div key={a.id} className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg">
+                    <Avatar className="w-8 h-8 flex-shrink-0">
+                      <AvatarFallback className="text-xs bg-gradient-to-br from-slate-600 to-slate-700 text-white">
+                        {a.user?.firstName?.[0]}{a.user?.lastName?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm text-slate-800 truncate">
+                        {a.user?.firstName} {a.user?.lastName}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {a.shift?.name} • {a.shift?.startTime} - {a.shift?.endTime}
+                      </p>
+                    </div>
+                    {getStatusBadge(a.status)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       {/* Resend modal */}
       <Dialog open={!!resendingAssignment} onOpenChange={(open) => {

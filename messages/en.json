@@ -155,7 +155,19 @@
     "invitationEmailDate": "Date:",
     "invitationEmailSchedule": "Schedule:",
     "invitationEmailDescription": "Description:",
-    "invitationSentFromDashboard": "Invitation sent from the dashboard"
+    "invitationSentFromDashboard": "Invitation sent from the dashboard",
+    "calendarView": "Calendar",
+    "today": "Today",
+    "moreAssignments": "+{count} more",
+    "noAssignmentsDay": "No assignments",
+    "dayDetail": "Assignments for {date}",
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri",
+    "sat": "Sat",
+    "sun": "Sun"
   },
   "shifts": {
     "title": "Shift Management",

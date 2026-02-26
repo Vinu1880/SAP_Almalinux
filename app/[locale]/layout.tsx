@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { RotationPatternsProvider } from "@/contexts/RotationPatternsContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AutoSyncProvider } from "@/contexts/AutoSyncContext";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
@@ -37,9 +38,11 @@ export default async function RootLayout({
       <body className="font-sans antialiased">
         <NextIntlClientProvider messages={messages}>
           <AuthProvider>
-            <RotationPatternsProvider>
-              {children}
-            </RotationPatternsProvider>
+            <AutoSyncProvider>
+              <RotationPatternsProvider>
+                {children}
+              </RotationPatternsProvider>
+            </AutoSyncProvider>
           </AuthProvider>
         </NextIntlClientProvider>
       </body>
