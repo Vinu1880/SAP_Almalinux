@@ -70,21 +70,14 @@ export async function POST(request: NextRequest) {
 
         const event = await eventResponse.json();
 
-        console.log(`[outlook/sync] Event ${outlookEventId}: subject="${event.subject}", attendees=${JSON.stringify(event.attendees?.map((a: any) => ({ email: a.emailAddress?.address, response: a.status?.response })))}`);
-        console.log(`[outlook/sync] Looking for user email: "${user.email}"`);
-
         const attendee = event.attendees?.find(
           (a: any) => a.emailAddress?.address?.toLowerCase() === user.email.toLowerCase()
         );
 
-        if (!attendee?.status?.response) {
-          console.log(`[outlook/sync] No matching attendee found or no response yet`);
-          continue;
-        }
+        if (!attendee?.status?.response) continue;
 
         const responseStatus = attendee.status.response;
         const newStatus = mapOutlookResponseToStatus(responseStatus);
-        console.log(`[outlook/sync] Attendee response: "${responseStatus}" -> mapped to: "${newStatus}", current DB status: "${assignment.status}"`);
 
         if (newStatus !== 'PENDING' && newStatus !== assignment.status) {
           await prisma.shiftAssignment.update({
