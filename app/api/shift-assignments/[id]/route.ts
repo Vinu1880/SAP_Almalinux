@@ -71,7 +71,7 @@ export async function PUT(
 
     if (body.status !== undefined) {
       updateData.status = body.status;
-      if (body.status === 'ACCEPTED' || body.status === 'REFUSED') {
+      if (body.status === 'ACCEPTED' || body.status === 'REFUSED' || body.status === 'TENTATIVE') {
         updateData.respondedAt = new Date();
       }
     }

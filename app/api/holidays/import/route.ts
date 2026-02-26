@@ -81,13 +81,13 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
   federalHolidays.forEach(holiday => {
     holidays.push({
       ...holiday,
-      cantons: ['ALL'],
+      cantons: ['CH', 'BE', 'ZH', 'VD'],
       recurring: true
     });
   });
 
   // Canton-specific holidays
-  if (cantons.includes('BE') || cantons.includes('ALL')) {
+  if (cantons.includes('BE') || cantons.includes('CH')) {
     holidays.push(
       {
         name: 'Berchtoldstag',
@@ -106,7 +106,7 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
     );
   }
 
-  if (cantons.includes('ZH') || cantons.includes('ALL')) {
+  if (cantons.includes('ZH') || cantons.includes('CH')) {
     holidays.push(
       {
         name: 'Berchtoldstag',
@@ -125,7 +125,7 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
     );
   }
 
-  if (cantons.includes('VD') || cantons.includes('ALL')) {
+  if (cantons.includes('VD') || cantons.includes('CH')) {
     holidays.push(
       {
         name: 'Berchtoldstag',
@@ -166,47 +166,47 @@ function getStandardSwissHolidays(year: number, cantons: string[]) {
   pentecostMonday.setDate(easter.getDate() + 50);
 
   // Good Friday (most cantons)
-  const goodFridayCantons = cantons.filter(c => ['BE', 'ZH', 'VD'].includes(c));
-  if (goodFridayCantons.length > 0 || cantons.includes('ALL')) {
+  const goodFridayCantons = cantons.includes('CH') ? ['BE', 'ZH', 'VD'] : cantons.filter(c => ['BE', 'ZH', 'VD'].includes(c));
+  if (goodFridayCantons.length > 0) {
     holidays.push({
       name: 'Vendredi Saint',
       date: formatDate(goodFriday),
-      cantons: cantons.includes('ALL') ? ['ALL'] : goodFridayCantons,
+      cantons: goodFridayCantons,
       type: 'CANTONAL',
       recurring: true
     });
   }
 
   // Easter Monday (primarily Vaud)
-  if (cantons.includes('VD') || cantons.includes('ALL')) {
+  if (cantons.includes('VD') || cantons.includes('CH')) {
     holidays.push({
       name: 'Lundi de Pâques',
       date: formatDate(easterMonday),
-      cantons: cantons.includes('ALL') ? ['ALL'] : ['VD'],
+      cantons: ['VD'],
       type: 'CANTONAL',
       recurring: true
     });
   }
 
   // Ascension (most cantons)
-  const ascensionCantons = cantons.filter(c => ['BE', 'ZH', 'VD'].includes(c));
-  if (ascensionCantons.length > 0 || cantons.includes('ALL')) {
+  const ascensionCantons = cantons.includes('CH') ? ['BE', 'ZH', 'VD'] : cantons.filter(c => ['BE', 'ZH', 'VD'].includes(c));
+  if (ascensionCantons.length > 0) {
     holidays.push({
       name: 'Ascension',
       date: formatDate(ascension),
-      cantons: cantons.includes('ALL') ? ['ALL'] : ascensionCantons,
+      cantons: ascensionCantons,
       type: 'CANTONAL',
       recurring: true
     });
   }
 
   // Whit Monday (primarily Bern and Vaud)
-  const pentecostCantons = cantons.filter(c => ['BE', 'VD'].includes(c));
-  if (pentecostCantons.length > 0 || cantons.includes('ALL')) {
+  const pentecostCantons = cantons.includes('CH') ? ['BE', 'VD'] : cantons.filter(c => ['BE', 'VD'].includes(c));
+  if (pentecostCantons.length > 0) {
     holidays.push({
       name: 'Lundi de Pentecôte',
       date: formatDate(pentecostMonday),
-      cantons: cantons.includes('ALL') ? ['ALL'] : pentecostCantons,
+      cantons: pentecostCantons,
       type: 'CANTONAL',
       recurring: true
     });

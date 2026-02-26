@@ -223,12 +223,12 @@ const {
   };
 
   // Get the status of a date+shift combination (checks if already sent)
-  const getDateShiftStatus = (date: string, shiftId: string): 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED' | null => {
+  const getDateShiftStatus = (date: string, shiftId: string): 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED' | null => {
     const matches = dbAssignments.filter((a: any) => normalizeDbDate(a.date) === date && a.shiftId === shiftId);
     if (matches.length === 0) return null;
-    // If any is ACCEPTED, show ACCEPTED; if any REFUSED, show REFUSED; else PENDING
     if (matches.some((a: any) => a.status === 'ACCEPTED')) return 'ACCEPTED';
     if (matches.some((a: any) => a.status === 'REFUSED')) return 'REFUSED';
+    if (matches.some((a: any) => a.status === 'TENTATIVE')) return 'TENTATIVE';
     if (matches.some((a: any) => a.status === 'CANCELLED')) return 'CANCELLED';
     return 'PENDING';
   };
@@ -711,10 +711,20 @@ const getUserCantonFromLocation = (location: string): string => {
   };
 
   // Fallback: read own calendars (old method)
+  // Only returns OOF events that involve users from the selected teams
   const fetchOutOfOfficeFromOwnCalendar = async (): Promise<OutlookEvent[]> => {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken || !startDate || !endDate) return [];
+
+      // Build a set of eligible user emails (only shift members from selected teams)
+      const eligibleEmails = new Set(
+        availableUsers
+          .filter(u => u.email)
+          .map(u => u.email.toLowerCase())
+      );
+
+      if (eligibleEmails.size === 0) return [];
 
       const startDateTime = new Date(startDate + 'T00:00:00').toISOString();
       const endDateTime = new Date(endDate + 'T23:59:59').toISOString();
@@ -747,7 +757,16 @@ const getUserCantonFromLocation = (location: string): string => {
           if (eventsResponse.ok) {
             const eventsData = await eventsResponse.json();
             const oofEvents = eventsData.value.filter((event: OutlookEvent) => {
-              return event.showAs === 'oof' || event.showAs === 'busy';
+              if (event.showAs !== 'oof' && event.showAs !== 'busy') return false;
+
+              // Only keep events where the organizer or an attendee is a shift member
+              const organizerEmail = event.organizer?.emailAddress?.address?.toLowerCase() || '';
+              const attendeeEmails = (event.attendees || []).map((a: any) =>
+                a.emailAddress?.address?.toLowerCase() || ''
+              );
+
+              return eligibleEmails.has(organizerEmail) ||
+                attendeeEmails.some((email: string) => eligibleEmails.has(email));
             });
             oofEvents.forEach((event: OutlookEvent) => {
               allOutOfOfficeEvents.push({ ...event, calendarName: calendar.name, calendarId: calendar.id });
@@ -1897,7 +1916,7 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                     {(() => {
                       const status = getDateShiftStatus(assignment.date, assignment.shiftId);
                       if (!status) return null;
-                      const dotColor = status === 'ACCEPTED' ? 'bg-green-500' : status === 'REFUSED' ? 'bg-red-500' : status === 'PENDING' ? 'bg-blue-500' : 'bg-gray-400';
+                      const dotColor = status === 'ACCEPTED' ? 'bg-green-500' : status === 'REFUSED' ? 'bg-red-500' : status === 'TENTATIVE' ? 'bg-orange-500' : status === 'PENDING' ? 'bg-blue-500' : 'bg-gray-400';
                       return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} title={t(`status${status.charAt(0) + status.slice(1).toLowerCase()}`)} />;
                     })()}
                   </>
@@ -2480,7 +2499,11 @@ useEffect(() => {
                     <div className="border-l pl-4 flex items-center gap-4">
                       <div className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        <span className="text-slate-600">{t('statusPending')}</span>
+                        <span className="text-slate-600">{t('statusNoAnswer')}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-orange-500" />
+                        <span className="text-slate-600">{t('statusTentative')}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-green-500" />
@@ -3078,7 +3101,13 @@ useEffect(() => {
                                               if (status === 'PENDING') return (
                                                 <Badge className="text-xs mt-2 bg-blue-100 text-blue-700 border-0 inline-flex items-center gap-1">
                                                   <Clock className="w-3 h-3" />
-                                                  {t('statusPending')}
+                                                  {t('statusNoAnswer')}
+                                                </Badge>
+                                              );
+                                              if (status === 'TENTATIVE') return (
+                                                <Badge className="text-xs mt-2 bg-orange-100 text-orange-700 border-0 inline-flex items-center gap-1">
+                                                  <AlertCircle className="w-3 h-3" />
+                                                  {t('statusTentative')}
                                                 </Badge>
                                               );
                                               if (status === 'ACCEPTED') return (

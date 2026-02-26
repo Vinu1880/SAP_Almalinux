@@ -107,12 +107,14 @@ const SettingsPage = () => {
   // Holiday states
   const currentYear = new Date().getFullYear();
   const { 
-    holidays, 
-    loading: holidaysLoading, 
-    createHoliday, 
-    updateHoliday, 
-    deleteHoliday, 
-    importStandardHolidays 
+    holidays,
+    loading: holidaysLoading,
+    createHoliday,
+    updateHoliday,
+    deleteHoliday,
+    deleteAllHolidays,
+    importCsvHolidays,
+    importStandardHolidays
   } = useHolidays(currentYear);
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -361,6 +363,10 @@ const SettingsPage = () => {
   };
 
   const [isImportingHolidays, setIsImportingHolidays] = useState(false);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
+  const [isDeletingAllHolidays, setIsDeletingAllHolidays] = useState(false);
+  const [isDeleteAllHolidaysDialogOpen, setIsDeleteAllHolidaysDialogOpen] = useState(false);
+  const csvFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleImportStandardHolidays = async () => {
     const selectedCantons = ['BE', 'ZH', 'VD'];
@@ -376,34 +382,137 @@ const SettingsPage = () => {
     }
   };
 
+  const handleImportCsv = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingCsv(true);
+    try {
+      const text = await file.text();
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) {
+        showNotification(t('csvEmptyError') || 'CSV file is empty or has no data rows', 'error');
+        return;
+      }
+
+      // Parse header to find canton columns
+      const header = lines[0].split(',').map(h => h.trim());
+      const dateIdx = header.findIndex(h => h.toLowerCase() === 'date');
+      const nameIdx = header.findIndex(h => h.toLowerCase() === 'name');
+      if (dateIdx === -1 || nameIdx === -1) {
+        showNotification(t('csvFormatError') || 'CSV must have "date" and "name" columns', 'error');
+        return;
+      }
+
+      // Find canton columns (CH, BE, VD, ZH, etc.)
+      const cantonColumns: { idx: number; code: string }[] = [];
+      header.forEach((h, i) => {
+        const upper = h.toUpperCase();
+        if (['CH', 'BE', 'VD', 'ZH'].includes(upper)) {
+          cantonColumns.push({ idx: i, code: upper });
+        }
+      });
+
+      // Parse all rows into holiday objects
+      const holidayList: any[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
+        if (cols.length < Math.max(dateIdx, nameIdx) + 1) continue;
+
+        const rawDate = cols[dateIdx];
+        const name = cols[nameIdx];
+        if (!rawDate || !name) continue;
+
+        // Parse date (DD.MM.YYYY or YYYY-MM-DD)
+        let isoDate: string;
+        if (rawDate.includes('.')) {
+          const [day, month, year] = rawDate.split('.');
+          isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        } else {
+          isoDate = rawDate;
+        }
+
+        // Determine cantons from TRUE/FALSE columns
+        const cantons: string[] = [];
+        let isCH = false;
+        for (const cc of cantonColumns) {
+          const val = cols[cc.idx]?.toUpperCase();
+          if (val === 'TRUE' || val === '1' || val === 'YES') {
+            if (cc.code === 'CH') {
+              isCH = true;
+            } else {
+              cantons.push(cc.code);
+            }
+          }
+        }
+
+        if (cantons.length === 0) continue;
+        const finalCantons = isCH ? ['CH', ...cantons] : cantons;
+        const type = isCH ? 'FEDERAL' : 'CANTONAL';
+
+        holidayList.push({ name, date: isoDate, cantons: finalCantons, type });
+      }
+
+      if (holidayList.length === 0) {
+        showNotification(t('csvEmptyError') || 'No valid holidays found in CSV', 'error');
+        return;
+      }
+
+      // Send all holidays in a single batch request
+      const imported = await importCsvHolidays(holidayList);
+
+      showNotification(
+        (t('holidaysImported') || '{count} holidays imported').replace('{count}', imported.length.toString()),
+        'success'
+      );
+    } catch (error) {
+      showNotification(t('csvImportError') || 'Failed to import CSV', 'error');
+    } finally {
+      setIsImportingCsv(false);
+      if (csvFileInputRef.current) csvFileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteAllHolidays = async () => {
+    setIsDeletingAllHolidays(true);
+    try {
+      const count = await deleteAllHolidays(selectedYear);
+      showNotification(t('holidaysDeleted')?.replace('{count}', count.toString()) || `${count} holidays deleted`, 'success');
+      setIsDeleteAllHolidaysDialogOpen(false);
+    } catch (error) {
+      showNotification(t('holidaysDeleteError') || 'Error deleting holidays', 'error');
+    } finally {
+      setIsDeletingAllHolidays(false);
+    }
+  };
+
+  const ALL_CANTONS = ['BE', 'ZH', 'VD'];
+
   const toggleCanton = (canton: string, isNewHoliday: boolean = true) => {
+    const computeCantons = (prev: string[]) => {
+      // Simple toggle — each checkbox is independent (CH is just a cosmetic badge)
+      return prev.includes(canton)
+        ? prev.filter(c => c !== canton)
+        : [...prev, canton];
+    };
+
     if (isNewHoliday) {
-      setNewHoliday(prev => ({
-        ...prev,
-        cantons: prev.cantons.includes(canton)
-          ? prev.cantons.filter(c => c !== canton)
-          : [...prev.cantons, canton]
-      }));
+      setNewHoliday(prev => ({ ...prev, cantons: computeCantons(prev.cantons) }));
     } else if (selectedHoliday) {
-      setSelectedHoliday((prev: any) => ({
-        ...prev,
-        cantons: prev.cantons.includes(canton)
-          ? prev.cantons.filter((c: string) => c !== canton)
-          : [...prev.cantons, canton]
-      }));
+      setSelectedHoliday((prev: any) => ({ ...prev, cantons: computeCantons(prev.cantons) }));
     }
   };
 
   const getCantonBadge = (canton: string) => {
     const colors: { [key: string]: string } = {
-      'ALL': 'bg-blue-100 text-blue-800',
+      'CH': 'bg-amber-100 text-amber-800',
       'BE': 'bg-red-100 text-red-800',
       'ZH': 'bg-blue-100 text-blue-800',
       'VD': 'bg-green-100 text-green-800'
     };
-    
+
     const labels: { [key: string]: string } = {
-      'ALL': tCommon("all"),
+      'CH': 'CH',
       'BE': t('cantonBerne'),
       'ZH': t('cantonZurich'),
       'VD': t('cantonVaud')
@@ -636,6 +745,27 @@ const SettingsPage = () => {
                       )}
                       {t("importStandards")}
                     </Button>
+                    <Button
+                      onClick={() => csvFileInputRef.current?.click()}
+                      variant="outline"
+                      size="sm"
+                      disabled={isImportingCsv}
+                      className="hover:bg-secondary/20"
+                    >
+                      {isImportingCsv ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileUp className="w-4 h-4 mr-2" />
+                      )}
+                      {t("importCsv") || "Import CSV"}
+                    </Button>
+                    <input
+                      ref={csvFileInputRef}
+                      type="file"
+                      accept=".csv"
+                      onChange={handleImportCsv}
+                      className="hidden"
+                    />
                     <Dialog open={isCreateHolidayDialogOpen} onOpenChange={setIsCreateHolidayDialogOpen}>
                       <Button
                         onClick={() => setIsCreateHolidayDialogOpen(true)}
@@ -645,6 +775,17 @@ const SettingsPage = () => {
                         {t("newHoliday")}
                       </Button>
                     </Dialog>
+                    {filteredHolidays.length > 0 && (
+                      <Button
+                        onClick={() => setIsDeleteAllHolidaysDialogOpen(true)}
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        {t("deleteAll") || "Delete all"}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -689,11 +830,6 @@ const SettingsPage = () => {
                               <div className="flex gap-1">
                                 {holiday.cantons.map(canton => getCantonBadge(canton))}
                               </div>
-                              {holiday.recurring && (
-                                <Badge className="bg-purple-100 text-purple-700 border-0 text-xs">
-                                  {t("recurring")}
-                                </Badge>
-                              )}
                             </div>
                             <div className="flex items-center gap-4 text-sm text-slate-600">
                               <span>{new Date(holiday.date).toLocaleDateString('fr-FR', { 
@@ -896,12 +1032,12 @@ const SettingsPage = () => {
               <div>
                 <Label>{t("cantonsAffected")} *</Label>
                 <div className="grid grid-cols-4 gap-2 mt-2">
-                  {['ALL', 'BE', 'ZH', 'VD'].map(canton => (
+                  {['CH', 'BE', 'ZH', 'VD'].map(canton => (
                     <label
                       key={canton}
                       className={`flex items-center justify-center p-3 rounded-lg border-2 cursor-pointer transition-colors ${
                         newHoliday.cantons.includes(canton)
-                          ? 'border-green-500 bg-green-50'
+                          ? canton === 'CH' ? 'border-amber-500 bg-amber-50' : 'border-green-500 bg-green-50'
                           : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
@@ -912,7 +1048,7 @@ const SettingsPage = () => {
                         className="sr-only"
                       />
                       <span className="text-sm font-medium">
-                        {canton === 'ALL' ? tCommon("all") : canton}
+                        {canton}
                       </span>
                     </label>
                   ))}
@@ -936,16 +1072,6 @@ const SettingsPage = () => {
                     <SelectItem value="CUSTOM">{t("custom")}</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  checked={newHoliday.recurring}
-                  onCheckedChange={(checked) =>
-                    setNewHoliday({...newHoliday, recurring: !!checked})
-                  }
-                />
-                <Label className="text-sm">{t("recurringAnnually")}</Label>
               </div>
 
               <div>
@@ -1000,12 +1126,12 @@ const SettingsPage = () => {
                 <div>
                   <Label>{t("cantonsAffected")}</Label>
                   <div className="grid grid-cols-4 gap-2 mt-2">
-                    {['ALL', 'BE', 'ZH', 'VD'].map(canton => (
+                    {['CH', 'BE', 'ZH', 'VD'].map(canton => (
                       <label
                         key={canton}
                         className={`flex items-center justify-center p-3 rounded-lg border-2 cursor-pointer transition-colors ${
                           selectedHoliday.cantons.includes(canton)
-                            ? 'border-green-500 bg-green-50'
+                            ? canton === 'CH' ? 'border-amber-500 bg-amber-50' : 'border-green-500 bg-green-50'
                             : 'border-slate-200 hover:border-slate-300'
                         }`}
                       >
@@ -1016,7 +1142,7 @@ const SettingsPage = () => {
                           className="sr-only"
                         />
                         <span className="text-sm font-medium">
-                          {canton === 'ALL' ? tCommon("all") : canton}
+                          {canton}
                         </span>
                       </label>
                     ))}
@@ -1038,16 +1164,6 @@ const SettingsPage = () => {
                       <SelectItem value="CUSTOM">{t("custom")}</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={selectedHoliday.recurring}
-                    onCheckedChange={(checked) =>
-                      setSelectedHoliday({...selectedHoliday, recurring: !!checked})
-                    }
-                  />
-                  <Label className="text-sm">{t("recurringAnnually")}</Label>
                 </div>
 
                 <div>
@@ -1163,6 +1279,41 @@ const SettingsPage = () => {
               >
                 <Trash className="w-4 h-4 mr-2" />
                 {tCommon("delete")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete All Holidays Dialog */}
+        <Dialog open={isDeleteAllHolidaysDialogOpen} onOpenChange={setIsDeleteAllHolidaysDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+                {t("deleteAllHolidays") || "Delete all holidays"}
+              </DialogTitle>
+              <DialogDescription>
+                {(t("deleteAllHolidaysConfirm") || "This will delete all {count} holidays for {year}.").replace('{count}', filteredHolidays.length.toString()).replace('{year}', selectedYear.toString())}
+                <strong className="block mt-2 text-red-600">
+                  {t("actionIrreversible")}
+                </strong>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeleteAllHolidaysDialogOpen(false)} className="hover:bg-secondary/20">
+                {tCommon("cancel")}
+              </Button>
+              <Button
+                onClick={handleDeleteAllHolidays}
+                disabled={isDeletingAllHolidays}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isDeletingAllHolidays ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 mr-2" />
+                )}
+                {t("deleteAll") || "Delete all"}
               </Button>
             </DialogFooter>
           </DialogContent>

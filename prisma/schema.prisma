@@ -228,6 +228,7 @@ enum Priority {
 
 enum AssignmentStatus {
   PENDING
+  TENTATIVE
   ACCEPTED
   REFUSED
   CANCELLED

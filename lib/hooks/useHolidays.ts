@@ -118,6 +118,46 @@ export function useHolidays(year?: number) {
     }
   }, []);
 
+  const importCsvHolidays = useCallback(async (holidayList: any[]) => {
+    try {
+      const response = await authFetch('/api/holidays/import-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ holidays: holidayList })
+      });
+
+      if (!response.ok) throw new Error('Failed to import CSV holidays');
+      const imported = await response.json();
+      setHolidays(prev => [...prev, ...imported]);
+      return imported;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import CSV holidays');
+      throw err;
+    }
+  }, []);
+
+  const deleteAllHolidays = useCallback(async (year?: number) => {
+    try {
+      const params = year ? `?year=${year}` : '';
+      const response = await authFetch(`/api/holidays${params}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) throw new Error('Failed to delete holidays');
+      const result = await response.json();
+
+      if (year) {
+        setHolidays(prev => prev.filter(h => new Date(h.date).getFullYear() !== year));
+      } else {
+        setHolidays([]);
+      }
+
+      return result.deletedCount;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete holidays');
+      throw err;
+    }
+  }, []);
 
 // Check if a user is on holiday for a given date based on their canton
 const isUserOnHoliday = useCallback((userLocation: string, date: string): boolean => {
@@ -137,12 +177,8 @@ const isUserOnHoliday = useCallback((userLocation: string, date: string): boolea
   }
 
   // Check if any holiday applies to this user's canton
+  // CH is cosmetic only — actual matching is done on individual cantons (BE, ZH, VD)
   const isOnHoliday = dateHolidays.some(holiday => {
-    // Holiday applies to all cantons
-    if (holiday.cantons.includes('ALL')) {
-      return true;
-    }
-
     // User has no location - only federal holidays apply
     if (!userLocation || userLocation === '') {
       return holiday.type === 'FEDERAL';
@@ -183,6 +219,8 @@ const isUserOnHoliday = useCallback((userLocation: string, date: string): boolea
     createHoliday,
     updateHoliday,
     deleteHoliday,
+    deleteAllHolidays,
+    importCsvHolidays,
     importStandardHolidays,
     isUserOnHoliday,
     refetch: fetchHolidays

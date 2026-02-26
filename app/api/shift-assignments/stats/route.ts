@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
     const accepted = assignments.filter(a => a.status === 'ACCEPTED').length;
     const refused = assignments.filter(a => a.status === 'REFUSED').length;
     const pending = assignments.filter(a => a.status === 'PENDING').length;
+    const tentative = assignments.filter(a => a.status === 'TENTATIVE').length;
     const cancelled = assignments.filter(a => a.status === 'CANCELLED').length;
     const total = assignments.length;
 
@@ -70,6 +71,7 @@ export async function GET(request: NextRequest) {
           accepted: 0,
           refused: 0,
           pending: 0,
+          tentative: 0,
           cancelled: 0
         };
       }
@@ -87,6 +89,7 @@ export async function GET(request: NextRequest) {
           accepted: 0,
           refused: 0,
           pending: 0,
+          tentative: 0,
           cancelled: 0
         };
       }
@@ -99,6 +102,7 @@ export async function GET(request: NextRequest) {
         accepted,
         refused,
         pending,
+        tentative,
         cancelled,
         total
       },

@@ -36,9 +36,9 @@ export async function GET(request: NextRequest) {
 
     // Filter by canton if specified
     let filteredHolidays = holidays;
-    if (canton && canton !== 'ALL') {
+    if (canton) {
       filteredHolidays = holidays.filter((holiday: any) =>
-        holiday.cantons.includes('ALL') || holiday.cantons.includes(canton)
+        holiday.cantons.includes(canton)
       );
     }
 
@@ -66,6 +66,14 @@ export async function POST(request: NextRequest) {
     }
     const { name, date, cantons, type, recurring, description } = validation.data;
 
+    // Check for duplicate (same date — prevents importing same day twice regardless of name)
+    const existing = await prisma.holiday.findFirst({
+      where: { date: new Date(date) }
+    });
+    if (existing) {
+      return NextResponse.json({ error: 'Holiday already exists for this date', duplicate: true }, { status: 409 });
+    }
+
     const holiday = await prisma.holiday.create({
       data: {
         name,
@@ -92,6 +100,45 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to create holiday' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Delete all holidays (with optional year filter)
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  const rl3 = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl3) return rl3;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const year = searchParams.get('year');
+
+    let whereClause: any = {};
+    if (year) {
+      whereClause.date = {
+        gte: new Date(`${year}-01-01`),
+        lte: new Date(`${year}-12-31`)
+      };
+    }
+
+    const result = await prisma.holiday.deleteMany({ where: whereClause });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'DELETE_ALL',
+        entity: 'HOLIDAY',
+        userId: auth.user.id,
+        data: { year: year || 'all', deletedCount: result.count }
+      }
+    });
+
+    return NextResponse.json({ success: true, deletedCount: result.count });
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to delete holidays' },
       { status: 500 }
     );
   }

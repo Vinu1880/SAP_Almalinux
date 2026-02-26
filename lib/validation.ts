@@ -71,7 +71,7 @@ export const createPikettSchema = z.object({
 export const updatePikettSchema = createPikettSchema.partial();
 
 export const updateAssignmentSchema = z.object({
-  status: z.enum(['PENDING', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional(),
+  status: z.enum(['PENDING', 'TENTATIVE', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional(),
   reason: z.string().max(500).nullable().optional(),
   outlookEventId: z.string().max(255).nullable().optional(),
   respondedAt: z.string().nullable().optional(),
@@ -84,7 +84,7 @@ export const createBulkShiftAssignmentsSchema = z.object({
     date: z.string(),
     shiftId: cuidSchema,
     userId: cuidSchema,
-    status: z.enum(['PENDING', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional().default('PENDING'),
+    status: z.enum(['PENDING', 'TENTATIVE', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional().default('PENDING'),
     reason: z.string().max(500).nullable().optional(),
     outlookEventId: z.string().max(255).nullable().optional(),
   })).min(1).max(1000),

@@ -281,6 +281,27 @@ const UsersPage = () => {
     refetch: refetchTeams 
   } = useTeams();
 
+  // Auto-load user shifts when patternUserId changes and modal is open
+  useEffect(() => {
+    if (isCreatePatternOpen && patternUserId && (!newPattern.userShifts || newPattern.userShifts.length === 0)) {
+      const user = users.find(u => u.id === patternUserId);
+      if (user) {
+        const userShifts = shifts.filter((shift: any) => {
+          const userInTeam = user.teamId === shift.teamId;
+          const userIncluded = shift.includedUserIds?.includes(patternUserId);
+          const userExcluded = shift.excludedUserIds?.includes(patternUserId);
+          return (userInTeam && !userExcluded) || userIncluded;
+        });
+        if (userShifts.length > 0) {
+          setNewPattern(prev => ({
+            ...prev,
+            userShifts: userShifts.map((s: any) => s.id)
+          }));
+        }
+      }
+    }
+  }, [isCreatePatternOpen, patternUserId, shifts, users]);
+
   // ROTATION VERIFICATION FUNCTION - Fixed version
   const hasValidRotation = (user: any): boolean => {
     // Check if the rotationConfig object exists and has a valid patternId

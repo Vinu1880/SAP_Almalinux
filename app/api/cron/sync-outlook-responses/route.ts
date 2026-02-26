@@ -60,11 +60,12 @@ async function getAccessToken(): Promise<string> {
   }
 }
 
-function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'REFUSED' | 'PENDING' {
+function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'TENTATIVE' | 'REFUSED' | 'PENDING' {
   switch (response?.toLowerCase()) {
     case 'accepted':
-    case 'tentativelyaccepted':
       return 'ACCEPTED';
+    case 'tentativelyaccepted':
+      return 'TENTATIVE';
     case 'declined':
       return 'REFUSED';
     default:
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     const pendingAssignments = await prisma.shiftAssignment.findMany({
       where: {
-        status: 'PENDING',
+        status: { in: ['PENDING', 'TENTATIVE'] },
         outlookEventId: {
           not: null
         }

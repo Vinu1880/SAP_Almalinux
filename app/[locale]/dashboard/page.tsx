@@ -344,7 +344,7 @@ const DashboardPage = () => {
 
           // 3. Check public holidays
           const canton = user.location || 'BE';
-          if (isUserOnHoliday(dateStr, canton)) {
+          if (isUserOnHoliday(canton, dateStr)) {
             const holidayForDate = holidays.find(h => {
               const hDateStr = normalizeDate(h.date);
               return hDateStr === dateStr && h.cantons.includes(canton);
@@ -731,7 +731,8 @@ const DashboardPage = () => {
     const configs = {
       ACCEPTED: { label: t('statusAccepted'), color: 'bg-green-100 text-green-800' },
       REFUSED: { label: t('statusRefused'), color: 'bg-red-100 text-red-800' },
-      PENDING: { label: t('statusPending'), color: 'bg-orange-100 text-orange-800' },
+      PENDING: { label: t('statusNoAnswer'), color: 'bg-blue-100 text-blue-800' },
+      TENTATIVE: { label: t('statusTentative'), color: 'bg-orange-100 text-orange-800' },
       CANCELLED: { label: t('statusCancelled'), color: 'bg-gray-100 text-gray-800' }
     };
 
@@ -747,10 +748,11 @@ const DashboardPage = () => {
     const configs = {
       ACCEPTED: t('statusAccepted'),
       REFUSED: t('statusRefused'),
-      PENDING: t('statusPending'),
+      PENDING: t('statusNoAnswer'),
+      TENTATIVE: t('statusTentative'),
       CANCELLED: t('statusCancelled')
     };
-    return configs[status as keyof typeof configs] || t('statusPending');
+    return configs[status as keyof typeof configs] || t('statusNoAnswer');
   };
 
   const handleExport = () => {
@@ -1074,7 +1076,8 @@ const DashboardPage = () => {
                           <SelectItem value="all">{t('allFilter')}</SelectItem>
                           <SelectItem value="ACCEPTED">{t('statusAccepted')}</SelectItem>
                           <SelectItem value="REFUSED">{t('statusRefused')}</SelectItem>
-                          <SelectItem value="PENDING">{t('statusPending')}</SelectItem>
+                          <SelectItem value="PENDING">{t('statusNoAnswer')}</SelectItem>
+                          <SelectItem value="TENTATIVE">{t('statusTentative')}</SelectItem>
                           <SelectItem value="CANCELLED">{t('statusCancelled')}</SelectItem>
                         </SelectContent>
                       </Select>

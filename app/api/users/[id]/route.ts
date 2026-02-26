@@ -172,7 +172,7 @@ export async function DELETE(
 
     // Check for pending/accepted assignments
     const activeAssignments = await prisma.shiftAssignment.count({
-      where: { userId: id, status: { in: ['PENDING', 'ACCEPTED'] } }
+      where: { userId: id, status: { in: ['PENDING', 'TENTATIVE', 'ACCEPTED'] } }
     });
     if (activeAssignments > 0) {
       return NextResponse.json(

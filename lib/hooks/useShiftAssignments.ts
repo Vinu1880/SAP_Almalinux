@@ -6,7 +6,7 @@ import { useAuthFetch, useAuthReady } from './useAuthFetch';
 export interface ShiftAssignment {
   id: string;
   date: Date;
-  status: 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
+  status: 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
   reason?: string;
   respondedAt?: Date;
   outlookEventId?: string;
@@ -48,6 +48,7 @@ export interface ShiftAssignmentStats {
   accepted: number;
   refused: number;
   pending: number;
+  tentative: number;
   cancelled: number;
   total: number;
 }
@@ -58,6 +59,7 @@ export interface UserStats {
   accepted: number;
   refused: number;
   pending: number;
+  tentative: number;
   cancelled: number;
 }
 
@@ -67,6 +69,7 @@ export interface TeamStats {
   accepted: number;
   refused: number;
   pending: number;
+  tentative: number;
   cancelled: number;
 }
 
@@ -74,7 +77,7 @@ interface UseShiftAssignmentsOptions {
   dateFilter?: '24h' | '7d' | '30d' | '90d' | '180d';
   teamId?: string;
   userId?: string;
-  status?: 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
+  status?: 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
 }
 
 export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
@@ -85,6 +88,7 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
     accepted: 0,
     refused: 0,
     pending: 0,
+    tentative: 0,
     cancelled: 0,
     total: 0
   });
@@ -140,7 +144,7 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
     date: string;
     shiftId: string;
     userId: string;
-    status?: 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
+    status?: 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
     reason?: string;
   }>) => {
     try {
@@ -169,7 +173,7 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
   };
 
   const updateAssignment = async (id: string, updateData: {
-    status?: 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
+    status?: 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
     reason?: string;
   }) => {
     try {
