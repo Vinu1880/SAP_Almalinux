@@ -50,6 +50,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { useShifts } from '@/lib/hooks/useShifts';
+import { usePiketts } from '@/lib/hooks/usePiketts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRotationPatterns } from '@/contexts/RotationPatternsContext';
 import { Button } from '@/components/ui/button';
@@ -85,6 +86,7 @@ import {
 // Import hooks
 import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
+import { useAuthFetch } from '@/lib/hooks/useAuthFetch';
 
 // Types
 type TimeSlot = 'morning' | 'afternoon' | 'evening' | 'night';
@@ -214,6 +216,18 @@ const UsersPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const { patterns: rotationPatterns, addPattern, updatePattern, deletePattern } = useRotationPatterns();
   const { shifts, loading: shiftsLoading } = useShifts();
+  const { piketts } = usePiketts();
+  const authFetch = useAuthFetch();
+
+  // Rules state
+  const [userRules, setUserRules] = useState<any[]>([]);
+  const [isAddingRule, setIsAddingRule] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [newRule, setNewRule] = useState<any>({
+    type: 'WEEK_PARITY',
+    config: { parity: 'odd' },
+    enabled: true,
+  });
 
   // Add CSS style
   useEffect(() => {
@@ -1093,6 +1107,130 @@ const UsersPage = () => {
     }
   };
 
+  // === Rules handlers ===
+  const fetchUserRules = async (userId: string) => {
+    try {
+      const res = await authFetch(`/api/users/${userId}/rules`);
+      if (res.ok) setUserRules(await res.json());
+    } catch { /* ignore */ }
+  };
+
+  const handleToggleRule = async (ruleId: string, enabled: boolean) => {
+    if (!selectedUser) return;
+    try {
+      await authFetch(`/api/users/${selectedUser.id}/rules/${ruleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      await fetchUserRules(selectedUser.id);
+    } catch (e: any) {
+      showError(e.message);
+    }
+  };
+
+  const handleDeleteRule = async (ruleId: string) => {
+    if (!selectedUser) return;
+    try {
+      await authFetch(`/api/users/${selectedUser.id}/rules/${ruleId}`, { method: 'DELETE' });
+      await fetchUserRules(selectedUser.id);
+    } catch (e: any) {
+      showError(e.message);
+    }
+  };
+
+  const handleStartEditRule = (rule: any) => {
+    setEditingRuleId(rule.id);
+    setNewRule({ type: rule.type, config: { ...rule.config }, enabled: rule.enabled });
+    setIsAddingRule(true);
+  };
+
+  const handleSaveRule = async () => {
+    if (!selectedUser) return;
+    try {
+      if (editingRuleId) {
+        const res = await authFetch(`/api/users/${selectedUser.id}/rules/${editingRuleId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newRule),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed');
+        }
+      } else {
+        const res = await authFetch(`/api/users/${selectedUser.id}/rules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newRule),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed');
+        }
+      }
+      await fetchUserRules(selectedUser.id);
+      setIsAddingRule(false);
+      setEditingRuleId(null);
+      setNewRule({ type: 'WEEK_PARITY', config: { parity: 'odd' }, enabled: true });
+    } catch (e: any) {
+      showError(e.message);
+    }
+  };
+
+  const handleRuleTypeChange = (type: string) => {
+    const defaults: Record<string, any> = {
+      WEEK_PARITY: { parity: 'odd' },
+      DOUBLE_SHIFT: { triggerShiftId: '', linkedShiftId: '' },
+      MAX_LOAD: { shiftId: '', maxPercentage: 50 },
+    };
+    setNewRule({ type, config: defaults[type], enabled: true });
+  };
+
+  const getRuleTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      WEEK_PARITY: t('ruleWeekParity'),
+      DOUBLE_SHIFT: t('ruleDoubleShift'),
+      MAX_LOAD: t('ruleMaxLoad'),
+    };
+    return labels[type] || type;
+  };
+
+  const getRuleDescription = (rule: any) => {
+    const findShiftOrPikett = (id: string) => shifts.find((s: any) => s.id === id) || piketts.find((p: any) => p.id === id);
+    switch (rule.type) {
+      case 'WEEK_PARITY':
+        return rule.config.parity === 'odd' ? t('oddWeeksOnly') : t('evenWeeksOnly');
+      case 'DOUBLE_SHIFT': {
+        const trigger = findShiftOrPikett(rule.config.triggerShiftId);
+        const linked = findShiftOrPikett(rule.config.linkedShiftId);
+        return t('doubleShiftDesc', { trigger: trigger?.name || '?', linked: linked?.name || '?' });
+      }
+      case 'MAX_LOAD': {
+        const shift = findShiftOrPikett(rule.config.shiftId);
+        return t('maxLoadDesc', { shift: shift?.name || '?', pct: rule.config.maxPercentage });
+      }
+      default: return '';
+    }
+  };
+
+  const getUserShiftsForRules = (user: any) => {
+    if (!user) return [];
+    const userShifts = shifts.filter((shift: any) => {
+      const inTeam = user.teamId === shift.teamId;
+      const included = shift.includedUserIds?.includes(user.id);
+      const excluded = shift.excludedUserIds?.includes(user.id);
+      return (inTeam && !excluded) || included;
+    });
+    const userPiketts = piketts.filter((pikett: any) => {
+      const inTeam = user.teamId === pikett.teamId;
+      const included = pikett.includedUserIds?.includes(user.id);
+      const excluded = pikett.excludedUserIds?.includes(user.id);
+      return (inTeam && !excluded) || included;
+    });
+    return [...userShifts, ...userPiketts];
+  };
+
   const handleUpdateUser = async () => {
     if (!selectedUser) return;
 
@@ -1807,6 +1945,7 @@ const UsersPage = () => {
                               });
 
                               setIsEditUserDialogOpen(true);
+                              fetchUserRules(user.id);
                             }}
                             variant="outline"
                             size="sm"
@@ -1952,6 +2091,7 @@ const UsersPage = () => {
                                     });
 
                                     setIsEditUserDialogOpen(true);
+                              fetchUserRules(user.id);
                                   }}
                                 >
                                   <Edit className="w-4 h-4 mr-2" />
@@ -2241,10 +2381,141 @@ const UsersPage = () => {
                 />
               )}
 
+              {/* === User Rules Section === */}
+              {selectedUser && (
+                <div className="space-y-3 border-t pt-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-semibold">{t('rules')}</Label>
+                    <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setIsAddingRule(true)}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      {t('addRule')}
+                    </Button>
+                  </div>
+
+                  {userRules.length === 0 && !isAddingRule && (
+                    <p className="text-sm text-slate-500">{t('noRules')}</p>
+                  )}
+
+                  {userRules.map((rule) => (
+                    <div key={rule.id} className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={rule.enabled}
+                          onCheckedChange={(checked) => handleToggleRule(rule.id, checked)}
+                        />
+                        <div>
+                          <p className="text-sm font-medium">{getRuleTypeLabel(rule.type)}</p>
+                          <p className="text-xs text-slate-500">{getRuleDescription(rule)}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="outline" size="sm" className="hover:bg-secondary/20" onClick={() => handleStartEditRule(rule)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50" onClick={() => handleDeleteRule(rule.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {isAddingRule && (
+                    <div className="p-4 border rounded-lg bg-blue-50 space-y-3">
+                      <Select value={newRule.type} onValueChange={handleRuleTypeChange} disabled={!!editingRuleId}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="WEEK_PARITY">{t('ruleWeekParity')}</SelectItem>
+                          <SelectItem value="DOUBLE_SHIFT">{t('ruleDoubleShift')}</SelectItem>
+                          <SelectItem value="MAX_LOAD">{t('ruleMaxLoad')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {newRule.type === 'WEEK_PARITY' && (
+                        <RadioGroup value={newRule.config.parity} onValueChange={(v) => setNewRule({ ...newRule, config: { parity: v } })}>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="odd" id="parity-odd" />
+                            <Label htmlFor="parity-odd">{t('oddWeeks')}</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="even" id="parity-even" />
+                            <Label htmlFor="parity-even">{t('evenWeeks')}</Label>
+                          </div>
+                        </RadioGroup>
+                      )}
+
+                      {newRule.type === 'DOUBLE_SHIFT' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">{t('triggerShift')}</Label>
+                            <Select value={newRule.config.triggerShiftId || ''} onValueChange={(v) => setNewRule({ ...newRule, config: { ...newRule.config, triggerShiftId: v } })}>
+                              <SelectTrigger><SelectValue placeholder={t('selectShift')} /></SelectTrigger>
+                              <SelectContent>
+                                {getUserShiftsForRules(selectedUser).map((s: any) => (
+                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">{t('linkedShift')}</Label>
+                            <Select value={newRule.config.linkedShiftId || ''} onValueChange={(v) => setNewRule({ ...newRule, config: { ...newRule.config, linkedShiftId: v } })}>
+                              <SelectTrigger><SelectValue placeholder={t('selectShift')} /></SelectTrigger>
+                              <SelectContent>
+                                {shifts.map((s: any) => (
+                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                ))}
+                                {piketts.map((p: any) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name} (Pikett)</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      )}
+
+                      {newRule.type === 'MAX_LOAD' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">{t('shift')}</Label>
+                            <Select value={newRule.config.shiftId || ''} onValueChange={(v) => setNewRule({ ...newRule, config: { ...newRule.config, shiftId: v } })}>
+                              <SelectTrigger><SelectValue placeholder={t('selectShift')} /></SelectTrigger>
+                              <SelectContent>
+                                {getUserShiftsForRules(selectedUser).map((s: any) => (
+                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">{t('maxPercentage')}</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={100}
+                              value={newRule.config.maxPercentage || 50}
+                              onChange={(e) => setNewRule({ ...newRule, config: { ...newRule.config, maxPercentage: parseInt(e.target.value) || 50 } })}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" className="hover:bg-secondary/20" onClick={() => { setIsAddingRule(false); setEditingRuleId(null); setNewRule({ type: 'WEEK_PARITY', config: { parity: 'odd' }, enabled: true }); }}>
+                          {tCommon('cancel')}
+                        </Button>
+                        <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleSaveRule}>
+                          {tCommon('save')}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <Label>Status</Label>
-                <Select 
-                  value={selectedUser?.status || 'ACTIVE'} 
+                <Select
+                  value={selectedUser?.status || 'ACTIVE'}
                   onValueChange={(value) => setSelectedUser({...selectedUser, status: value})}
                 >
                   <SelectTrigger>

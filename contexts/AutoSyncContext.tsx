@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 
@@ -8,7 +8,7 @@ interface AutoSyncContextType {
   nextSyncIn: number;
   syncing: boolean;
   syncMessage: { type: 'success' | 'error'; text: string } | null;
-  triggerSync: () => void;
+  triggerSync: () => Promise<void>;
   clearSyncMessage: () => void;
 }
 
@@ -23,42 +23,57 @@ export const AutoSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [nextSyncIn, setNextSyncIn] = useState(SYNC_INTERVAL);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const syncingRef = useRef(false);
+  const syncPromiseRef = useRef<Promise<void> | null>(null);
 
   const clearSyncMessage = useCallback(() => setSyncMessage(null), []);
 
   const doSync = useCallback(async () => {
-    if (syncing) return;
+    // If already syncing, wait for the current sync to finish
+    if (syncingRef.current && syncPromiseRef.current) {
+      await syncPromiseRef.current;
+      return;
+    }
+
+    syncingRef.current = true;
     setSyncing(true);
     setSyncMessage(null);
 
-    try {
-      const graphToken = await getAccessToken();
-      const res = await authFetch('/api/outlook/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(graphToken ? { 'X-Graph-Token': graphToken } : {})
+    const promise = (async () => {
+      try {
+        const graphToken = await getAccessToken();
+        const res = await authFetch('/api/outlook/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(graphToken ? { 'X-Graph-Token': graphToken } : {})
+          }
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || 'Sync failed');
         }
-      });
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || 'Sync failed');
+        const result = await res.json();
+        setSyncMessage({ type: 'success', text: `Sync: ${result.updated || 0} updated` });
+        setTimeout(() => setSyncMessage(null), 5000);
+      } catch (err) {
+        setSyncMessage({ type: 'error', text: err instanceof Error ? err.message : 'Sync error' });
+        setTimeout(() => setSyncMessage(null), 10000);
+      } finally {
+        syncingRef.current = false;
+        setSyncing(false);
+        syncPromiseRef.current = null;
       }
+    })();
 
-      const result = await res.json();
-      setSyncMessage({ type: 'success', text: `Sync: ${result.updated || 0} updated` });
-      setTimeout(() => setSyncMessage(null), 5000);
-    } catch (err) {
-      setSyncMessage({ type: 'error', text: err instanceof Error ? err.message : 'Sync error' });
-      setTimeout(() => setSyncMessage(null), 10000);
-    } finally {
-      setSyncing(false);
-    }
-  }, [syncing, getAccessToken, authFetch]);
+    syncPromiseRef.current = promise;
+    await promise;
+  }, [getAccessToken, authFetch]);
 
-  const triggerSync = useCallback(() => {
-    doSync();
+  const triggerSync = useCallback(async () => {
+    await doSync();
     setNextSyncIn(SYNC_INTERVAL);
   }, [doSync]);
 

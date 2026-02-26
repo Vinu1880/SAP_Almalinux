@@ -23,7 +23,8 @@ export async function GET(
       where: { id },
       include: {
         team: true,
-        leadingTeam: true
+        leadingTeam: true,
+        rules: true,
       }
     });
 
@@ -125,7 +126,8 @@ export async function PUT(
       data: updateData,
       include: {
         team: true,
-        leadingTeam: true
+        leadingTeam: true,
+        rules: true,
       }
     });
 

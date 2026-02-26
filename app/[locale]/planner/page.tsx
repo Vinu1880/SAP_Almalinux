@@ -95,6 +95,7 @@ interface ShiftAssignment {
   isManualOverride?: boolean;
   overrideReason?: string;
   noAssignmentReason?: string;
+  isDoubleShift?: boolean;
 }
 
 interface RotationPattern {
@@ -1338,11 +1339,32 @@ const processShiftAssignments = async () => {
           }
 
           // ========================================
+          // PRIORITY 2.5: USER RULES — WEEK_PARITY
+          // ========================================
+          const weekParityRules = (user.rules || []).filter(
+            (r: any) => r.type === 'WEEK_PARITY' && r.enabled
+          );
+          if (weekParityRules.length > 0) {
+            const wk = getWeekKey(date);
+            const weekNum = parseInt(wk.split('-W')[1]);
+            const isOddWeek = weekNum % 2 !== 0;
+            const wantsOdd = weekParityRules[0].config.parity === 'odd';
+            if ((wantsOdd && !isOddWeek) || (!wantsOdd && isOddWeek)) {
+              unavailableUsers.push({
+                user,
+                reason: t('reasonWeekParity', { parity: wantsOdd ? 'odd' : 'even' }),
+                conflictEvents: []
+              });
+              continue;
+            }
+          }
+
+          // ========================================
           // PRIORITY 3: ALREADY ASSIGNED TODAY
           // ========================================
-          const hasNormalShiftToday = assignments.some(a => 
-            a.date === date && 
-            !a.isPikett && 
+          const hasNormalShiftToday = assignments.some(a =>
+            a.date === date &&
+            !a.isPikett &&
             a.assignedUsers.some(u => u.id === user.id)
           );
           
@@ -1403,6 +1425,27 @@ const processShiftAssignments = async () => {
             }
           }
             
+          // ========================================
+          // PRIORITY 6: USER RULES — MAX_LOAD
+          // ========================================
+          const maxLoadRules = (user.rules || []).filter(
+            (r: any) => r.type === 'MAX_LOAD' && r.enabled && r.config.shiftId === shiftId
+          );
+          if (maxLoadRules.length > 0) {
+            const maxRule = maxLoadRules[0];
+            const totalDates = selectedDates.length;
+            const maxAssignments = Math.ceil(totalDates * (maxRule.config.maxPercentage / 100));
+            const current = userShiftsTracking[user.id]?.[shiftId] || 0;
+            if (current >= maxAssignments) {
+              unavailableUsers.push({
+                user,
+                reason: t('reasonMaxLoad', { pct: maxRule.config.maxPercentage }),
+                conflictEvents: []
+              });
+              continue;
+            }
+          }
+
           // ========================================
           // IF WE GET HERE: THE USER IS AVAILABLE
           // ========================================
@@ -1530,6 +1573,69 @@ const processShiftAssignments = async () => {
       }
     }
     
+    // ========================================
+    // DOUBLE_SHIFT POST-PROCESSING
+    // ========================================
+    const doubleShiftAdditions: any[] = [];
+    for (const assignment of assignments) {
+      for (const assignedUser of assignment.assignedUsers) {
+        const dsRules = (assignedUser.rules || []).filter(
+          (r: any) => r.type === 'DOUBLE_SHIFT' && r.enabled && r.config.triggerShiftId === assignment.shiftId
+        );
+        for (const rule of dsRules) {
+          const linkedShiftId = rule.config.linkedShiftId;
+          // Look up in shifts first, then piketts
+          const linkedShift = shifts.find((s: any) => s.id === linkedShiftId);
+          const linkedPikett = !linkedShift ? piketts.find((p: any) => p.id === linkedShiftId) : null;
+          const linkedItem = linkedShift || (linkedPikett ? { ...linkedPikett, startTime: '00:00', endTime: '23:59' } : null);
+          if (!linkedItem) continue;
+
+          const alreadyAssigned = assignments.some(
+            a => a.date === assignment.date && a.shiftId === linkedShiftId &&
+                 a.assignedUsers.some((u: any) => u.id === assignedUser.id)
+          ) || doubleShiftAdditions.some(
+            a => a.date === assignment.date && a.shiftId === linkedShiftId &&
+                 a.userId === assignedUser.id
+          );
+          if (alreadyAssigned) continue;
+
+          doubleShiftAdditions.push({
+            date: assignment.date,
+            shiftId: linkedShiftId,
+            shift: linkedItem,
+            user: { ...assignedUser, isDoubleShift: true },
+            userId: assignedUser.id,
+            isPikett: !!linkedPikett,
+          });
+        }
+      }
+    }
+    for (const ds of doubleShiftAdditions) {
+      const existing = assignments.find(
+        a => a.date === ds.date && a.shiftId === ds.shiftId
+      );
+      if (existing) {
+        if (!existing.assignedUsers.some((u: any) => u.id === ds.userId)) {
+          existing.assignedUsers.push(ds.user);
+        }
+      } else {
+        assignments.push({
+          date: ds.date,
+          shiftId: ds.shiftId,
+          shift: ds.shift,
+          assignedUsers: [ds.user],
+          availableUsers: [],
+          unavailableUsers: [],
+          isRotationAssignment: false,
+          isDoubleShift: true,
+          isPikett: ds.isPikett,
+        });
+      }
+      if (!userShiftsTracking[ds.userId]) userShiftsTracking[ds.userId] = {};
+      if (!userShiftsTracking[ds.userId][ds.shiftId]) userShiftsTracking[ds.userId][ds.shiftId] = 0;
+      userShiftsTracking[ds.userId][ds.shiftId]++;
+    }
+
     // Fetch fresh DB assignments to override with real users
     let freshDbAssignments: any[] = [];
     try {

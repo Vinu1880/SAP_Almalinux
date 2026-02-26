@@ -206,8 +206,8 @@ const DashboardPage = () => {
 
   // Function to check which users are OOF/busy on a specific date using getSchedule API
   // Same logic as planner's fetchOutOfOfficeForPeriod - uses delegated permissions
-  const fetchUnavailableUsersForDate = async (date: string, userEmails: string[]): Promise<Map<string, string>> => {
-    const unavailableMap = new Map<string, string>();
+  const fetchUnavailableUsersForDate = async (date: string, userEmails: string[]): Promise<Map<string, { status: string; subject?: string }>> => {
+    const unavailableMap = new Map<string, { status: string; subject?: string }>();
 
     try {
       const accessToken = await getAccessToken();
@@ -258,31 +258,22 @@ const DashboardPage = () => {
         for (const userSchedule of scheduleData.value) {
           const userEmail = (userSchedule.scheduleId || '').toLowerCase();
 
-          // Method 1: Check availabilityView (most reliable)
-          // Codes: 0=free, 1=tentative, 2=busy, 3=oof, 4=workingElsewhere
-          if (userSchedule.availabilityView) {
+          // Check scheduleItems for status and subject info
+          const items = userSchedule.scheduleItems || [];
+          const oofItem = items.find((item: any) => item.status === 'oof');
+          const busyItem = items.find((item: any) => item.status === 'busy');
+
+          if (oofItem) {
+            unavailableMap.set(userEmail, { status: 'oof', subject: oofItem.subject });
+          } else if (busyItem) {
+            unavailableMap.set(userEmail, { status: 'busy', subject: busyItem.subject });
+          } else if (userSchedule.availabilityView) {
+            // Fallback to availabilityView codes if no scheduleItems
             const viewCodes = userSchedule.availabilityView.split('');
             if (viewCodes.some((c: string) => c === '3')) {
-              unavailableMap.set(userEmail, 'oof');
-              continue;
-            }
-            if (viewCodes.some((c: string) => c === '2')) {
-              unavailableMap.set(userEmail, 'busy');
-              continue;
-            }
-          }
-
-          // Method 2: Check scheduleItems as fallback
-          if (userSchedule.scheduleItems) {
-            for (const item of userSchedule.scheduleItems) {
-              if (item.status === 'oof') {
-                unavailableMap.set(userEmail, 'oof');
-                break;
-              }
-              if (item.status === 'busy') {
-                unavailableMap.set(userEmail, 'busy');
-                break;
-              }
+              unavailableMap.set(userEmail, { status: 'oof' });
+            } else if (viewCodes.some((c: string) => c === '2')) {
+              unavailableMap.set(userEmail, { status: 'busy' });
             }
           }
         }
@@ -367,12 +358,7 @@ const DashboardPage = () => {
         // Get eligible users for the shift (don't exclude anyone - let them be categorized)
         const eligibleUsers = getEligibleUsersForShift(shift);
 
-        // Fetch OOF/busy status using getSchedule API
-        // Returns a Map of email -> 'oof' | 'busy'
-        const eligibleEmails = eligibleUsers.filter(u => u.email).map(u => u.email);
-        const unavailableUsersMap = await fetchUnavailableUsersForDate(dateStr, eligibleEmails);
-
-        // Calculate prev/next dates for consecutive shift check
+        // Fetch all assignments around this date (prev, current, next day) for accurate checks
         const assignmentDate = new Date(dateStr);
         const prevDate = new Date(assignmentDate);
         prevDate.setDate(prevDate.getDate() - 1);
@@ -380,6 +366,23 @@ const DashboardPage = () => {
         nextDate.setDate(nextDate.getDate() + 1);
         const prevDateStr = normalizeDate(prevDate);
         const nextDateStr = normalizeDate(nextDate);
+
+        let dateAssignments = assignments;
+        try {
+          const res = await authFetch(`/api/shift-assignments?startDate=${prevDateStr}&endDate=${nextDateStr}`);
+          if (res.ok) {
+            dateAssignments = await res.json();
+            console.log(`[resend-check] Fetched ${dateAssignments.length} assignments for ${prevDateStr} to ${nextDateStr}`);
+          } else {
+            console.warn(`[resend-check] Failed to fetch assignments: ${res.status}`);
+          }
+        } catch (e) {
+          console.warn('[resend-check] Error fetching assignments:', e);
+        }
+
+        // Fetch OOF status using getSchedule API
+        const eligibleEmails = eligibleUsers.filter(u => u.email).map(u => u.email);
+        const unavailableUsersMap = await fetchUnavailableUsersForDate(dateStr, eligibleEmails);
 
         // Categorize each eligible user (same as planner)
         const available: any[] = [];
@@ -389,7 +392,7 @@ const DashboardPage = () => {
 
         for (const user of eligibleUsers) {
           // 1. Check if user has REFUSED this specific shift on this date
-          const refusedAssignment = assignments.find(a =>
+          const refusedAssignment = dateAssignments.find(a =>
             normalizeDate(a.date) === dateStr &&
             a.userId === user.id &&
             a.shiftId === resendingAssignment.shiftId &&
@@ -402,7 +405,7 @@ const DashboardPage = () => {
           }
 
           // 2. Check if user has an ACTIVE (PENDING/ACCEPTED) assignment on this date
-          const activeAssignmentToday = assignments.find(a =>
+          const activeAssignmentToday = dateAssignments.find(a =>
             normalizeDate(a.date) === dateStr &&
             a.userId === user.id &&
             a.id !== resendingAssignment.id &&
@@ -411,7 +414,7 @@ const DashboardPage = () => {
           );
 
           if (activeAssignmentToday) {
-            alreadyAssigned.push(user);
+            alreadyAssigned.push({ ...user, _assignedShiftName: activeAssignmentToday.shift?.name || 'Shift' });
             continue;
           }
 
@@ -436,19 +439,23 @@ const DashboardPage = () => {
           }
 
           // 5. Check Out of Office / Busy using the Map from getSchedule
-          // If user passed steps 1-2 (not refused, not already assigned) but
-          // getSchedule says they're oof or busy, they have a conflict
-          const userOofStatus = unavailableUsersMap.get(user.email?.toLowerCase());
-          if (userOofStatus === 'oof' || userOofStatus === 'busy') {
-            unavailable.push({
-              user,
-              reason: userOofStatus === 'oof' ? t('reasonOutOfOffice') : t('reasonOutOfOffice')
-            });
-            continue;
+          const userCalendarStatus = unavailableUsersMap.get(user.email?.toLowerCase());
+          if (userCalendarStatus) {
+            if (userCalendarStatus.status === 'oof') {
+              unavailable.push({ user, reason: t('reasonOutOfOffice') });
+              continue;
+            }
+            if (userCalendarStatus.status === 'busy') {
+              // Check if busy is from one of our own shift assignments (already handled by step 2)
+              // If not already caught by step 2, it's a real external busy event
+              const busySubject = userCalendarStatus.subject || '';
+              unavailable.push({ user, reason: busySubject ? `${t('reasonBusy')} (${busySubject})` : t('reasonBusy') });
+              continue;
+            }
           }
 
           // 6. Check consecutive shifts (same logic as planner: check prev/next day)
-          const hasConsecutiveShift = assignments.some(a => {
+          const hasConsecutiveShift = dateAssignments.some(a => {
             const aDateNorm = normalizeDate(a.date);
             return (aDateNorm === prevDateStr || aDateNorm === nextDateStr) &&
               a.userId === user.id &&
@@ -457,7 +464,7 @@ const DashboardPage = () => {
           });
 
           if (hasConsecutiveShift) {
-            const consecutiveAssignments = assignments.filter(a => {
+            const consecutiveAssignments = dateAssignments.filter(a => {
               const aDateNorm = normalizeDate(a.date);
               return (aDateNorm === prevDateStr || aDateNorm === nextDateStr) &&
                 a.userId === user.id &&
@@ -689,8 +696,9 @@ const DashboardPage = () => {
 
   // Sync handler: uses global auto-sync + refreshes dashboard data
   const syncOutlook = async () => {
-    triggerSync();
-    await refresh(); fetchCalendarAssignments();
+    await triggerSync();
+    await refresh();
+    fetchCalendarAssignments();
   };
 
   // Calculate user statistics with all details
@@ -1485,15 +1493,15 @@ const DashboardPage = () => {
                             </div>
                             <div className="space-y-0.5">
                               {dayAssignments.slice(0, maxVisible).map((a: any) => (
-                                <div key={a.id} className="flex items-center gap-1 text-[10px] leading-tight truncate">
-                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotColor(a.status)}`} />
+                                <div key={a.id} className="flex items-center gap-1 text-xs leading-tight truncate">
+                                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(a.status)}`} />
                                   <span className="truncate text-slate-700">
-                                    {a.shift?.name} — {a.user?.firstName} {a.user?.lastName?.[0]}.
+                                    {a.shift?.name} — {a.user?.firstName} {a.user?.lastName}
                                   </span>
                                 </div>
                               ))}
                               {dayAssignments.length > maxVisible && (
-                                <div className="text-[10px] text-blue-600 font-medium px-1">
+                                <div className="text-xs text-blue-600 font-medium px-1">
                                   {t('moreAssignments', { count: dayAssignments.length - maxVisible })}
                                 </div>
                               )}
@@ -1638,11 +1646,6 @@ const DashboardPage = () => {
                       </h4>
                       <div className="space-y-2">
                         {usersAvailability.alreadyAssigned.map(user => {
-                          const otherAssignment = assignments.find(
-                            a => a.date === resendingAssignment?.date &&
-                                 a.userId === user.id &&
-                                 a.id !== resendingAssignment?.id
-                          );
                           return (
                             <div
                               key={user.id}
@@ -1669,7 +1672,7 @@ const DashboardPage = () => {
                                     </p>
                                   </div>
                                   <Badge variant="outline" className="text-xs bg-white">
-                                    {otherAssignment?.shift?.name || t('otherShift')}
+                                    {user._assignedShiftName || t('otherShift')}
                                   </Badge>
                                 </div>
                                 {selectedNewUser === user.id && (

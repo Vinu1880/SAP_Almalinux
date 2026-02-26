@@ -107,6 +107,7 @@
     "reasonHolidayWithName": "Feiertag: {name}",
     "reasonNotWorkingToday": "Arbeitet heute nicht",
     "reasonOutOfOffice": "Abwesend",
+    "reasonBusy": "Beschäftigt",
     "alreadyAssignedTodayWithCount": "Heute bereits zugewiesen ({count})",
     "userFilter": "Benutzer",
     "shiftFilter": "Schicht",
@@ -387,7 +388,24 @@
     "deleteTeamError": "Fehler beim Löschen des Teams",
     "cantonVaud": "Waadt (VD)",
     "cantonBerne": "Bern (BE)",
-    "cantonZurich": "Zürich (ZH)"
+    "cantonZurich": "Zürich (ZH)",
+    "rules": "Regeln",
+    "addRule": "Regel hinzufügen",
+    "noRules": "Keine Regeln definiert",
+    "ruleWeekParity": "Wochenparität",
+    "ruleDoubleShift": "Doppelschicht",
+    "ruleMaxLoad": "Maximale Auslastung",
+    "oddWeeks": "Ungerade Wochen",
+    "evenWeeks": "Gerade Wochen",
+    "oddWeeksOnly": "Arbeitet nur in ungeraden Wochen",
+    "evenWeeksOnly": "Arbeitet nur in geraden Wochen",
+    "triggerShift": "Auslösende Schicht",
+    "linkedShift": "Verknüpfte Schicht",
+    "selectShift": "Schicht auswählen",
+    "doubleShiftDesc": "Bei Zuweisung zu {trigger} → auch {linked}",
+    "maxPercentage": "Max %",
+    "maxLoadDesc": "Max {pct}% von {shift}",
+    "shift": "Schicht"
   },
   "settings": {
     "title": "Einstellungen",
@@ -669,6 +687,9 @@
     "statusTentative": "Vorläufig",
     "statusAccepted": "Akzeptiert",
     "statusRefused": "Abgelehnt",
-    "statusCancelled": "Storniert"
+    "statusCancelled": "Storniert",
+    "reasonWeekParity": "Wochenparität ({parity})",
+    "reasonMaxLoad": "Maximale Auslastung erreicht ({pct}%)",
+    "reasonDoubleShift": "Doppelschicht von {shift}"
   }
 }

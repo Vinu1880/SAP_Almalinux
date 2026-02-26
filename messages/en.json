@@ -107,6 +107,7 @@
     "reasonHolidayWithName": "Holiday: {name}",
     "reasonNotWorkingToday": "Not working today",
     "reasonOutOfOffice": "Out of Office",
+    "reasonBusy": "Busy",
     "alreadyAssignedTodayWithCount": "Already assigned today ({count})",
     "userFilter": "User",
     "shiftFilter": "Shift",
@@ -387,7 +388,24 @@
     "deleteTeamError": "Error deleting team",
     "cantonVaud": "Vaud (VD)",
     "cantonBerne": "Berne (BE)",
-    "cantonZurich": "Zurich (ZH)"
+    "cantonZurich": "Zurich (ZH)",
+    "rules": "Rules",
+    "addRule": "Add rule",
+    "noRules": "No rules defined",
+    "ruleWeekParity": "Week parity",
+    "ruleDoubleShift": "Double-shift",
+    "ruleMaxLoad": "Max load",
+    "oddWeeks": "Odd weeks",
+    "evenWeeks": "Even weeks",
+    "oddWeeksOnly": "Works only on odd weeks",
+    "evenWeeksOnly": "Works only on even weeks",
+    "triggerShift": "Trigger shift",
+    "linkedShift": "Linked shift",
+    "selectShift": "Select a shift",
+    "doubleShiftDesc": "If assigned to {trigger} → also {linked}",
+    "maxPercentage": "Max %",
+    "maxLoadDesc": "Max {pct}% of {shift}",
+    "shift": "Shift"
   },
   "settings": {
     "title": "Settings",
@@ -669,6 +687,9 @@
     "statusTentative": "Tentative",
     "statusAccepted": "Accepted",
     "statusRefused": "Refused",
-    "statusCancelled": "Cancelled"
+    "statusCancelled": "Cancelled",
+    "reasonWeekParity": "Week parity ({parity})",
+    "reasonMaxLoad": "Max load reached ({pct}%)",
+    "reasonDoubleShift": "Double-shift from {shift}"
   }
 }

@@ -27,6 +27,25 @@ export const createUserSchema = z.object({
 });
 export const updateUserSchema = createUserSchema.partial();
 
+// UserRule validation
+export const weekParityConfigSchema = z.object({
+  parity: z.enum(['odd', 'even']),
+});
+export const doubleShiftConfigSchema = z.object({
+  triggerShiftId: cuidSchema,
+  linkedShiftId: cuidSchema,
+});
+export const maxLoadConfigSchema = z.object({
+  shiftId: cuidSchema,
+  maxPercentage: z.number().int().min(1).max(100),
+});
+export const createUserRuleSchema = z.object({
+  type: z.enum(['WEEK_PARITY', 'DOUBLE_SHIFT', 'MAX_LOAD']),
+  config: z.any(),
+  enabled: z.boolean().optional().default(true),
+});
+export const updateUserRuleSchema = createUserRuleSchema.partial();
+
 export const createTeamSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).nullable().optional(),
