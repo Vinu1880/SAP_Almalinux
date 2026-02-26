@@ -130,7 +130,8 @@ export async function POST(request: NextRequest) {
       errors: errorCount
     });
 
-  } catch {
-    return NextResponse.json({ error: 'Synchronization failed' }, { status: 500 });
+  } catch (error) {
+    console.error('[outlook/sync] Synchronization failed:', error);
+    return NextResponse.json({ error: 'Synchronization failed', details: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
