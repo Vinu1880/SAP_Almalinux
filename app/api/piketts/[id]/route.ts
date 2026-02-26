@@ -82,6 +82,20 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // Clean up UserRules that reference this pikett in their JSON config
+    const allRules = await prisma.userRule.findMany({
+      where: { type: { in: ['DOUBLE_SHIFT', 'MAX_LOAD'] } }
+    });
+    const orphanedRuleIds = allRules
+      .filter((r: any) => {
+        const cfg = r.config as any;
+        return cfg?.triggerShiftId === id || cfg?.linkedShiftId === id || cfg?.shiftId === id;
+      })
+      .map((r: any) => r.id);
+    if (orphanedRuleIds.length > 0) {
+      await prisma.userRule.deleteMany({ where: { id: { in: orphanedRuleIds } } });
+    }
+
     await prisma.pikett.delete({
       where: { id }
     });

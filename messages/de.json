@@ -405,7 +405,10 @@
     "doubleShiftDesc": "Bei Zuweisung zu {trigger} → auch {linked}",
     "maxPercentage": "Max %",
     "maxLoadDesc": "Max {pct}% von {shift}",
-    "shift": "Schicht"
+    "shift": "Schicht",
+    "ruleDuplicateWeekParity": "Eine Wochenparitätsregel existiert bereits für diesen Benutzer",
+    "ruleDuplicateMaxLoad": "Eine Max-Last-Regel existiert bereits für diese Schicht",
+    "ruleDuplicateDoubleShift": "Eine Doppelschicht-Regel existiert bereits für diese Auslöserschicht"
   },
   "settings": {
     "title": "Einstellungen",

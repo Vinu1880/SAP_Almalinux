@@ -420,15 +420,17 @@ const getUserCantonFromLocation = (location: string): string => {
     }
     
     // Calculate which week of the cycle we are in
-    const startDateObj = new Date(startDate);
+    // Use ISO week number for consistency across generation tranches
+    // This ensures rotations continue correctly when generating in 3-4 month batches
     const currentDateObj = new Date(date);
-    
-    // Calculate number of weeks since start
-    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-    const weeksSinceStart = Math.floor((currentDateObj.getTime() - startDateObj.getTime()) / msPerWeek);
-    
-    // Determine the week in the cycle (0-based)
-    const weekInCycle = weeksSinceStart % pattern.cycleLength;
+    const tmp = new Date(currentDateObj.valueOf());
+    const dayNum = tmp.getUTCDay() || 7;
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    const isoWeekNum = Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+
+    // Determine the week in the cycle (0-based, using ISO week number)
+    const weekInCycle = (isoWeekNum - 1) % pattern.cycleLength;
     
     const weekPattern = pattern.weeks[weekInCycle];
     if (!weekPattern) {
@@ -497,7 +499,8 @@ const getUserCantonFromLocation = (location: string): string => {
           teamId: dbUser.teamId || null,
           availability: dbUser.availability || null,
           role: dbUser.role || null,
-          location: dbUser.location || null
+          location: dbUser.location || null,
+          rules: dbUser.rules || []
         });
       });
       
@@ -520,7 +523,8 @@ const getUserCantonFromLocation = (location: string): string => {
         teamId: dbUser.teamId || null,
         availability: dbUser.availability || null,
         role: dbUser.role || null,
-        location: dbUser.location || null
+        location: dbUser.location || null,
+        rules: dbUser.rules || []
       }));
       setAvailableUsers(dbUsers);
       return dbUsers;
@@ -955,6 +959,37 @@ const processShiftAssignments = async () => {
     const userAvailableDays: { [userId: string]: { [shiftId: string]: number } } = {};
     // Track weekly assignments to avoid same user twice in one week
     const weeklyAssignments: { [weekKey: string]: { [shiftId: string]: Set<string> } } = {};
+
+    // Pre-compute lookup maps for O(1) access instead of O(n) .find() calls
+    const shiftMap = new Map(shifts.map((s: any) => [s.id, s]));
+    const pikettMap = new Map(piketts.map((p: any) => [p.id, p]));
+    // Pre-compute day-of-week and adjacent dates for each date (avoid repeated new Date() calls)
+    const dateDowMap = new Map(dates.map(d => [d, new Date(d).getDay()]));
+    const dateAdjacentMap = new Map(dates.map(d => {
+      const dt = new Date(d);
+      const prev = new Date(dt); prev.setDate(prev.getDate() - 1);
+      const next = new Date(dt); next.setDate(next.getDate() + 1);
+      return [d, {
+        prev: prev.toISOString().split('T')[0],
+        next: next.toISOString().split('T')[0]
+      }];
+    }));
+    // Fast lookup: "date|userId" -> assigned (non-pikett) for O(1) checks
+    const assignedNormalShiftSet = new Set<string>();
+    // Fast lookup: "date|userId" -> assigned (any shift, for consecutive check)
+    const assignedAnyShiftSet = new Set<string>();
+    // Pre-compute active date counts per shift/pikett for MAX_LOAD
+    const activeDateCountCache = new Map<string, number>();
+    const getActiveDateCount = (itemId: string): number => {
+      if (activeDateCountCache.has(itemId)) return activeDateCountCache.get(itemId)!;
+      const item = shiftMap.get(itemId) || pikettMap.get(itemId);
+      const count = dates.filter(d => {
+        const dow = dateDowMap.get(d)!;
+        return !item?.daysOfWeek || item.daysOfWeek.includes(dow);
+      }).length;
+      activeDateCountCache.set(itemId, count);
+      return count;
+    };
     const getWeekKey = (dateStr: string) => {
       const d = new Date(dateStr);
       const tmp = new Date(d.valueOf());
@@ -969,7 +1004,7 @@ const processShiftAssignments = async () => {
     if (selectedPiketts.length > 0) {
       
       for (const pikettId of selectedPiketts) {
-        const pikett = piketts.find(p => p.id === pikettId);
+        const pikett = pikettMap.get(pikettId);
         if (!pikett) continue;
         
         // Get eligible users for this pikett
@@ -1032,6 +1067,21 @@ const processShiftAssignments = async () => {
               continue;
             }
             
+            // Check WEEK_PARITY rule
+            const wpRules = (candidateUser.rules || []).filter(
+              (r: any) => r.type === 'WEEK_PARITY' && r.enabled
+            );
+            if (wpRules.length > 0) {
+              const weekNum = parseInt(weekKey.split('-W')[1]);
+              const isOddWeek = weekNum % 2 !== 0;
+              const wantsOdd = wpRules[0].config.parity === 'odd';
+              if ((wantsOdd && !isOddWeek) || (!wantsOdd && isOddWeek)) {
+                userRotationIndex++;
+                attempts++;
+                continue;
+              }
+            }
+
             // Check availability for this week
             if (settings.checkCalendars) {
               let unavailableDaysCount = 0;
@@ -1041,7 +1091,7 @@ const processShiftAssignments = async () => {
                   unavailableDaysCount++;
                 }
               }
-              
+
               // If the user is absent more than 2 days in the week, skip to the next
               if (unavailableDaysCount > 2) {
                 userRotationIndex++;
@@ -1049,23 +1099,19 @@ const processShiftAssignments = async () => {
                 continue;
               }
             }
-            
+
             // This user is OK for this week
             assignedUserForWeek = candidateUser;
             lastAssignedUserId = candidateUser.id;
           }
           
-          // If no available user found, force assignment of the next in rotation
-          if (!assignedUserForWeek && shuffledUsers.length > 0) {
-            assignedUserForWeek = shuffledUsers[userRotationIndex % shuffledUsers.length];
-            lastAssignedUserId = assignedUserForWeek.id;
-          }
+          // If no available user found, leave pikett unassigned for this week
+          // (respects WEEK_PARITY and availability constraints)
           
           // Create assignments for each day of the week
             for (const date of weekDates) {
               // Check if this day is configured for the pikett
-              const dateObj = new Date(date);
-              const dayOfWeek = dateObj.getDay();
+              const dayOfWeek = dateDowMap.get(date)!;
               if (pikett.daysOfWeek && !pikett.daysOfWeek.includes(dayOfWeek)) {
                 continue; // Skip to next day if this day is not configured
               }
@@ -1171,8 +1217,8 @@ const processShiftAssignments = async () => {
       let shiftsToProcess = [...selectedShifts];
       if (settings.prioritySystem) {
         shiftsToProcess.sort((a, b) => {
-          const shiftA = shifts.find(s => s.id === a);
-          const shiftB = shifts.find(s => s.id === b);
+          const shiftA = shiftMap.get(a);
+          const shiftB = shiftMap.get(b);
           const membersA = getEligibleUsersForShift(shiftA).length;
           const membersB = getEligibleUsersForShift(shiftB).length;
           return membersA - membersB;
@@ -1199,14 +1245,34 @@ const processShiftAssignments = async () => {
               continue;
             }
 
-            // Check that this shift is part of the selected shifts in the planner
-            if (!selectedShifts.includes(shiftId)) {
+            // Check that this shift/pikett is part of the selected items in the planner
+            const isSelectedShift = selectedShifts.includes(shiftId);
+            const isSelectedPikett = selectedPiketts.includes(shiftId);
+            if (!isSelectedShift && !isSelectedPikett) {
               continue;
             }
 
-            // Find the shift directly by its ID
-            const selectedShift = shifts.find(s => s.id === shiftId);
-            if (!selectedShift) {
+            // Find the shift or pikett by its ID
+            const selectedShift = isSelectedShift
+              ? shiftMap.get(shiftId) || null
+              : null;
+            const selectedPikett = isSelectedPikett
+              ? pikettMap.get(shiftId) || null
+              : null;
+            const selectedItem = selectedShift || (selectedPikett ? {
+              ...selectedPikett,
+              startTime: '00:00',
+              endTime: '23:59'
+            } : null);
+            if (!selectedItem) {
+              continue;
+            }
+
+            // Skip if already assigned for this date+item (e.g. by PART 1 piketts)
+            const alreadyHasAssignment = assignments.some(a =>
+              a.date === date && a.shiftId === shiftId
+            );
+            if (alreadyHasAssignment) {
               continue;
             }
 
@@ -1217,16 +1283,30 @@ const processShiftAssignments = async () => {
 
             // Check calendar availability
             if (settings.checkCalendars) {
-              const availability = isUserAvailable(rotationUser, date, oofEvents, selectedShift);
+              const availability = isUserAvailable(rotationUser, date, oofEvents, selectedItem);
               if (!availability.available) {
                 continue;
               }
             }
 
-            // Check that the user is eligible for this shift
-            const eligibleUsers = getEligibleUsersForShift(selectedShift);
+            // Check WEEK_PARITY rule
+            const rotWpRules = (rotationUser.rules || []).filter(
+              (r: any) => r.type === 'WEEK_PARITY' && r.enabled
+            );
+            if (rotWpRules.length > 0) {
+              const wk = getWeekKey(date);
+              const weekNum = parseInt(wk.split('-W')[1]);
+              const isOddWeek = weekNum % 2 !== 0;
+              const wantsOdd = rotWpRules[0].config.parity === 'odd';
+              if ((wantsOdd && !isOddWeek) || (!wantsOdd && isOddWeek)) {
+                continue;
+              }
+            }
+
+            // Check that the user is eligible for this shift/pikett
+            const eligibleUsers = getEligibleUsersForShift(selectedItem);
             const isEligible = eligibleUsers.some(u => u.id === rotationUser.id);
-            
+
             if (!isEligible) {
               continue;
             }
@@ -1239,14 +1319,20 @@ const processShiftAssignments = async () => {
               userShiftsTracking[rotationUser.id][shiftId] = 0;
             }
             userShiftsTracking[rotationUser.id][shiftId]++;
-            
-            dailyAssignments[rotationUser.id] = [selectedShift.name];
+
+            dailyAssignments[rotationUser.id] = [selectedItem.name];
+
+            // Update fast-lookup sets
+            if (!selectedPikett) {
+              assignedNormalShiftSet.add(`${date}|${rotationUser.id}`);
+            }
+            assignedAnyShiftSet.add(`${date}|${rotationUser.id}`);
 
             // Create the assignment
             assignments.push({
               date,
-              shiftId: selectedShift.id,
-              shift: selectedShift,
+              shiftId: selectedItem.id,
+              shift: selectedItem,
               assignedUsers: [{
                 ...rotationUser,
                 shiftsAssigned: { ...userShiftsTracking[rotationUser.id] }
@@ -1260,6 +1346,7 @@ const processShiftAssignments = async () => {
                   conflictEvents: []
                 })),
               isRotationAssignment: true,
+              isPikett: !!selectedPikett,
               rotationPriority: priority
             });
           }
@@ -1267,12 +1354,11 @@ const processShiftAssignments = async () => {
         
         // PART 2.2: Process shifts not assigned by rotation
         for (const shiftId of shiftsToProcess) {
-          const shift = shifts.find(s => s.id === shiftId);
+          const shift = shiftMap.get(shiftId);
           if (!shift) continue;
-          
+
           // Check if this day is configured for the shift
-          const dateObj = new Date(date);
-          const dayOfWeek = dateObj.getDay();
+          const dayOfWeek = dateDowMap.get(date)!;
           if (shift.daysOfWeek && !shift.daysOfWeek.includes(dayOfWeek)) {
             continue; // Skip to next day if this day is not configured
           }
@@ -1362,12 +1448,8 @@ const processShiftAssignments = async () => {
           // ========================================
           // PRIORITY 3: ALREADY ASSIGNED TODAY
           // ========================================
-          const hasNormalShiftToday = assignments.some(a =>
-            a.date === date &&
-            !a.isPikett &&
-            a.assignedUsers.some(u => u.id === user.id)
-          );
-          
+          const hasNormalShiftToday = assignedNormalShiftSet.has(`${date}|${user.id}`);
+
           if (hasNormalShiftToday) {
             unavailableUsers.push({
               user,
@@ -1400,20 +1482,11 @@ const processShiftAssignments = async () => {
           // are not detected here. For a complete check, include at least
           // one day before and after your period in the generation.
           if (settings.avoidConsecutiveShifts) {
-            const hasConsecutiveNormalShift = assignments.some(a => {
-              if (a.isPikett) return false;
-              const currentDate = new Date(date);
-              const prevDate = new Date(currentDate);
-              prevDate.setDate(prevDate.getDate() - 1);
-              const nextDate = new Date(currentDate);
-              nextDate.setDate(nextDate.getDate() + 1);
-
-              const prevDateStr = prevDate.toISOString().split('T')[0];
-              const nextDateStr = nextDate.toISOString().split('T')[0];
-
-              return (a.date === prevDateStr || a.date === nextDateStr) &&
-                    a.assignedUsers.some(u => u.id === user.id);
-            });
+            const adjacent = dateAdjacentMap.get(date);
+            const hasConsecutiveNormalShift = adjacent ? (
+              assignedNormalShiftSet.has(`${adjacent.prev}|${user.id}`) ||
+              assignedNormalShiftSet.has(`${adjacent.next}|${user.id}`)
+            ) : false;
 
             if (hasConsecutiveNormalShift) {
               unavailableUsers.push({
@@ -1433,8 +1506,8 @@ const processShiftAssignments = async () => {
           );
           if (maxLoadRules.length > 0) {
             const maxRule = maxLoadRules[0];
-            const totalDates = selectedDates.length;
-            const maxAssignments = Math.ceil(totalDates * (maxRule.config.maxPercentage / 100));
+            const activeDatesForShift = getActiveDateCount(shiftId);
+            const maxAssignments = Math.max(1, Math.ceil(activeDatesForShift * (maxRule.config.maxPercentage / 100)));
             const current = userShiftsTracking[user.id]?.[shiftId] || 0;
             if (current >= maxAssignments) {
               unavailableUsers.push({
@@ -1527,6 +1600,10 @@ const processShiftAssignments = async () => {
             dailyAssignments[selectedUser.id] = [shift.name];
             selectedUser.shiftsAssigned = { ...userShiftsTracking[selectedUser.id] };
             assignedUsers = [selectedUser];
+
+            // Update fast-lookup sets
+            assignedNormalShiftSet.add(`${date}|${selectedUser.id}`);
+            assignedAnyShiftSet.add(`${date}|${selectedUser.id}`);
             
           } else {
             // Determine the main reason
@@ -1574,63 +1651,104 @@ const processShiftAssignments = async () => {
     }
     
     // ========================================
-    // DOUBLE_SHIFT POST-PROCESSING
+    // DOUBLE_SHIFT POST-PROCESSING (with chaining support)
     // ========================================
-    const doubleShiftAdditions: any[] = [];
-    for (const assignment of assignments) {
-      for (const assignedUser of assignment.assignedUsers) {
-        const dsRules = (assignedUser.rules || []).filter(
-          (r: any) => r.type === 'DOUBLE_SHIFT' && r.enabled && r.config.triggerShiftId === assignment.shiftId
-        );
-        for (const rule of dsRules) {
-          const linkedShiftId = rule.config.linkedShiftId;
-          // Look up in shifts first, then piketts
-          const linkedShift = shifts.find((s: any) => s.id === linkedShiftId);
-          const linkedPikett = !linkedShift ? piketts.find((p: any) => p.id === linkedShiftId) : null;
-          const linkedItem = linkedShift || (linkedPikett ? { ...linkedPikett, startTime: '00:00', endTime: '23:59' } : null);
-          if (!linkedItem) continue;
-
-          const alreadyAssigned = assignments.some(
-            a => a.date === assignment.date && a.shiftId === linkedShiftId &&
-                 a.assignedUsers.some((u: any) => u.id === assignedUser.id)
-          ) || doubleShiftAdditions.some(
-            a => a.date === assignment.date && a.shiftId === linkedShiftId &&
-                 a.userId === assignedUser.id
+    // Process in multiple passes to support chains (e.g. SEC→CDC and CDC→SEC)
+    // Max 5 passes to prevent infinite loops
+    const allDoubleShiftAdditions: any[] = [];
+    const dsAssignedSet = new Set<string>(); // "date|shiftId|userId" for O(1) dedup
+    const dsUserShiftCounts = new Map<string, number>(); // "userId|shiftId" -> count for MAX_LOAD
+    let dsSourceAssignments = [...assignments];
+    for (let dsPass = 0; dsPass < 5; dsPass++) {
+      const passAdditions: any[] = [];
+      for (const assignment of dsSourceAssignments) {
+        for (const assignedUser of assignment.assignedUsers) {
+          const dsRules = (assignedUser.rules || []).filter(
+            (r: any) => r.type === 'DOUBLE_SHIFT' && r.enabled && r.config.triggerShiftId === assignment.shiftId
           );
-          if (alreadyAssigned) continue;
+          for (const rule of dsRules) {
+            const linkedShiftId = rule.config.linkedShiftId;
+            // Look up in shifts first, then piketts (O(1) via Map)
+            const linkedShift = shiftMap.get(linkedShiftId) || null;
+            const linkedPikett = !linkedShift ? (pikettMap.get(linkedShiftId) || null) : null;
+            const linkedItem = linkedShift || (linkedPikett ? { ...linkedPikett, startTime: '00:00', endTime: '23:59' } : null);
+            if (!linkedItem) continue;
 
-          doubleShiftAdditions.push({
-            date: assignment.date,
-            shiftId: linkedShiftId,
-            shift: linkedItem,
-            user: { ...assignedUser, isDoubleShift: true },
-            userId: assignedUser.id,
-            isPikett: !!linkedPikett,
-          });
+            // Fast dedup check using Set
+            const dsKey = `${assignment.date}|${linkedShiftId}|${assignedUser.id}`;
+            if (dsAssignedSet.has(dsKey)) continue;
+
+            // Also check existing assignments
+            const alreadyInAssignments = assignments.some(
+              a => a.date === assignment.date && a.shiftId === linkedShiftId &&
+                   a.assignedUsers.some((u: any) => u.id === assignedUser.id)
+            );
+            if (alreadyInAssignments) continue;
+
+            // For piketts: only 1 user per pikett per date (first DOUBLE_SHIFT wins)
+            if (linkedPikett) {
+              const pikettAlreadyCovered = assignments.some(
+                a => a.date === assignment.date && a.shiftId === linkedShiftId &&
+                     a.assignedUsers.length > 0
+              ) || dsAssignedSet.has(`${assignment.date}|${linkedShiftId}|*`);
+              if (pikettAlreadyCovered) continue;
+            }
+
+            // Check MAX_LOAD on the linked shift before adding
+            const dsMaxLoadRules = (assignedUser.rules || []).filter(
+              (r: any) => r.type === 'MAX_LOAD' && r.enabled && r.config.shiftId === linkedShiftId
+            );
+            if (dsMaxLoadRules.length > 0) {
+              const dsMaxRule = dsMaxLoadRules[0];
+              const dsActiveDates = getActiveDateCount(linkedShiftId);
+              const dsMaxAssignments = Math.max(1, Math.ceil(dsActiveDates * (dsMaxRule.config.maxPercentage / 100)));
+              const dsCurrent = (userShiftsTracking[assignedUser.id]?.[linkedShiftId] || 0)
+                + (dsUserShiftCounts.get(`${assignedUser.id}|${linkedShiftId}`) || 0);
+              if (dsCurrent >= dsMaxAssignments) continue;
+            }
+
+            dsAssignedSet.add(dsKey);
+            if (linkedPikett) {
+              dsAssignedSet.add(`${assignment.date}|${linkedShiftId}|*`); // Block other users for this pikett+date
+            }
+            const countKey = `${assignedUser.id}|${linkedShiftId}`;
+            dsUserShiftCounts.set(countKey, (dsUserShiftCounts.get(countKey) || 0) + 1);
+            passAdditions.push({
+              date: assignment.date,
+              shiftId: linkedShiftId,
+              shift: linkedItem,
+              user: { ...assignedUser, isDoubleShift: true },
+              userId: assignedUser.id,
+              isPikett: !!linkedPikett,
+            });
+          }
         }
       }
+      if (passAdditions.length === 0) break; // No more additions to process
+      allDoubleShiftAdditions.push(...passAdditions);
+      // Next pass: check if these new additions trigger more rules
+      dsSourceAssignments = passAdditions.map(ds => ({
+        date: ds.date,
+        shiftId: ds.shiftId,
+        shift: ds.shift,
+        assignedUsers: [ds.user],
+        availableUsers: [],
+        unavailableUsers: [],
+      }));
     }
-    for (const ds of doubleShiftAdditions) {
-      const existing = assignments.find(
-        a => a.date === ds.date && a.shiftId === ds.shiftId
-      );
-      if (existing) {
-        if (!existing.assignedUsers.some((u: any) => u.id === ds.userId)) {
-          existing.assignedUsers.push(ds.user);
-        }
-      } else {
-        assignments.push({
-          date: ds.date,
-          shiftId: ds.shiftId,
-          shift: ds.shift,
-          assignedUsers: [ds.user],
-          availableUsers: [],
-          unavailableUsers: [],
-          isRotationAssignment: false,
-          isDoubleShift: true,
-          isPikett: ds.isPikett,
-        });
-      }
+    for (const ds of allDoubleShiftAdditions) {
+      // Always create a separate assignment entry (each assignment shows 1 user in the calendar)
+      assignments.push({
+        date: ds.date,
+        shiftId: ds.shiftId,
+        shift: ds.shift,
+        assignedUsers: [ds.user],
+        availableUsers: [],
+        unavailableUsers: [],
+        isRotationAssignment: false,
+        isDoubleShift: true,
+        isPikett: ds.isPikett,
+      });
       if (!userShiftsTracking[ds.userId]) userShiftsTracking[ds.userId] = {};
       if (!userShiftsTracking[ds.userId][ds.shiftId]) userShiftsTracking[ds.userId][ds.shiftId] = 0;
       userShiftsTracking[ds.userId][ds.shiftId]++;

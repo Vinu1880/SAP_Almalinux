@@ -405,7 +405,10 @@
     "doubleShiftDesc": "If assigned to {trigger} → also {linked}",
     "maxPercentage": "Max %",
     "maxLoadDesc": "Max {pct}% of {shift}",
-    "shift": "Shift"
+    "shift": "Shift",
+    "ruleDuplicateWeekParity": "A week parity rule already exists for this user",
+    "ruleDuplicateMaxLoad": "A max load rule already exists for this shift",
+    "ruleDuplicateDoubleShift": "A double-shift rule already exists for this trigger shift"
   },
   "settings": {
     "title": "Settings",

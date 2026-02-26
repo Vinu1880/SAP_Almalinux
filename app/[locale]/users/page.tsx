@@ -1148,6 +1148,29 @@ const UsersPage = () => {
   const handleSaveRule = async () => {
     if (!selectedUser) return;
     try {
+      // Prevent duplicate rules
+      const existingRules = userRules.filter((r: any) => editingRuleId ? r.id !== editingRuleId : true);
+      if (newRule.type === 'WEEK_PARITY') {
+        const existing = existingRules.find((r: any) => r.type === 'WEEK_PARITY');
+        if (existing) {
+          showError(t('ruleDuplicateWeekParity'));
+          return;
+        }
+      }
+      if (newRule.type === 'MAX_LOAD') {
+        const existing = existingRules.find((r: any) => r.type === 'MAX_LOAD' && r.config.shiftId === newRule.config.shiftId);
+        if (existing) {
+          showError(t('ruleDuplicateMaxLoad'));
+          return;
+        }
+      }
+      if (newRule.type === 'DOUBLE_SHIFT') {
+        const existing = existingRules.find((r: any) => r.type === 'DOUBLE_SHIFT' && r.config.triggerShiftId === newRule.config.triggerShiftId);
+        if (existing) {
+          showError(t('ruleDuplicateDoubleShift'));
+          return;
+        }
+      }
       if (editingRuleId) {
         const res = await authFetch(`/api/users/${selectedUser.id}/rules/${editingRuleId}`, {
           method: 'PUT',
@@ -2461,11 +2484,8 @@ const UsersPage = () => {
                             <Select value={newRule.config.linkedShiftId || ''} onValueChange={(v) => setNewRule({ ...newRule, config: { ...newRule.config, linkedShiftId: v } })}>
                               <SelectTrigger><SelectValue placeholder={t('selectShift')} /></SelectTrigger>
                               <SelectContent>
-                                {shifts.map((s: any) => (
+                                {getUserShiftsForRules(selectedUser).map((s: any) => (
                                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                ))}
-                                {piketts.map((p: any) => (
-                                  <SelectItem key={p.id} value={p.id}>{p.name} (Pikett)</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -2716,9 +2736,15 @@ const UsersPage = () => {
                         const userExcluded = shift.excludedUserIds?.includes(uid);
                         return (userInTeam && !userExcluded) || userIncluded;
                       });
+                      const userPiketts = piketts.filter((pikett: any) => {
+                        const inTeam = user.teamId === pikett.teamId;
+                        const included = pikett.includedUserIds?.includes(uid);
+                        const excluded = pikett.excludedUserIds?.includes(uid);
+                        return (inTeam && !excluded) || included;
+                      });
                       setNewPattern({
                         ...newPattern,
-                        userShifts: userShifts.map((s: any) => s.id)
+                        userShifts: [...userShifts.map((s: any) => s.id), ...userPiketts.map((p: any) => p.id)]
                       });
                     }
                   }}
@@ -2761,12 +2787,15 @@ const UsersPage = () => {
                           const hasAfternoon = dayAvail?.afternoon === true;
                           const isDayAvailable = userAvailability ? (hasMorning || hasAfternoon) : true;
 
-                          // Filter shifts based on user availability for this day
+                          // Filter shifts/piketts based on user availability for this day
                           // Uses proportion-based logic: if <25% of shift falls in a period, treat as single-period
-                          const availableShifts = (newPattern.userShifts || []).map(sid => shifts.find((s: any) => s.id === sid)).filter(Boolean).filter((shift: any) => {
+                          const findShiftOrPikettById = (sid: string) => shifts.find((s: any) => s.id === sid) || piketts.find((p: any) => p.id === sid);
+                          const availableShifts = (newPattern.userShifts || []).map(sid => findShiftOrPikettById(sid)).filter(Boolean).filter((item: any) => {
+                            // Piketts are always available (no time-based filtering)
+                            if (!item.startTime) return true;
                             if (!userAvailability || !dayAvail) return true;
-                            const [startH, startM] = (shift.startTime || '0:0').split(':').map(Number);
-                            const [endH, endM] = (shift.endTime || '0:0').split(':').map(Number);
+                            const [startH, startM] = (item.startTime || '0:0').split(':').map(Number);
+                            const [endH, endM] = (item.endTime || '0:0').split(':').map(Number);
                             const startMinutes = startH * 60 + (startM || 0);
                             const endMinutes = endH * 60 + (endM || 0);
                             const midday = 13 * 60; // 13:00
@@ -2813,7 +2842,7 @@ const UsersPage = () => {
                                       <span className="text-slate-400">{t("unavailableShort")}</span>
                                     ) : week[day]?.[0] ? (
                                       <span className="truncate">
-                                        {shifts.find(s => s.id === week[day][0])?.name || 'Shift'}
+                                        {(shifts.find(s => s.id === week[day][0]) || piketts.find(p => p.id === week[day][0]))?.name || 'Shift'}
                                       </span>
                                     ) : (
                                       <span className="text-slate-400">{t("free")}</span>
@@ -2825,16 +2854,16 @@ const UsersPage = () => {
                                     <SelectItem value="none">
                                       <span className="text-slate-400">{t("free")}</span>
                                     </SelectItem>
-                                      {availableShifts.map((shift: any) => (
-                                          <SelectItem key={shift.id} value={shift.id}>
+                                      {availableShifts.map((item: any) => (
+                                          <SelectItem key={item.id} value={item.id}>
                                             <div className="flex items-center gap-2">
                                               <div
                                                 className="w-2 h-2 rounded-full"
-                                                style={{ backgroundColor: shift.color }}
+                                                style={{ backgroundColor: item.color }}
                                               />
-                                              <span>{shift.name}</span>
+                                              <span>{item.name}</span>
                                               <span className="text-xs text-slate-500">
-                                                ({shift.startTime}-{shift.endTime})
+                                                {item.startTime ? `(${item.startTime}-${item.endTime})` : '(Pikett)'}
                                               </span>
                                             </div>
                                           </SelectItem>

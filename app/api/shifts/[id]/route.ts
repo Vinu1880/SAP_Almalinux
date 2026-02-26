@@ -142,6 +142,20 @@ export async function DELETE(
       where: { shiftId: id }
     });
 
+    // Clean up UserRules that reference this shift in their JSON config
+    const allRules = await prisma.userRule.findMany({
+      where: { type: { in: ['DOUBLE_SHIFT', 'MAX_LOAD'] } }
+    });
+    const orphanedRuleIds = allRules
+      .filter((r: any) => {
+        const cfg = r.config as any;
+        return cfg?.triggerShiftId === id || cfg?.linkedShiftId === id || cfg?.shiftId === id;
+      })
+      .map((r: any) => r.id);
+    if (orphanedRuleIds.length > 0) {
+      await prisma.userRule.deleteMany({ where: { id: { in: orphanedRuleIds } } });
+    }
+
     const shift = await prisma.shift.delete({
       where: { id }
     });

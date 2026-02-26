@@ -39,8 +39,13 @@ export async function PUT(
     if (validation.data.enabled !== undefined) data.enabled = validation.data.enabled;
     if (validation.data.type) data.type = validation.data.type;
 
+    // If type changes, config MUST be provided to avoid type/config mismatch
+    const type = validation.data.type || existing.type;
+    if (validation.data.type && validation.data.type !== existing.type && !validation.data.config) {
+      return NextResponse.json({ error: 'Config is required when changing rule type' }, { status: 400 });
+    }
+
     if (validation.data.config) {
-      const type = validation.data.type || existing.type;
       let configResult;
       switch (type) {
         case 'WEEK_PARITY':

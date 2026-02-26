@@ -34,6 +34,8 @@ export const weekParityConfigSchema = z.object({
 export const doubleShiftConfigSchema = z.object({
   triggerShiftId: cuidSchema,
   linkedShiftId: cuidSchema,
+}).refine(data => data.triggerShiftId !== data.linkedShiftId, {
+  message: 'Trigger and linked shift must be different',
 });
 export const maxLoadConfigSchema = z.object({
   shiftId: cuidSchema,
