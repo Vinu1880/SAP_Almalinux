@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
         shiftAssignments: data.shiftAssignments?.length || 0,
         outOfOfficeEvents: data.outOfOfficeEvents?.length || 0,
         auditLogs: data.auditLogs?.length || 0,
+        userRules: data.userRules?.length || 0,
+        holidays: data.holidays?.length || 0,
       };
 
       return NextResponse.json({
@@ -88,10 +90,12 @@ export async function POST(request: NextRequest) {
     // STEP 1: Clean the database
     await prisma.$transaction(async (tx) => {
       await tx.auditLog.deleteMany();
+      await tx.userRule.deleteMany();
       await tx.shiftAssignment.deleteMany();
       await tx.pikett.deleteMany();
       await tx.shift.deleteMany();
       await tx.outOfOfficeEvent.deleteMany();
+      await tx.holiday.deleteMany();
       await tx.user.deleteMany();
       await tx.team.deleteMany();
       await tx.rotationPattern.deleteMany();
@@ -308,6 +312,48 @@ export async function POST(request: NextRequest) {
           timeout: 10000,
         });
       }
+    }
+
+    // STEP 10: Restore UserRules
+    if (data.userRules?.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.userRule.createMany({
+          data: data.userRules.map((rule: any) => ({
+            id: rule.id,
+            userId: rule.userId,
+            type: rule.type,
+            config: rule.config,
+            enabled: rule.enabled,
+            createdAt: new Date(rule.createdAt),
+            updatedAt: new Date(rule.updatedAt)
+          }))
+        });
+      }, {
+        maxWait: 10000,
+        timeout: 10000,
+      });
+    }
+
+    // STEP 11: Restore Holidays
+    if (data.holidays?.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.holiday.createMany({
+          data: data.holidays.map((holiday: any) => ({
+            id: holiday.id,
+            name: holiday.name,
+            date: new Date(holiday.date),
+            cantons: holiday.cantons,
+            type: holiday.type,
+            recurring: holiday.recurring,
+            description: holiday.description,
+            createdAt: new Date(holiday.createdAt),
+            updatedAt: new Date(holiday.updatedAt)
+          }))
+        });
+      }, {
+        maxWait: 10000,
+        timeout: 10000,
+      });
     }
 
     // Log successful restore

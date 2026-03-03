@@ -74,6 +74,8 @@ export async function POST(request: NextRequest) {
       shiftAssignments: await prisma.shiftAssignment.findMany(),
       outOfOfficeEvents: await prisma.outOfOfficeEvent.findMany(),
       auditLogs: await prisma.auditLog.findMany(),
+      userRules: await prisma.userRule.findMany(),
+      holidays: await prisma.holiday.findMany(),
     };
 
     const usersWithRotation = data.users.filter(u => u.rotationConfig !== null);
@@ -95,7 +97,9 @@ export async function POST(request: NextRequest) {
         shiftAssignments: data.shiftAssignments.length,
         outOfOfficeEvents: data.outOfOfficeEvents.length,
         auditLogs: data.auditLogs.length,
-        usersWithRotation: usersWithRotation.length
+        usersWithRotation: usersWithRotation.length,
+        userRules: data.userRules.length,
+        holidays: data.holidays.length
       },
       data
     };

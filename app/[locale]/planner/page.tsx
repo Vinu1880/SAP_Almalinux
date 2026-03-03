@@ -976,6 +976,8 @@ const processShiftAssignments = async () => {
     }));
     // Fast lookup: "date|userId" -> assigned (non-pikett) for O(1) checks
     const assignedNormalShiftSet = new Set<string>();
+    // Fast lookup: "date|userId" -> assigned to pikett for soft-block in shift assignment
+    const assignedPikettSet = new Set<string>();
     // Fast lookup: "date|userId" -> assigned (any shift, for consecutive check)
     const assignedAnyShiftSet = new Set<string>();
     // Pre-compute active date counts per shift/pikett for MAX_LOAD
@@ -1169,6 +1171,12 @@ const processShiftAssignments = async () => {
                   dayConflicts = availability.conflictEvents;
                   unavailabilityReason = t('reasonOutOfOffice');
                 }
+              }
+
+              // Track pikett assignment for soft-block in PART 2.2
+              if (dayAvailable) {
+                assignedPikettSet.add(`${date}|${assignedUserForWeek.id}`);
+                assignedAnyShiftSet.add(`${date}|${assignedUserForWeek.id}`);
               }
 
               assignments.push({
@@ -1557,23 +1565,30 @@ const processShiftAssignments = async () => {
             const weekSet = weeklyAssignments[weekKey]?.[shiftId] || new Set<string>();
             const availableIds = new Set(availableForThisDate.map(u => u.id));
 
+            // Separate available users: prefer non-pikett users, pikett users as fallback
+            const nonPikettAvailable = availableForThisDate.filter(u => !assignedPikettSet.has(`${date}|${u.id}`));
+            const pikettOnlyAvailable = availableForThisDate.filter(u => assignedPikettSet.has(`${date}|${u.id}`));
+            const preferredIds = new Set(nonPikettAvailable.map(u => u.id));
+
             // Pick next user from queue who is available today and not yet assigned this week
             let selectedUser: any = null;
 
-            // Pass 1: find someone not yet assigned this week
-            for (let i = 0; i < queue.length; i++) {
-              const idx = (shiftWeekPointers[weekShiftKey] + i) % queue.length;
-              const user = queue[idx];
-              if (availableIds.has(user.id) && !weekSet.has(user.id)) {
-                selectedUser = availableForThisDate.find(u => u.id === user.id);
-                shiftWeekPointers[weekShiftKey] = (idx + 1) % queue.length;
-                break;
+            // Pass 1: find someone NOT on pikett and not yet assigned this week
+            if (nonPikettAvailable.length > 0) {
+              for (let i = 0; i < queue.length; i++) {
+                const idx = (shiftWeekPointers[weekShiftKey] + i) % queue.length;
+                const user = queue[idx];
+                if (preferredIds.has(user.id) && !weekSet.has(user.id)) {
+                  selectedUser = nonPikettAvailable.find(u => u.id === user.id);
+                  shiftWeekPointers[weekShiftKey] = (idx + 1) % queue.length;
+                  break;
+                }
               }
             }
 
-            // Pass 2: if all available users already assigned this week, pick by ratio
-            if (!selectedUser) {
-              let candidateUsers = [...availableForThisDate];
+            // Pass 1b: if no non-pikett user found without week repeat, try non-pikett with week repeat
+            if (!selectedUser && nonPikettAvailable.length > 0) {
+              let candidateUsers = [...nonPikettAvailable];
               if (settings.balanceShifts) {
                 candidateUsers.sort((a, b) => {
                   const aRatio = (userShiftsTracking[a.id]?.[shiftId] || 0) / (userAvailableDays[a.id]?.[shiftId] || 1);
@@ -1582,6 +1597,24 @@ const processShiftAssignments = async () => {
                 });
               }
               selectedUser = candidateUsers[0];
+            }
+
+            // Pass 2: fallback — all non-pikett users exhausted, use pikett users
+            if (!selectedUser && pikettOnlyAvailable.length > 0) {
+              let candidateUsers = [...pikettOnlyAvailable];
+              if (settings.balanceShifts) {
+                candidateUsers.sort((a, b) => {
+                  const aRatio = (userShiftsTracking[a.id]?.[shiftId] || 0) / (userAvailableDays[a.id]?.[shiftId] || 1);
+                  const bRatio = (userShiftsTracking[b.id]?.[shiftId] || 0) / (userAvailableDays[b.id]?.[shiftId] || 1);
+                  return aRatio - bRatio;
+                });
+              }
+              selectedUser = candidateUsers[0];
+            }
+
+            // Pass 3: absolute fallback (should not happen)
+            if (!selectedUser) {
+              selectedUser = availableForThisDate[0];
             }
 
             // Track weekly assignment

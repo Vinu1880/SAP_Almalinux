@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(normalizedUsers);
   } catch (error) {
+    console.error('[GET /api/users] Error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch users' },
       { status: 500 }
