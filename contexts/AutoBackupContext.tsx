@@ -11,6 +11,7 @@ const AutoBackupContext = createContext<AutoBackupContextType | undefined>(undef
 
 const LAST_BACKUP_KEY = 'lastAutoBackupTime';
 const BACKUP_SCHEDULE_KEY = 'backupSchedule';
+const LAST_LOG_CLEANUP_KEY = 'lastLogCleanupTime';
 
 function shouldBackupNow(schedule: any): boolean {
   const now = new Date();
@@ -73,8 +74,6 @@ export const AutoBackupProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         if (res.ok) {
           localStorage.setItem(LAST_BACKUP_KEY, String(now));
-          // Cleanup audit logs older than 90 days
-          authFetch('/api/audit-logs/cleanup', { method: 'DELETE' }).catch(() => {});
         }
       } catch (err) {
         console.error('[AutoBackup] Error:', err);
@@ -83,10 +82,17 @@ export const AutoBackupProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     };
 
-    // Check on mount
-    checkAndBackup();
+    // Daily audit log cleanup (independent of backup schedule)
+    const lastCleanup = localStorage.getItem(LAST_LOG_CLEANUP_KEY);
+    const lastCleanupTime = lastCleanup ? parseInt(lastCleanup, 10) : 0;
+    const hoursSinceCleanup = (Date.now() - lastCleanupTime) / (1000 * 60 * 60);
+    if (hoursSinceCleanup >= 24) {
+      authFetch('/api/audit-logs/cleanup', { method: 'DELETE' })
+        .then(() => localStorage.setItem(LAST_LOG_CLEANUP_KEY, String(Date.now())))
+        .catch(() => {});
+    }
 
-    // Check every 10 minutes
+    checkAndBackup();
     const timer = setInterval(checkAndBackup, 10 * 60 * 1000);
     return () => clearInterval(timer);
   }, [isReady, authFetch]);
