@@ -1568,6 +1568,10 @@ const processShiftAssignments = async () => {
     const dsAssignedSet = new Set<string>(); // "date|shiftId|userId" for O(1) dedup
     const dsUserShiftCounts = new Map<string, number>(); // "userId|shiftId" -> count for MAX_LOAD
     let dsSourceAssignments = [...assignments];
+    console.log('[DS-DEBUG] Total assignments to scan:', dsSourceAssignments.length);
+    console.log('[DS-DEBUG] Assignments with users:', dsSourceAssignments.filter(a => a.assignedUsers.length > 0).length);
+    const allUsersWithRules = dsSourceAssignments.flatMap(a => a.assignedUsers).filter((u: any) => u.rules?.length > 0);
+    console.log('[DS-DEBUG] Users with rules in assignments:', allUsersWithRules.map((u: any) => ({ name: u.displayName, rules: u.rules?.map((r: any) => r.type) })));
     for (let dsPass = 0; dsPass < 5; dsPass++) {
       const passAdditions: any[] = [];
       for (const assignment of dsSourceAssignments) {
@@ -1575,32 +1579,48 @@ const processShiftAssignments = async () => {
           const dsRules = (assignedUser.rules || []).filter(
             (r: any) => r.type === 'DOUBLE_SHIFT' && r.enabled && r.config.triggerShiftId === assignment.shiftId
           );
+          if (dsRules.length > 0) {
+            console.log(`[DS-DEBUG] ${assignedUser.displayName} on ${assignment.date} shift=${assignment.shiftId} has ${dsRules.length} matching DS rules`);
+          }
           for (const rule of dsRules) {
             const linkedShiftId = rule.config.linkedShiftId;
             // Look up in shifts first, then piketts (O(1) via Map)
             const linkedShift = shiftMap.get(linkedShiftId) || null;
             const linkedPikett = !linkedShift ? (pikettMap.get(linkedShiftId) || null) : null;
             const linkedItem = linkedShift || (linkedPikett ? { ...linkedPikett, startTime: '00:00', endTime: '23:59' } : null);
-            if (!linkedItem) continue;
+            if (!linkedItem) { console.log(`[DS-DEBUG] SKIP: linkedItem not found for ${linkedShiftId}`); continue; }
 
             // Fast dedup check using Set
             const dsKey = `${assignment.date}|${linkedShiftId}|${assignedUser.id}`;
-            if (dsAssignedSet.has(dsKey)) continue;
+            if (dsAssignedSet.has(dsKey)) { console.log(`[DS-DEBUG] SKIP dedup: ${dsKey}`); continue; }
 
             // Also check existing assignments
             const alreadyInAssignments = assignments.some(
               a => a.date === assignment.date && a.shiftId === linkedShiftId &&
                    a.assignedUsers.some((u: any) => u.id === assignedUser.id)
             );
-            if (alreadyInAssignments) continue;
+            if (alreadyInAssignments) { console.log(`[DS-DEBUG] SKIP already assigned: ${assignedUser.displayName} ${assignment.date} ${linkedShiftId}`); continue; }
 
-            // For piketts: only 1 user per pikett per date (first DOUBLE_SHIFT wins)
+            // For piketts: DOUBLE_SHIFT replaces normal rotation assignment
             if (linkedPikett) {
-              const pikettAlreadyCovered = assignments.some(
-                a => a.date === assignment.date && a.shiftId === linkedShiftId &&
-                     a.assignedUsers.length > 0
-              ) || dsAssignedSet.has(`${assignment.date}|${linkedShiftId}|*`);
-              if (pikettAlreadyCovered) continue;
+              // Check if another DS rule already claimed this pikett+date
+              if (dsAssignedSet.has(`${assignment.date}|${linkedShiftId}|*`)) {
+                console.log(`[DS-DEBUG] SKIP pikett already claimed by another DS: ${assignment.date} ${linkedShiftId}`);
+                continue;
+              }
+              // Remove normal rotation user from this pikett so DS user takes over
+              const existingIdx = assignments.findIndex(
+                a => a.date === assignment.date && a.shiftId === linkedShiftId && a.assignedUsers.length > 0
+              );
+              if (existingIdx !== -1) {
+                const removedUser = assignments[existingIdx].assignedUsers[0];
+                console.log(`[DS-DEBUG] Replacing ${removedUser?.displayName} with ${assignedUser.displayName} on ${linkedPikett.name} ${assignment.date}`);
+                assignments[existingIdx].assignedUsers = [];
+                // Decrement tracking for removed user
+                if (removedUser && userShiftsTracking[removedUser.id]?.[linkedShiftId]) {
+                  userShiftsTracking[removedUser.id][linkedShiftId]--;
+                }
+              }
             }
 
             // Check MAX_LOAD on the linked shift before adding
