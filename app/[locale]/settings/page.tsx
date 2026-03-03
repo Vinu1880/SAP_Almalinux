@@ -1,6 +1,4 @@
 'use client';
-// app/settings/page.tsx
-
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
@@ -37,13 +35,11 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -97,6 +93,33 @@ const SettingsPage = () => {
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Scheduled backup states
+  const [backupSchedule, setBackupSchedule] = useState({
+    enabled: false,
+    frequency: 'daily' as 'daily' | 'weekly' | 'monthly',
+    hour: '02:00',
+    dayOfWeek: 1, // Monday
+    dayOfMonth: 1,
+    maxBackups: 10,
+  });
+
+  // Load scheduled backup settings from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('backupSchedule');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migrate old format
+      if (parsed.intervalHours && !parsed.frequency) {
+        parsed.frequency = parsed.intervalHours <= 24 ? 'daily' : parsed.intervalHours <= 168 ? 'weekly' : 'monthly';
+        parsed.hour = parsed.hour || '02:00';
+        parsed.dayOfWeek = parsed.dayOfWeek || 1;
+        parsed.dayOfMonth = parsed.dayOfMonth || 1;
+        delete parsed.intervalHours;
+      }
+      setBackupSchedule(prev => ({ ...prev, ...parsed }));
+    }
+  }, []);
 
   // Delete confirmation dialog states
   const [deleteBackupFileName, setDeleteBackupFileName] = useState<string | null>(null);
@@ -161,12 +184,18 @@ const SettingsPage = () => {
     }, 1000);
   };
 
+  const saveBackupSchedule = (newSchedule: typeof backupSchedule) => {
+    setBackupSchedule(newSchedule);
+    localStorage.setItem('backupSchedule', JSON.stringify(newSchedule));
+  };
+
   const createBackup = async () => {
     setIsCreatingBackup(true);
     try {
       const response = await authFetch('/api/backup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxBackups: backupSchedule.maxBackups > 0 ? backupSchedule.maxBackups : 0 })
       });
 
       if (response.ok) {
@@ -929,6 +958,127 @@ const SettingsPage = () => {
                   <p className="text-sm text-slate-600 mt-2">
                     {t("backupInstructions")}
                   </p>
+                </div>
+
+                {/* Backup Schedule & Rotation Settings */}
+                <div className="mb-8 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <h3 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    {t("backupRotation")}
+                  </h3>
+                  <div className="space-y-4">
+                    {/* Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm font-medium text-slate-700">{t("scheduledBackup")}</Label>
+                        <p className="text-xs text-slate-500">{t("scheduledBackupDesc")}</p>
+                      </div>
+                      <Switch
+                        checked={backupSchedule.enabled}
+                        onCheckedChange={(checked) => saveBackupSchedule({ ...backupSchedule, enabled: checked })}
+                      />
+                    </div>
+
+                    {backupSchedule.enabled && (
+                      <>
+                        {/* Frequency */}
+                        <div className="flex items-center gap-3">
+                          <Label className="text-sm text-slate-600 whitespace-nowrap">{t("backupFrequency")}</Label>
+                          <div className="flex gap-1 bg-white border rounded-md p-0.5">
+                            {(['daily', 'weekly', 'monthly'] as const).map((freq) => (
+                              <button
+                                key={freq}
+                                onClick={() => saveBackupSchedule({ ...backupSchedule, frequency: freq })}
+                                className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                                  backupSchedule.frequency === freq
+                                    ? 'bg-[#00ff7b] text-black font-medium'
+                                    : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                {t(`backupFreq${freq.charAt(0).toUpperCase() + freq.slice(1)}`)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Day of week (for weekly) */}
+                        {backupSchedule.frequency === 'weekly' && (
+                          <div className="flex items-center gap-3">
+                            <Label className="text-sm text-slate-600 whitespace-nowrap">{t("backupDay")}</Label>
+                            <Select
+                              value={String(backupSchedule.dayOfWeek)}
+                              onValueChange={(value) => saveBackupSchedule({ ...backupSchedule, dayOfWeek: parseInt(value) })}
+                            >
+                              <SelectTrigger className="w-36">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">{t("backupMonday")}</SelectItem>
+                                <SelectItem value="2">{t("backupTuesday")}</SelectItem>
+                                <SelectItem value="3">{t("backupWednesday")}</SelectItem>
+                                <SelectItem value="4">{t("backupThursday")}</SelectItem>
+                                <SelectItem value="5">{t("backupFriday")}</SelectItem>
+                                <SelectItem value="6">{t("backupSaturday")}</SelectItem>
+                                <SelectItem value="0">{t("backupSunday")}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Day of month (for monthly) */}
+                        {backupSchedule.frequency === 'monthly' && (
+                          <div className="flex items-center gap-3">
+                            <Label className="text-sm text-slate-600 whitespace-nowrap">{t("backupDayOfMonth")}</Label>
+                            <Select
+                              value={String(backupSchedule.dayOfMonth)}
+                              onValueChange={(value) => saveBackupSchedule({ ...backupSchedule, dayOfMonth: parseInt(value) })}
+                            >
+                              <SelectTrigger className="w-24">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[1, 5, 10, 15, 20, 25].map(d => (
+                                  <SelectItem key={d} value={String(d)}>{d}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Time */}
+                        <div className="flex items-center gap-3">
+                          <Label className="text-sm text-slate-600 whitespace-nowrap">{t("backupTime")}</Label>
+                          <input
+                            type="time"
+                            value={backupSchedule.hour}
+                            onChange={(e) => saveBackupSchedule({ ...backupSchedule, hour: e.target.value })}
+                            className="border rounded-md px-3 py-1.5 text-sm bg-white"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Max backups (always visible) */}
+                    <div className="flex items-center gap-3 pt-2 border-t border-slate-200">
+                      <Label className="text-sm text-slate-600 whitespace-nowrap">{t("maxBackups")}</Label>
+                      <Select
+                        value={String(backupSchedule.maxBackups)}
+                        onValueChange={(value) => saveBackupSchedule({ ...backupSchedule, maxBackups: parseInt(value) })}
+                      >
+                        <SelectTrigger className="w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3</SelectItem>
+                          <SelectItem value="5">5</SelectItem>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="0">{t("backupNoLimit")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-xs text-slate-500">{t("maxBackupsDesc")}</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Liste des sauvegardes */}

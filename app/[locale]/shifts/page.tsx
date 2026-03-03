@@ -1,39 +1,14 @@
 'use client';
-
-//app/shifts/page.tsx
-
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navigation from '@/components/Navigation';
 import { useTranslations } from 'next-intl';
 import {
-  Clock,
-  Plus,
-  Edit,
-  Trash2,
-  Users,
-  Calendar,
-  Search,
-  Filter,
-  MoreHorizontal,
-  Copy,
-  Star,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  RefreshCw,
-  Save,
-  UserPlus,
-  UserMinus,
-  X,
-  CalendarDays,
-  Shield,
-  Info,
-  AlertTriangle,
-  Building2,
-  Mail
+  Clock, Plus, Edit, Trash2, Users, Search, Filter, Copy,
+  AlertCircle, Loader2, Save, UserPlus, UserMinus,
+  CalendarDays, Shield, AlertTriangle, Building2, Mail
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,11 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Hooks for real data
 import { useShifts } from '@/lib/hooks/useShifts';

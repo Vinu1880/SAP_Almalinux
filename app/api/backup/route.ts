@@ -23,7 +23,12 @@ export async function GET(request: NextRequest) {
 
     const files = fs.readdirSync(backupsDir)
       .filter(f => f.startsWith('backup_') && f.endsWith('.json') && !f.startsWith('backup_latest'))
-      .sort((a, b) => b.localeCompare(a));
+      .sort((a, b) => {
+        // Sort by file modification time (newest first)
+        const aStat = fs.statSync(path.join(backupsDir, a));
+        const bStat = fs.statSync(path.join(backupsDir, b));
+        return bStat.mtimeMs - aStat.mtimeMs;
+      });
 
     const backups = files.map(fileName => {
       const filePath = path.join(backupsDir, fileName);
@@ -65,6 +70,9 @@ export async function POST(request: NextRequest) {
   if (rl) return rl;
 
   try {
+    const body = await request.json().catch(() => ({}));
+    const maxBackups = body?.maxBackups || 0;
+
     const data = {
       teams: await prisma.team.findMany(),
       users: await prisma.user.findMany(),
@@ -105,13 +113,28 @@ export async function POST(request: NextRequest) {
     };
 
     const jsonString = JSON.stringify(backup, null, 2);
-    const fileName = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}.json`;
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().substring(0, 8).replace(/:/g, '');
+    const fileName = `backup_ShiftAutoPlanner_${dateStr}_${timeStr}.json`;
     const filePath = path.join(backupsDir, fileName);
 
     fs.writeFileSync(filePath, jsonString, 'utf-8');
 
     const latestPath = path.join(backupsDir, 'backup_latest.json');
     fs.writeFileSync(latestPath, jsonString, 'utf-8');
+
+    // Rotate old backups: keep only maxBackups most recent
+    if (maxBackups > 0) {
+      const allBackups = fs.readdirSync(backupsDir)
+        .filter(f => f.startsWith('backup_ShiftAutoPlanner_') && f.endsWith('.json'))
+        .sort((a, b) => b.localeCompare(a));
+      if (allBackups.length > maxBackups) {
+        for (const old of allBackups.slice(maxBackups)) {
+          fs.unlinkSync(path.join(backupsDir, old));
+        }
+      }
+    }
 
     await prisma.auditLog.create({
       data: {

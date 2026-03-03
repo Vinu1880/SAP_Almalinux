@@ -1,7 +1,4 @@
 'use client';
-
-//app/users/page.tsx
-
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
@@ -9,45 +6,11 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Navigation from '@/components/Navigation';
 import { useTranslations } from 'next-intl';
 import {
-  Users,
-  Plus,
-  Edit,
-  Trash2,
-  Search,
-  Mail,
-  Phone,
-  Calendar,
-  Clock,
-  UserCheck,
-  UserX,
-  Download,
-  Upload,
-  Settings,
-  Shield,
-  Loader2,
-  RefreshCw,
-  AlertCircle,
-  Save,
-  X,
-  Sun,
-  Moon,
-  CalendarDays,
-  Building2,
-  Crown,
-  RotateCw,
-  ChevronRight,
-  Info,
-  Palette,
-  AlertTriangle,
-  UserPlus,
-  UserMinus,
-  Grid3X3,
-  List,
-  Filter,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  MoreHorizontal
+  Users, Plus, Edit, Trash2, Search, Mail, Phone,
+  UserCheck, Loader2, AlertCircle, Save, X, Sun, Moon,
+  Building2, Crown, RotateCw, Info, AlertTriangle,
+  UserPlus, UserMinus, Grid3X3, List, Filter,
+  ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal
 } from 'lucide-react';
 import { useShifts } from '@/lib/hooks/useShifts';
 import { usePiketts } from '@/lib/hooks/usePiketts';
@@ -58,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -75,12 +38,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 // Import hooks
@@ -88,8 +47,6 @@ import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { useAuthFetch } from '@/lib/hooks/useAuthFetch';
 
-// Types
-type TimeSlot = 'morning' | 'afternoon' | 'evening' | 'night';
 type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 
 interface WeekPattern {
@@ -1398,7 +1355,19 @@ const UsersPage = () => {
     }
   };
 
-  // Filtering and sorting
+  const openEditUser = (user: any) => {
+    setEditWorkType(user.workPercent && user.workPercent < 100 ? 'partial' : 'full');
+    setSelectedUser({
+      id: user.id, firstName: user.firstName || '', lastName: user.lastName || '',
+      email: user.email || '', phone: user.phone || '', location: user.location || '',
+      teamId: user.teamId || '', role: user.role || '', workPercent: user.workPercent || 100,
+      status: user.status || 'ACTIVE', notes: user.notes || '',
+      availability: user.availability || fullTimeAvailability, rotationConfig: getRotationConfig(user)
+    });
+    setIsEditUserDialogOpen(true);
+    fetchUserRules(user.id);
+  };
+
   const filteredUsers = users
     .filter(user => {
       const matchesSearch = user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1941,39 +1910,7 @@ const UsersPage = () => {
                         </div>
 
                         <div className="flex items-center justify-between pt-3 mt-3 border-t">
-                          <Button
-                            onClick={() => {
-                              let userWorkType: 'full' | 'partial' = 'full';
-
-                              if (user.workPercent && user.workPercent < 100) {
-                                userWorkType = 'partial';
-                              }
-
-                              setEditWorkType(userWorkType);
-
-                              setSelectedUser({
-                                id: user.id,
-                                firstName: user.firstName || '',
-                                lastName: user.lastName || '',
-                                email: user.email || '',
-                                phone: user.phone || '',
-                                location: user.location || '',
-                                teamId: user.teamId || '',
-                                role: user.role || '',
-                                workPercent: user.workPercent || 100,
-                                status: user.status || 'ACTIVE',
-                                notes: user.notes || '',
-                                availability: user.availability || fullTimeAvailability,
-                                rotationConfig: getRotationConfig(user)
-                              });
-
-                              setIsEditUserDialogOpen(true);
-                              fetchUserRules(user.id);
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 mr-2 hover:bg-secondary/20"
-                          >
+                          <Button onClick={() => openEditUser(user)} variant="outline" size="sm" className="flex-1 mr-2 hover:bg-secondary/20">
                             <Edit className="w-4 h-4 mr-1" />
                             {tCommon("edit")}
                           </Button>
@@ -2087,36 +2024,7 @@ const UsersPage = () => {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    let userWorkType: 'full' | 'partial' = 'full';
-
-                                    if (user.workPercent && user.workPercent < 100) {
-                                      userWorkType = 'partial';
-                                    }
-
-                                    setEditWorkType(userWorkType);
-
-                                    setSelectedUser({
-                                      id: user.id,
-                                      firstName: user.firstName || '',
-                                      lastName: user.lastName || '',
-                                      email: user.email || '',
-                                      phone: user.phone || '',
-                                      location: user.location || '',
-                                      teamId: user.teamId || '',
-                                      role: user.role || '',
-                                      workPercent: user.workPercent || 100,
-                                      status: user.status || 'ACTIVE',
-                                      notes: user.notes || '',
-                                      availability: user.availability || fullTimeAvailability,
-                                      rotationConfig: getRotationConfig(user)
-                                    });
-
-                                    setIsEditUserDialogOpen(true);
-                              fetchUserRules(user.id);
-                                  }}
-                                >
+                                <DropdownMenuItem onClick={() => openEditUser(user)}>
                                   <Edit className="w-4 h-4 mr-2" />
                                   {tCommon("edit")}
                                 </DropdownMenuItem>

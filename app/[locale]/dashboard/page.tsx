@@ -1,6 +1,4 @@
 'use client';
-//app/dashboard/page.tsx
-
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useMemo } from 'react';
@@ -8,36 +6,14 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Navigation from '@/components/Navigation';
 import { useTranslations } from 'next-intl';
 import {
-  CheckCircle,
-  XCircle,
-  Clock3,
-  TrendingUp,
-  Users,
-  Calendar,
-  Filter,
-  Download,
-  RefreshCw,
-  Eye,
-  MoreHorizontal,
-  Activity,
-  Loader2,
-  Send,
-  AlertCircle,
-  Building2,
-  X,
-  FilterX,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Trash2,
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight
+  CheckCircle, XCircle, Clock3, TrendingUp, Users, Calendar, Filter,
+  Download, RefreshCw, Loader2, Send, AlertCircle, Building2, X,
+  FilterX, ArrowUpDown, ArrowUp, ArrowDown, Trash2, AlertTriangle,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -212,7 +188,7 @@ const DashboardPage = () => {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        console.warn('[OOF Check] No access token available');
+        // No access token
         return unavailableMap;
       }
       if (userEmails.length === 0) return unavailableMap;
@@ -244,14 +220,12 @@ const DashboardPage = () => {
         });
 
         if (!scheduleResponse.ok) {
-          console.warn('[OOF Check] getSchedule failed:', scheduleResponse.status, await scheduleResponse.text().catch(() => ''));
           continue;
         }
 
         const scheduleData = await scheduleResponse.json();
 
         if (!scheduleData.value) {
-          console.warn('[OOF Check] No value in schedule response');
           continue;
         }
 
@@ -279,7 +253,7 @@ const DashboardPage = () => {
         }
       }
     } catch (error) {
-      console.warn('[OOF Check] Error:', error);
+      // OOF check error
     }
 
     return unavailableMap;
@@ -372,12 +346,9 @@ const DashboardPage = () => {
           const res = await authFetch(`/api/shift-assignments?startDate=${prevDateStr}&endDate=${nextDateStr}`);
           if (res.ok) {
             dateAssignments = await res.json();
-            console.log(`[resend-check] Fetched ${dateAssignments.length} assignments for ${prevDateStr} to ${nextDateStr}`);
           } else {
-            console.warn(`[resend-check] Failed to fetch assignments: ${res.status}`);
           }
         } catch (e) {
-          console.warn('[resend-check] Error fetching assignments:', e);
         }
 
         // Fetch OOF status using getSchedule API
@@ -800,60 +771,39 @@ const DashboardPage = () => {
     return configs[status as keyof typeof configs] || t('statusNoAnswer');
   };
 
+  const downloadCsv = (content: string, filename: string) => {
+    const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.setAttribute('href', URL.createObjectURL(blob));
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleExport = () => {
+    const date = new Date().toISOString().split('T')[0];
     if (selectedView === 'shifts') {
-      // Export recent shifts
-      const csvContent = [
+      const csv = [
         [t('user'), t('team'), t('shift'), t('schedule'), t('date'), t('status')].join(';'),
-        ...assignments.map(assignment => [
-          `${assignment.user.firstName} ${assignment.user.lastName}`,
-          assignment.user.team?.name || tCommon('noTeam'),
-          assignment.shift.name,
-          `${assignment.shift.startTime} - ${assignment.shift.endTime}`,
-          new Date(assignment.date).toLocaleDateString('fr-FR'),
-          getStatusLabel(assignment.status)
+        ...assignments.map(a => [
+          `${a.user.firstName} ${a.user.lastName}`, a.user.team?.name || tCommon('noTeam'),
+          a.shift.name, `${a.shift.startTime} - ${a.shift.endTime}`,
+          new Date(a.date).toLocaleDateString('fr-FR'), getStatusLabel(a.status)
         ].join(';'))
       ].join('\n');
-
-      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `dashboard_shifts_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      downloadCsv(csv, `dashboard_shifts_${date}.csv`);
     } else {
-      // Export user statistics
-      const csvContent = [
+      const csv = [
         [t('user'), t('team'), t('totalShifts'), t('accepted'), t('pending'), t('refused'), t('cancelled'), t('acceptanceRate')].join(';'),
-        ...userStatsWithDetails.map(userStat => {
-          const acceptanceRate = userStat.total > 0
-            ? Math.round((userStat.accepted / userStat.total) * 100)
-            : 0;
-          return [
-            `${userStat.user?.firstName} ${userStat.user?.lastName}`,
-            userStat.user?.team?.name || tCommon('noTeam'),
-            userStat.total,
-            userStat.accepted,
-            userStat.pending,
-            userStat.refused,
-            userStat.cancelled,
-            `${acceptanceRate}%`
-          ].join(';');
-        })
+        ...userStatsWithDetails.map(s => [
+          `${s.user?.firstName} ${s.user?.lastName}`, s.user?.team?.name || tCommon('noTeam'),
+          s.total, s.accepted, s.pending, s.refused, s.cancelled,
+          `${s.total > 0 ? Math.round((s.accepted / s.total) * 100) : 0}%`
+        ].join(';'))
       ].join('\n');
-
-      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `dashboard_utilisateurs_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      downloadCsv(csv, `dashboard_utilisateurs_${date}.csv`);
     }
   };
 

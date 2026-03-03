@@ -3,6 +3,7 @@ import "./globals.css";
 import { RotationPatternsProvider } from "@/contexts/RotationPatternsContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AutoSyncProvider } from "@/contexts/AutoSyncContext";
+import { AutoBackupProvider } from "@/contexts/AutoBackupContext";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
@@ -39,9 +40,11 @@ export default async function RootLayout({
         <NextIntlClientProvider messages={messages}>
           <AuthProvider>
             <AutoSyncProvider>
-              <RotationPatternsProvider>
-                {children}
-              </RotationPatternsProvider>
+              <AutoBackupProvider>
+                <RotationPatternsProvider>
+                  {children}
+                </RotationPatternsProvider>
+              </AutoBackupProvider>
             </AutoSyncProvider>
           </AuthProvider>
         </NextIntlClientProvider>

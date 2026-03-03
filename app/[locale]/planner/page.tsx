@@ -16,13 +16,7 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  UserCheck,
-  UserX,
-  Filter,
   Save,
-  Download,
-  Search,
-  Plus,
   Mail,
   Loader2,
   ChevronLeft,
@@ -139,15 +133,6 @@ const {
 
 // Holidays loaded in planner - no-op, data available via holidays state
 
-    const getCurrentWeek = () => {
-      const date = new Date();
-      const year = date.getFullYear();
-      const firstDayOfYear = new Date(year, 0, 1);
-      const days = Math.floor((date.getTime() - firstDayOfYear.getTime()) / (24 * 60 * 60 * 1000));
-      const weekNumber = Math.ceil((days + firstDayOfYear.getDay() + 1) / 7);
-      return `${year}-W${weekNumber.toString().padStart(2, '0')}`;
-    };
-
   // State
   const [selectedShifts, setSelectedShifts] = useState<string[]>([]);
   const [selectedPiketts, setSelectedPiketts] = useState<string[]>([]);
@@ -234,74 +219,15 @@ const {
     return 'PENDING';
   };
 
-  // Settings
+  const defaultSettings = { avoidConsecutiveShifts: true, balanceShifts: true, checkCalendars: true, respectWorkPercentage: true, prioritySystem: true, enableRotations: true };
   const loadSettings = () => {
-  if (typeof window === 'undefined') {
-    // Server side - return default settings
-    return {
-      avoidConsecutiveShifts: true,
-      balanceShifts: true,
-      checkCalendars: true,
-      respectWorkPercentage: true,
-      prioritySystem: true,
-      enableRotations: true
-    };
-  }
-  
-  const savedSettings = localStorage.getItem('shiftSettings');
-  if (savedSettings) {
-    try {
-      return JSON.parse(savedSettings);
-    } catch (e) {
-      // Settings parse error - fallback to defaults
-    }
-  }
-  return {
-    avoidConsecutiveShifts: true,
-    balanceShifts: true,
-    checkCalendars: true,
-    respectWorkPercentage: true,
-    prioritySystem: true,
-    enableRotations: true
+    if (typeof window === 'undefined') return defaultSettings;
+    try { const s = localStorage.getItem('shiftSettings'); return s ? JSON.parse(s) : defaultSettings; } catch { return defaultSettings; }
   };
-};
-
-  // Function to map cities to cantons
-// NOTE: duplicate function (first occurrence)
-const getUserCantonFromLocation = (location: string): string => {
-  const cantonMapping: { [key: string]: string } = {
-    'bern': 'BE', 'berne': 'BE',
-    'zurich': 'ZH', 'dubendorf': 'ZH',
-    'yverdon': 'VD', 'yverdon-les-bains': 'VD'
-  };
-  
-  const normalizedLocation = location.toLowerCase();
-  return cantonMapping[normalizedLocation] || 'BE';
-};
 
   // Utility function to check if a user works on a given day
 const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEndTime?: string): boolean => {
-  if (!user.availability) return true; // If no config, assume they work every day
-
-  // Function to map cities to cantons
-const getUserCantonFromLocation = (location: string): string => {
-  const cantonMapping: { [key: string]: string } = {
-    'bern': 'BE', 'berne': 'BE',
-    'zurich': 'ZH', 'winterthur': 'ZH',
-    'lausanne': 'VD', 'yverdon': 'VD', 'yverdon-les-bains': 'VD',
-    'geneva': 'GE', 'geneve': 'GE',
-    'basel': 'BS', 'bale': 'BS',
-    'lucerne': 'LU', 'stgallen': 'SG', 'chur': 'GR',
-    'fribourg': 'FR', 'neuchatel': 'NE', 'sion': 'VS',
-    'lugano': 'TI', 'bellinzona': 'TI', 'aarau': 'AG', 'zug': 'ZG'
-  };
-  
-  const normalizedLocation = location.toLowerCase();
-  return cantonMapping[normalizedLocation] || 'BE';
-};
-
-// Function to check public holidays
-
+  if (!user.availability) return true;
   const dateObj = new Date(date);
   const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
   
@@ -353,25 +279,6 @@ const getUserCantonFromLocation = (location: string): string => {
   // If no time specified, check if at least part of the day is available
   return dayAvailability.morning === true || dayAvailability.afternoon === true;
 };
-
-  // Retrieve active piketts
-  const [activePiketts, setActivePiketts] = useState<any[]>([]);
-
-  useEffect(() => {
-    const savedPiketts = localStorage.getItem('piketts');
-    if (savedPiketts) {
-      const piketts = JSON.parse(savedPiketts);
-      // Filter active piketts for the selected period
-      const filtered = piketts.filter((p: any) => {
-        if (p.status !== 'ACTIVE') return false;
-        // Check if the pikett is in the period
-        const pikettWeek = p.startWeek;
-        // Logic to check the period
-        return true; // To be refined as needed
-      });
-      setActivePiketts(filtered);
-    }
-  }, [startDate, endDate]);
 
   const [settings, setSettings] = useState(() => loadSettings());
 
@@ -479,55 +386,24 @@ const getUserCantonFromLocation = (location: string): string => {
     return shuffled;
   };
 
+  const mapDbUser = (u: any) => ({
+    id: u.id, email: u.email, displayName: `${u.firstName} ${u.lastName}`,
+    firstName: u.firstName, lastName: u.lastName, workPercent: u.workPercent || 100,
+    status: u.status, rotationConfig: u.rotationConfig || null, teamId: u.teamId || null,
+    availability: u.availability || null, role: u.role || null, location: u.location || null,
+    rules: u.rules || []
+  });
+
   const fetchUsersFromCalendars = async (): Promise<any[]> => {
     setIsLoadingUsers(true);
-
     try {
-      const usersMap = new Map<string, any>();
-
-      // Add ALL users from the DB with their complete data
-      users.forEach(dbUser => {
-        usersMap.set(dbUser.email.toLowerCase(), {
-          id: dbUser.id,
-          email: dbUser.email,
-          displayName: `${dbUser.firstName} ${dbUser.lastName}`,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          workPercent: dbUser.workPercent || 100,
-          status: dbUser.status,
-          rotationConfig: dbUser.rotationConfig || null,
-          teamId: dbUser.teamId || null,
-          availability: dbUser.availability || null,
-          role: dbUser.role || null,
-          location: dbUser.location || null,
-          rules: dbUser.rules || []
-        });
-      });
-      
-      const allUsers = Array.from(usersMap.values());
-
+      const allUsers = users.map(mapDbUser);
       setAvailableUsers(allUsers);
       return allUsers;
-      
-    } catch (error) {
-      // Graph API error - fallback to DB users
-      const dbUsers = users.map(dbUser => ({
-        id: dbUser.id,
-        email: dbUser.email,
-        displayName: `${dbUser.firstName} ${dbUser.lastName}`,
-        firstName: dbUser.firstName,
-        lastName: dbUser.lastName,
-        workPercent: dbUser.workPercent || 100,
-        status: dbUser.status,
-        rotationConfig: dbUser.rotationConfig || null,
-        teamId: dbUser.teamId || null,
-        availability: dbUser.availability || null,
-        role: dbUser.role || null,
-        location: dbUser.location || null,
-        rules: dbUser.rules || []
-      }));
-      setAvailableUsers(dbUsers);
-      return dbUsers;
+    } catch {
+      const allUsers = users.map(mapDbUser);
+      setAvailableUsers(allUsers);
+      return allUsers;
     } finally {
       setIsLoadingUsers(false);
     }
@@ -2066,29 +1942,15 @@ const processShiftAssignments = async () => {
     }
   };
 
-  const getDaysInMonth = (month: number, year: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (month: number, year: number) => {
-    return new Date(year, month, 1).getDay();
-  };
+  const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
 
   const generateCalendarDays = () => {
     const daysInMonth = getDaysInMonth(calendarMonth, calendarYear);
     const firstDay = getFirstDayOfMonth(calendarMonth, calendarYear);
-    const days: (number | null)[] = [];
-    
     const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
-    
-    for (let i = 0; i < adjustedFirstDay; i++) {
-      days.push(null);
-    }
-    
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-    
+    const days: (number | null)[] = Array(adjustedFirstDay).fill(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
     return days;
   };
 
@@ -2809,26 +2671,6 @@ useEffect(() => {
                                     {pattern?.name || t('unknownPattern')}
                                   </p>
                                 </div>
-                                {(() => {
-                                  const week = getCurrentWeek();
-                                  const savedPiketts = localStorage.getItem('piketts');
-                                  const piketts = savedPiketts ? JSON.parse(savedPiketts) : [];
-                                  const userPikett = piketts.find((p: any) =>
-                                    p.userId === user.id &&
-                                    p.startWeek === week &&
-                                    p.status === 'ACTIVE'
-                                  );
-
-                                  if (userPikett) {
-                                    return (
-                                      <Badge className="bg-red-100 text-red-700 text-xs border-0">
-                                        <Shield className="w-3 h-3 mr-1" />
-                                        {t('pikett')}
-                                      </Badge>
-                                    );
-                                  }
-                                  return null;
-                                })()}
                               </div>
                               <div className="flex flex-col items-end gap-0.5">
                                 <Badge className={`text-xs border-0 ${
@@ -3355,41 +3197,18 @@ useEffect(() => {
                                             )}
                                             {(() => {
                                               const status = getDateShiftStatus(assignment.date, assignment.shiftId);
-                                              if (status === 'PENDING') return (
-                                                <Badge className="text-xs mt-2 bg-blue-100 text-blue-700 border-0 inline-flex items-center gap-1">
-                                                  <Clock className="w-3 h-3" />
-                                                  {t('statusNoAnswer')}
-                                                </Badge>
-                                              );
-                                              if (status === 'TENTATIVE') return (
-                                                <Badge className="text-xs mt-2 bg-orange-100 text-orange-700 border-0 inline-flex items-center gap-1">
-                                                  <AlertCircle className="w-3 h-3" />
-                                                  {t('statusTentative')}
-                                                </Badge>
-                                              );
-                                              if (status === 'ACCEPTED') return (
-                                                <Badge className="text-xs mt-2 bg-green-100 text-green-700 border-0 inline-flex items-center gap-1">
-                                                  <CheckCircle className="w-3 h-3" />
-                                                  {t('statusAccepted')}
-                                                </Badge>
-                                              );
-                                              if (status === 'REFUSED') return (
-                                                <Badge className="text-xs mt-2 bg-red-100 text-red-700 border-0 inline-flex items-center gap-1">
-                                                  <XCircle className="w-3 h-3" />
-                                                  {t('statusRefused')}
-                                                </Badge>
-                                              );
-                                              if (status === 'CANCELLED') return (
-                                                <Badge className="text-xs mt-2 bg-gray-100 text-gray-600 border-0 inline-flex items-center gap-1">
-                                                  <XCircle className="w-3 h-3" />
-                                                  {t('statusCancelled')}
-                                                </Badge>
-                                              );
-                                              return (
-                                                <Badge variant="outline" className="text-xs mt-2 bg-slate-50 text-slate-500 inline-flex items-center gap-1">
-                                                  <Send className="w-3 h-3" />
-                                                  {t('statusNotSent')}
-                                                </Badge>
+                                              const cfg: Record<string, { bg: string; icon: React.ReactNode; label: string }> = {
+                                                PENDING: { bg: 'bg-blue-100 text-blue-700', icon: <Clock className="w-3 h-3" />, label: t('statusNoAnswer') },
+                                                TENTATIVE: { bg: 'bg-orange-100 text-orange-700', icon: <AlertCircle className="w-3 h-3" />, label: t('statusTentative') },
+                                                ACCEPTED: { bg: 'bg-green-100 text-green-700', icon: <CheckCircle className="w-3 h-3" />, label: t('statusAccepted') },
+                                                REFUSED: { bg: 'bg-red-100 text-red-700', icon: <XCircle className="w-3 h-3" />, label: t('statusRefused') },
+                                                CANCELLED: { bg: 'bg-gray-100 text-gray-600', icon: <XCircle className="w-3 h-3" />, label: t('statusCancelled') },
+                                              };
+                                              const c = status && cfg[status];
+                                              return c ? (
+                                                <Badge className={`text-xs mt-2 ${c.bg} border-0 inline-flex items-center gap-1`}>{c.icon}{c.label}</Badge>
+                                              ) : (
+                                                <Badge variant="outline" className="text-xs mt-2 bg-slate-50 text-slate-500 inline-flex items-center gap-1"><Send className="w-3 h-3" />{t('statusNotSent')}</Badge>
                                               );
                                             })()}
                                           </div>
