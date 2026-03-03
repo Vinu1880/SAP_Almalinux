@@ -11,7 +11,8 @@ export type SecurityEventType =
   | 'PATH_TRAVERSAL_ATTEMPT'
   | 'BACKUP_CREATED'
   | 'BACKUP_RESTORED'
-  | 'CRON_AUTH_FAILURE';
+  | 'CRON_AUTH_FAILURE'
+  | 'AUDIT_LOGS_CLEANUP';
 
 interface SecurityEvent {
   type: SecurityEventType;

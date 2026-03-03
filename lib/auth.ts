@@ -83,13 +83,16 @@ async function validateToken(request: NextRequest): Promise<AuthUser | null> {
     const exp = payload.exp ? payload.exp * 1000 : Date.now() + 3600_000;
     tokenCache.set(token, { user, expiresAt: exp - CACHE_MARGIN_MS });
     return user;
-  } catch {
+  } catch (jwksErr) {
     // Fallback to Graph API validation (handles Graph API access tokens)
     try {
       const response = await fetch('https://graph.microsoft.com/v1.0/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!response.ok) return null;
+      if (!response.ok) {
+        console.error(`[Auth] JWKS failed: ${(jwksErr as Error)?.message} | Graph /me fallback: ${response.status}`);
+        return null;
+      }
 
       const profile = await response.json();
       const user: AuthUser = {
@@ -101,7 +104,8 @@ async function validateToken(request: NextRequest): Promise<AuthUser | null> {
 
       tokenCache.set(token, { user, expiresAt: Date.now() + 5 * 60_000 });
       return user;
-    } catch {
+    } catch (graphErr) {
+      console.error(`[Auth] JWKS: ${(jwksErr as Error)?.message} | Graph /me error: ${(graphErr as Error)?.message}`);
       return null;
     }
   }

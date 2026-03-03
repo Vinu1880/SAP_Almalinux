@@ -38,6 +38,7 @@ import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useShifts } from '@/lib/hooks/useShifts';
+import { usePiketts } from '@/lib/hooks/usePiketts';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAutoSync } from '@/contexts/AutoSyncContext';
@@ -171,6 +172,7 @@ const DashboardPage = () => {
 
   const { holidays, isUserOnHoliday } = useHolidays();
   const { shifts, loading: shiftsLoading } = useShifts();
+  const { piketts } = usePiketts();
 
   const [usersAvailability, setUsersAvailability] = useState<{
     available: any[];
@@ -680,13 +682,29 @@ const DashboardPage = () => {
       const user = users.find(u => u.id === stat.userId);
       const userAssignments = assignments.filter(a => a.userId === stat.userId);
 
+      // Per-shift breakdown: { shiftName, shiftColor, total, accepted }
+      const shiftMap = new Map<string, { name: string; color: string; total: number; accepted: number }>();
+      userAssignments.forEach(a => {
+        const key = a.shift?.id || 'unknown';
+        const entry = shiftMap.get(key) || { name: a.shift?.name || '?', color: a.shift?.color || '#94a3b8', total: 0, accepted: 0 };
+        entry.total++;
+        if (a.status === 'ACCEPTED') entry.accepted++;
+        shiftMap.set(key, entry);
+      });
+
+      // Count piketts assigned to this user
+      const userPiketts = piketts.filter(p => p.userId === stat.userId && p.status === 'ACTIVE');
+
       return {
         ...stat,
         user,
-        assignments: userAssignments
+        assignments: userAssignments,
+        shiftBreakdown: Array.from(shiftMap.values()).sort((a, b) => b.total - a.total),
+        pikettCount: userPiketts.length,
+        pikettNames: userPiketts.map(p => p.name)
       };
-    }).filter(stat => stat.user); // Filter out users not found
-  }, [userStats, users, assignments]);
+    }).filter(stat => stat.user);
+  }, [userStats, users, assignments, piketts]);
 
   // Filter assignments based on all filters
   const filteredAssignments = useMemo(() => {
@@ -796,11 +814,13 @@ const DashboardPage = () => {
       downloadCsv(csv, `dashboard_shifts_${date}.csv`);
     } else {
       const csv = [
-        [t('user'), t('team'), t('totalShifts'), t('accepted'), t('pending'), t('refused'), t('cancelled'), t('acceptanceRate')].join(';'),
+        [t('user'), t('team'), t('totalShifts'), t('accepted'), t('pending'), t('refused'), t('cancelled'), t('acceptanceRate'), t('shiftBreakdown'), 'Pikett'].join(';'),
         ...userStatsWithDetails.map(s => [
           `${s.user?.firstName} ${s.user?.lastName}`, s.user?.team?.name || tCommon('noTeam'),
           s.total, s.accepted, s.pending, s.refused, s.cancelled,
-          `${s.total > 0 ? Math.round((s.accepted / s.total) * 100) : 0}%`
+          `${s.total > 0 ? Math.round((s.accepted / s.total) * 100) : 0}%`,
+          s.shiftBreakdown.map((sb: any) => `${sb.name}(${sb.accepted}/${sb.total})`).join(' | '),
+          s.pikettNames.join(' | ')
         ].join(';'))
       ].join('\n');
       downloadCsv(csv, `dashboard_utilisateurs_${date}.csv`);
@@ -1337,24 +1357,62 @@ const DashboardPage = () => {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-3">
-                          <div className="text-center p-2 bg-green-50 rounded-lg">
+                        {/* Status breakdown */}
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div className="p-1.5 bg-green-50 rounded">
                             <p className="text-lg font-semibold text-green-700">{userStat.accepted}</p>
                             <p className="text-xs text-green-600">{t('accepted')}</p>
                           </div>
-                          <div className="text-center p-2 bg-orange-50 rounded-lg">
+                          <div className="p-1.5 bg-orange-50 rounded">
                             <p className="text-lg font-semibold text-orange-700">{userStat.pending}</p>
                             <p className="text-xs text-orange-600">{t('pending')}</p>
                           </div>
-                          <div className="text-center p-2 bg-red-50 rounded-lg">
+                          <div className="p-1.5 bg-red-50 rounded">
                             <p className="text-lg font-semibold text-red-700">{userStat.refused}</p>
                             <p className="text-xs text-red-600">{t('refused')}</p>
                           </div>
-                          <div className="text-center p-2 bg-gray-50 rounded-lg">
+                          <div className="p-1.5 bg-gray-50 rounded">
                             <p className="text-lg font-semibold text-gray-700">{userStat.cancelled}</p>
                             <p className="text-xs text-gray-600">{t('cancelled')}</p>
                           </div>
                         </div>
+
+                        {/* Shift breakdown */}
+                        {userStat.shiftBreakdown.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-slate-100">
+                            <p className="text-xs font-medium text-slate-500 mb-2">{t('shiftBreakdown')}</p>
+                            <div className="space-y-1.5">
+                              {userStat.shiftBreakdown.map((sb: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: sb.color }} />
+                                    <span className="text-slate-700 truncate">{sb.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-slate-500">{sb.accepted}/{sb.total}</span>
+                                    <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${sb.total > 0 ? (sb.accepted / sb.total) * 100 : 0}%` }} />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Pikett info */}
+                        {userStat.pikettCount > 0 && (
+                          <div className="mt-2 pt-2 border-t border-slate-100">
+                            <div className="flex items-center gap-1.5">
+                              <Badge className="bg-red-100 text-red-700 border-0 text-xs">
+                                {t('pikettActive', { count: userStat.pikettCount })}
+                              </Badge>
+                              <span className="text-xs text-slate-500 truncate">
+                                {userStat.pikettNames.join(', ')}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

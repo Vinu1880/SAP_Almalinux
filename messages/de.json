@@ -168,7 +168,9 @@
     "thu": "Do",
     "fri": "Fr",
     "sat": "Sa",
-    "sun": "So"
+    "sun": "So",
+    "shiftBreakdown": "Schichtaufschlüsselung",
+    "pikettActive": "Pikett ({count})"
   },
   "shifts": {
     "title": "Schichtverwaltung",

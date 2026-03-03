@@ -168,7 +168,9 @@
     "thu": "Thu",
     "fri": "Fri",
     "sat": "Sat",
-    "sun": "Sun"
+    "sun": "Sun",
+    "shiftBreakdown": "Shift breakdown",
+    "pikettActive": "Pikett ({count})"
   },
   "shifts": {
     "title": "Shift Management",

@@ -168,7 +168,9 @@
     "thu": "Jeu",
     "fri": "Ven",
     "sat": "Sam",
-    "sun": "Dim"
+    "sun": "Dim",
+    "shiftBreakdown": "Détail par shift",
+    "pikettActive": "Pikett ({count})"
   },
   "shifts": {
     "title": "Gestion des Shifts",
