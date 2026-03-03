@@ -5,6 +5,11 @@ services:
     image: postgres:16-alpine
     container_name: sap-postgres
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     environment:
       POSTGRES_USER: sa_sap
       POSTGRES_PASSWORD: "Jq1v*lHHU_;sT+X^"
@@ -34,6 +39,11 @@ services:
     image: sap-app:latest
     container_name: sap-app
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "10"
     depends_on:
       sap-postgres:
         condition: service_healthy
@@ -61,6 +71,11 @@ services:
     image: nginx:stable
     container_name: sap-nginx
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     depends_on:
       - app
     ports:

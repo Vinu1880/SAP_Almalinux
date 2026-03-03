@@ -73,7 +73,8 @@ export const AutoBackupProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         if (res.ok) {
           localStorage.setItem(LAST_BACKUP_KEY, String(now));
-          console.log('[AutoBackup] Scheduled backup created');
+          // Cleanup audit logs older than 90 days
+          authFetch('/api/audit-logs/cleanup', { method: 'DELETE' }).catch(() => {});
         }
       } catch (err) {
         console.error('[AutoBackup] Error:', err);
