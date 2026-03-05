@@ -701,6 +701,8 @@
     "noInvitationsSentError": "Keine Einladung konnte gesendet werden ({count} Fehler).\n\nMögliche Ursachen:\n- Abgelaufener Zugriffstoken\n- Ungültige E-Mail-Adresse\n- Keine Internetverbindung\n\nEs wurde keine Zuweisung in der Datenbank erstellt.",
     "noInvitationsToSend": "Keine Einladungen zu senden.",
     "sendingInProgress": "Wird gesendet...",
+    "sent": "gesendet",
+    "errors": "Fehler",
     "understood": "Verstanden",
     "statusNotSent": "Nicht gesendet",
     "statusPending": "Keine Antwort",
