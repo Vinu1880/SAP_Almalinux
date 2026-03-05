@@ -550,7 +550,7 @@
     "passwordPlaceholder": "Mot de passe",
     "loginButton": "Se connecter",
     "loggingIn": "Connexion...",
-    "appTitle": "Shift Auto Planner - SAP",
+    "appTitle": "Shift Auto Planner",
     "intelligentManagement": "Gestion intelligente des équipes",
     "planYourTeams": "Planifiez vos équipes en toute simplicité",
     "automateDescription": "Automatisez la gestion des shifts, respectez les contraintes métier et optimisez la répartition des tâches avec notre solution intelligente.",
@@ -567,7 +567,7 @@
     "loginError": "Échec de la connexion avec Microsoft. Veuillez réessayer.",
     "credentialsError": "Échec de la connexion. Vérifiez vos identifiants.",
     "secureConnection": "Connexion sécurisée",
-    "copyright": "© 2025 SAP (Shift Auto Planner). Tous droits réservés.",
+    "copyright": "© 2025 Shift Auto Planner. Tous droits réservés.",
     "needHelp": "Besoin d'aide ?",
     "contactSupport": "Contactez le support"
   },

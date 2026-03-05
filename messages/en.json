@@ -550,7 +550,7 @@
     "passwordPlaceholder": "Password",
     "loginButton": "Sign in",
     "loggingIn": "Signing in...",
-    "appTitle": "Shift Auto Planner - SAP",
+    "appTitle": "Shift Auto Planner",
     "intelligentManagement": "Intelligent team management",
     "planYourTeams": "Plan your teams with ease",
     "automateDescription": "Automate shift management, respect business constraints and optimize task distribution with our intelligent solution.",
@@ -567,7 +567,7 @@
     "loginError": "Microsoft login failed. Please try again.",
     "credentialsError": "Login failed. Check your credentials.",
     "secureConnection": "Secure connection",
-    "copyright": "© 2025 SAP (Shift Auto Planner). All rights reserved.",
+    "copyright": "© 2025 Shift Auto Planner. All rights reserved.",
     "needHelp": "Need help?",
     "contactSupport": "Contact support"
   },

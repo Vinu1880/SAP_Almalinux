@@ -550,7 +550,7 @@
     "passwordPlaceholder": "Passwort",
     "loginButton": "Anmelden",
     "loggingIn": "Anmelden...",
-    "appTitle": "Shift Auto Planner - SAP",
+    "appTitle": "Shift Auto Planner",
     "intelligentManagement": "Intelligente Teamverwaltung",
     "planYourTeams": "Planen Sie Ihre Teams mit Leichtigkeit",
     "automateDescription": "Automatisieren Sie die Schichtverwaltung, respektieren Sie geschäftliche Einschränkungen und optimieren Sie die Aufgabenverteilung mit unserer intelligenten Lösung.",
@@ -567,7 +567,7 @@
     "loginError": "Microsoft-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
     "credentialsError": "Anmeldung fehlgeschlagen. Überprüfen Sie Ihre Anmeldedaten.",
     "secureConnection": "Sichere Verbindung",
-    "copyright": "© 2025 SAP (Shift Auto Planner). Alle Rechte vorbehalten.",
+    "copyright": "© 2025 Shift Auto Planner. Alle Rechte vorbehalten.",
     "needHelp": "Brauchen Sie Hilfe?",
     "contactSupport": "Support kontaktieren"
   },
