@@ -20,7 +20,6 @@ export const createUserSchema = z.object({
   teamId: z.string().max(30).nullable().optional(),
   rotationConfig: z.object({
     patternId: z.string(),
-    priority: z.string().optional().default('medium'),
     allowedShiftTypes: z.array(z.string()).optional().default([]),
   }).nullable().optional(),
   availability: z.any().nullable().optional(),

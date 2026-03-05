@@ -682,13 +682,16 @@ const DashboardPage = () => {
       const user = users.find(u => u.id === stat.userId);
       const userAssignments = assignments.filter(a => a.userId === stat.userId);
 
-      // Per-shift breakdown: { shiftName, shiftColor, total, accepted }
-      const shiftMap = new Map<string, { name: string; color: string; total: number; accepted: number }>();
+      // Per-shift breakdown
+      const shiftMap = new Map<string, { name: string; color: string; total: number; accepted: number; pending: number; refused: number; cancelled: number }>();
       userAssignments.forEach(a => {
         const key = a.shift?.id || 'unknown';
-        const entry = shiftMap.get(key) || { name: a.shift?.name || '?', color: a.shift?.color || '#94a3b8', total: 0, accepted: 0 };
+        const entry = shiftMap.get(key) || { name: a.shift?.name || '?', color: a.shift?.color || '#94a3b8', total: 0, accepted: 0, pending: 0, refused: 0, cancelled: 0 };
         entry.total++;
         if (a.status === 'ACCEPTED') entry.accepted++;
+        else if (a.status === 'PENDING') entry.pending++;
+        else if (a.status === 'REFUSED') entry.refused++;
+        else if (a.status === 'CANCELLED') entry.cancelled++;
         shiftMap.set(key, entry);
       });
 
@@ -1377,25 +1380,60 @@ const DashboardPage = () => {
                           </div>
                         </div>
 
-                        {/* Shift breakdown */}
+                        {/* Shift details — donut rings */}
                         {userStat.shiftBreakdown.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-slate-100">
-                            <p className="text-xs font-medium text-slate-500 mb-2">{t('shiftBreakdown')}</p>
-                            <div className="space-y-1.5">
-                              {userStat.shiftBreakdown.map((sb: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: sb.color }} />
-                                    <span className="text-slate-700 truncate">{sb.name}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-slate-500">{sb.accepted}/{sb.total}</span>
-                                    <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${sb.total > 0 ? (sb.accepted / sb.total) * 100 : 0}%` }} />
+                            <p className="text-xs font-medium text-slate-500 mb-2">{t('shiftDetails')}</p>
+                            <div className="flex flex-wrap gap-3">
+                              {userStat.shiftBreakdown.map((sb: any, idx: number) => {
+                                const r = 16, stroke = 4, size = 44;
+                                const circ = 2 * Math.PI * r;
+                                const accPct = sb.total > 0 ? sb.accepted / sb.total : 0;
+                                const penPct = sb.total > 0 ? sb.pending / sb.total : 0;
+                                const refPct = sb.total > 0 ? sb.refused / sb.total : 0;
+                                const accOff = circ * (1 - accPct);
+                                const penOff = circ * (1 - penPct);
+                                const refOff = circ * (1 - refPct);
+                                const accRot = -90;
+                                const penRot = -90 + accPct * 360;
+                                const refRot = -90 + (accPct + penPct) * 360;
+                                return (
+                                  <div key={idx} className="flex flex-col items-center gap-1 min-w-[52px]">
+                                    <div className="relative" style={{ width: size, height: size }}>
+                                      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                                        {/* Background ring */}
+                                        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
+                                        {/* Refused arc (red) — draw first (bottom layer) */}
+                                        {sb.refused > 0 && (
+                                          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#ef4444" strokeWidth={stroke}
+                                            strokeDasharray={circ} strokeDashoffset={refOff} strokeLinecap="round"
+                                            style={{ transform: `rotate(${refRot}deg)`, transformOrigin: 'center' }} />
+                                        )}
+                                        {/* Pending arc (orange) */}
+                                        {sb.pending > 0 && (
+                                          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#f59e0b" strokeWidth={stroke}
+                                            strokeDasharray={circ} strokeDashoffset={penOff} strokeLinecap="round"
+                                            style={{ transform: `rotate(${penRot}deg)`, transformOrigin: 'center' }} />
+                                        )}
+                                        {/* Accepted arc (green) — draw last (top layer) */}
+                                        {sb.accepted > 0 && (
+                                          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#22c55e" strokeWidth={stroke}
+                                            strokeDasharray={circ} strokeDashoffset={accOff} strokeLinecap="round"
+                                            style={{ transform: `rotate(${accRot}deg)`, transformOrigin: 'center' }} />
+                                        )}
+                                      </svg>
+                                      {/* Center text */}
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        <span className="text-[10px] font-semibold text-slate-700">{sb.accepted}/{sb.total}</span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: sb.color }} />
+                                      <span className="text-[10px] text-slate-600 truncate max-w-[60px]">{sb.name}</span>
                                     </div>
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}

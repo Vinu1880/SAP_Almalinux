@@ -40,7 +40,6 @@ export function useUsers() {
         // Keep rotationConfig as-is - it's a simple JSON object
         dataToSend.rotationConfig = {
           patternId: userData.rotationConfig.patternId,
-          priority: userData.rotationConfig.priority || 'medium',
           allowedShiftTypes: userData.rotationConfig.allowedShiftTypes || []
         };
       } else {

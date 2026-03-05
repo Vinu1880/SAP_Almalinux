@@ -64,7 +64,6 @@ interface RotationPattern {
 
 interface RotationConfig {
   patternId: string;
-  priority: 'high' | 'medium' | 'low';
   allowedShiftTypes: string[];
 }
 
@@ -288,7 +287,6 @@ const UsersPage = () => {
     
     return {
       patternId: user.rotationConfig.patternId,
-      priority: user.rotationConfig.priority || 'medium',
       allowedShiftTypes: user.rotationConfig.allowedShiftTypes || []
     };
   };
@@ -538,7 +536,6 @@ const UsersPage = () => {
                         onRotationConfigChange({
                           ...rotationConfig,
                           patternId,
-                          priority: rotationConfig?.priority || 'medium',
                           allowedShiftTypes: rotationConfig?.allowedShiftTypes || []
                         });
                       }}
@@ -632,34 +629,6 @@ const UsersPage = () => {
                       <Plus className="w-3 h-3 mr-1" />
                       {t("createNewPattern")}
                     </Button>
-                  </div>
-
-                  <div>
-                    <Label>{t("assignmentPriority")}</Label>
-                    <RadioGroup
-                      value={rotationConfig?.priority || 'medium'}
-                      onValueChange={(value) => {
-                        onRotationConfigChange({
-                          ...rotationConfig,
-                          patternId: rotationConfig?.patternId || '',
-                          priority: value as 'high' | 'medium' | 'low',
-                          allowedShiftTypes: rotationConfig?.allowedShiftTypes || []
-                        });
-                      }}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="high" id="high" />
-                        <Label htmlFor="high" className="font-normal">{t("priorityHighDesc")}</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="medium" id="medium" />
-                        <Label htmlFor="medium" className="font-normal">{t("priorityMediumDesc")}</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="low" id="low" />
-                        <Label htmlFor="low" className="font-normal">{t("priorityLowDesc")}</Label>
-                      </div>
-                    </RadioGroup>
                   </div>
 
                   {/* Display and edit the current pattern if selected */}
@@ -1878,10 +1847,6 @@ const UsersPage = () => {
                             <p className="text-xs font-semibold text-purple-700 flex items-center">
                               <RotateCw className="w-3 h-3 mr-1" />
                               {rotationPattern.name}
-                            </p>
-                            <p className="text-xs text-purple-600 mt-1">
-                              {t("priority")}: {rotationConfig?.priority === 'high' ? t("priorityHigh") :
-                                        rotationConfig?.priority === 'medium' ? t("priorityMedium") : t("priorityLow")}
                             </p>
                           </div>
                         )}

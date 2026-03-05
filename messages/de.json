@@ -170,6 +170,7 @@
     "sat": "Sa",
     "sun": "So",
     "shiftBreakdown": "Schichtaufschlüsselung",
+    "shiftDetails": "Schicht Details",
     "pikettActive": "Pikett ({count})"
   },
   "shifts": {
@@ -353,13 +354,6 @@
     "selectPattern": "Muster auswählen",
     "existingPatterns": "Vorhandene Muster:",
     "noPatternCreated": "Kein Muster erstellt",
-    "assignmentPriority": "Zuweisungspriorität",
-    "priorityHighDesc": "Hoch - Immer bevorzugt zugewiesen",
-    "priorityMediumDesc": "Mittel - Nach Verfügbarkeit",
-    "priorityLowDesc": "Niedrig - Bei Bedarf",
-    "priorityHigh": "Hoch",
-    "priorityMedium": "Mittel",
-    "priorityLow": "Niedrig",
     "cycleOfWeeks": "Zyklus von {count} Woche(n)",
     "currentPattern": "Aktuelles Muster:",
     "weekXOfY": "Woche {week} von {total}",

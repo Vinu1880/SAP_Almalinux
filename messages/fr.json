@@ -170,6 +170,7 @@
     "sat": "Sam",
     "sun": "Dim",
     "shiftBreakdown": "Détail par shift",
+    "shiftDetails": "Détails des shifts",
     "pikettActive": "Pikett ({count})"
   },
   "shifts": {
@@ -353,13 +354,6 @@
     "selectPattern": "Sélectionner un pattern",
     "existingPatterns": "Patterns existants :",
     "noPatternCreated": "Aucun pattern créé",
-    "assignmentPriority": "Priorité d'assignation",
-    "priorityHighDesc": "Haute - Toujours assigné en priorité",
-    "priorityMediumDesc": "Moyenne - Selon disponibilité",
-    "priorityLowDesc": "Basse - Si nécessaire",
-    "priorityHigh": "Haute",
-    "priorityMedium": "Moyenne",
-    "priorityLow": "Basse",
     "cycleOfWeeks": "Cycle de {count} semaine(s)",
     "currentPattern": "Pattern actuel :",
     "weekXOfY": "Semaine {week} sur {total}",

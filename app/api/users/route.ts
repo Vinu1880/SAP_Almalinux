@@ -101,7 +101,6 @@ export async function POST(request: NextRequest) {
     if (validation.data.rotationConfig && validation.data.rotationConfig.patternId) {
       userData.rotationConfig = {
         patternId: validation.data.rotationConfig.patternId,
-        priority: validation.data.rotationConfig.priority || 'medium',
         allowedShiftTypes: validation.data.rotationConfig.allowedShiftTypes || []
       };
     } else {

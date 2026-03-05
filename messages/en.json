@@ -170,6 +170,7 @@
     "sat": "Sat",
     "sun": "Sun",
     "shiftBreakdown": "Shift breakdown",
+    "shiftDetails": "Shift details",
     "pikettActive": "Pikett ({count})"
   },
   "shifts": {
@@ -353,13 +354,6 @@
     "selectPattern": "Select a pattern",
     "existingPatterns": "Existing patterns:",
     "noPatternCreated": "No pattern created",
-    "assignmentPriority": "Assignment priority",
-    "priorityHighDesc": "High - Always assigned first",
-    "priorityMediumDesc": "Medium - Based on availability",
-    "priorityLowDesc": "Low - If needed",
-    "priorityHigh": "High",
-    "priorityMedium": "Medium",
-    "priorityLow": "Low",
     "cycleOfWeeks": "Cycle of {count} week(s)",
     "currentPattern": "Current pattern:",
     "weekXOfY": "Week {week} of {total}",

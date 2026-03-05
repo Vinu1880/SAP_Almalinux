@@ -85,7 +85,6 @@ interface ShiftAssignment {
     conflictEvents: OutlookEvent[];
   }>;
   isRotationAssignment?: boolean;
-  rotationPriority?: 'high' | 'medium' | 'low';
   isPikett?: boolean;
   isManualOverride?: boolean;
   overrideReason?: string;
@@ -314,20 +313,17 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
 
   // Improved rotation function
   const getRotationShiftForUserOnDate = (
-    userId: string, 
+    userId: string,
     date: string,
     user: any
-  ): { shiftId: string | null; priority: 'high' | 'medium' | 'low' } => {
+  ): string | null => {
     if (!settings.enableRotations || !user.rotationConfig?.patternId) {
-      return { shiftId: null, priority: 'low' };
+      return null;
     }
-    
+
     const pattern = rotationPatterns.find(p => p.id === user.rotationConfig.patternId);
-    if (!pattern) {
-      // Pattern not found for user
-      return { shiftId: null, priority: user.rotationConfig.priority || 'low' };
-    }
-    
+    if (!pattern) return null;
+
     // Calculate which week of the cycle we are in
     // Use ISO week number for consistency across generation tranches
     // This ensures rotations continue correctly when generating in 3-4 month batches
@@ -340,20 +336,15 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
 
     // Determine the week in the cycle (0-based, using ISO week number)
     const weekInCycle = (isoWeekNum - 1) % pattern.cycleLength;
-    
+
     const weekPattern = pattern.weeks[weekInCycle];
-    if (!weekPattern) {
-      return { shiftId: null, priority: user.rotationConfig.priority || 'low' };
-    }
+    if (!weekPattern) return null;
 
     // Get the day of the week
     const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][currentDateObj.getDay()];
     const shiftIds = weekPattern[dayOfWeek] || [];
 
-    return { 
-      shiftId: shiftIds[0] || null, 
-      priority: user.rotationConfig.priority || 'medium' 
-    };
+    return shiftIds[0] || null;
   };
 
   // Shuffle function using mulberry32 PRNG (good distribution, deterministic per seed)
@@ -1019,7 +1010,6 @@ const processShiftAssignments = async () => {
                 })),
                 isPikett: true,
                 isRotationAssignment: false,
-                rotationPriority: 'high'
               });
             } else {
               // Check availability for this specific day
@@ -1088,11 +1078,10 @@ const processShiftAssignments = async () => {
                 ],
                 isPikett: true,
                 isRotationAssignment: false,
-                rotationPriority: 'high'
               });
             }
           }
-          
+
           // Move to the next user for the following week
           userRotationIndex++;
         }
@@ -1103,7 +1092,7 @@ const processShiftAssignments = async () => {
    // PART 2: Process regular SHIFTS
     if (selectedShifts.length > 0) {
       const rotationUsers = currentUsers.filter(u => u.rotationConfig?.patternId);
-      
+
       let shiftsToProcess = [...selectedShifts];
       if (settings.prioritySystem) {
         shiftsToProcess.sort((a, b) => {
@@ -1114,69 +1103,57 @@ const processShiftAssignments = async () => {
           return membersA - membersB;
         });
       }
-      
-      // Track which week we're in to re-shuffle each week
-      const shiftWeekQueues: { [key: string]: any[] } = {};
-      const shiftWeekPointers: { [key: string]: number } = {};
 
-      for (const date of dates) {
-        const dailyAssignments: { [userId: string]: string[] } = {};
-
-        // PART 2.1: Process rotations if enabled
-        if (settings.enableRotations) {
+      // ========================================
+      // PART 2.1: Process ALL rotations across ALL dates FIRST
+      // This ensures assignedNormalShiftSet is fully populated before
+      // normal shift assignment, so consecutive shift checks work correctly.
+      // ========================================
+      if (settings.enableRotations) {
+        for (const date of dates) {
           for (const rotationUser of rotationUsers) {
-            const { shiftId, priority } = getRotationShiftForUserOnDate(
+            const shiftId = getRotationShiftForUserOnDate(
               rotationUser.id,
               date,
               rotationUser
             );
-            
-            if (!shiftId) {
-              continue;
-            }
 
-            // Check that this shift/pikett is part of the selected items in the planner
+            if (!shiftId) continue;
+
+            // Check that this shift/pikett is part of the selected items
             const isSelectedShift = selectedShifts.includes(shiftId);
             const isSelectedPikett = selectedPiketts.includes(shiftId);
-            if (!isSelectedShift && !isSelectedPikett) {
-              continue;
-            }
+            if (!isSelectedShift && !isSelectedPikett) continue;
 
             // Find the shift or pikett by its ID
-            const selectedShift = isSelectedShift
-              ? shiftMap.get(shiftId) || null
-              : null;
-            const selectedPikett = isSelectedPikett
-              ? pikettMap.get(shiftId) || null
-              : null;
-            const selectedItem = selectedShift || (selectedPikett ? {
-              ...selectedPikett,
+            const rotSelectedShift = isSelectedShift ? shiftMap.get(shiftId) || null : null;
+            const rotSelectedPikett = isSelectedPikett ? pikettMap.get(shiftId) || null : null;
+            const selectedItem = rotSelectedShift || (rotSelectedPikett ? {
+              ...rotSelectedPikett,
               startTime: '00:00',
               endTime: '23:59'
             } : null);
-            if (!selectedItem) {
-              continue;
-            }
+            if (!selectedItem) continue;
 
-            // Skip if already assigned for this date+item (e.g. by PART 1 piketts)
+            // Skip if already assigned (e.g. by PART 1 piketts)
             const alreadyHasAssignment = assignments.some(a =>
               a.date === date && a.shiftId === shiftId
             );
-            if (alreadyHasAssignment) {
-              continue;
-            }
+            if (alreadyHasAssignment) continue;
 
-            // Check availability - Public holidays
-            if (isUserOnHoliday(rotationUser.location || '', date)) {
-              continue;
+            // Check public holidays
+            if (isUserOnHoliday(rotationUser.location || '', date)) continue;
+
+            // Check part-time / work schedule
+            if (settings.respectWorkPercentage) {
+              const worksThisDay = isUserWorkingOnDay(rotationUser, date, selectedItem.startTime, selectedItem.endTime);
+              if (!worksThisDay) continue;
             }
 
             // Check calendar availability
             if (settings.checkCalendars) {
               const availability = isUserAvailable(rotationUser, date, oofEvents, selectedItem);
-              if (!availability.available) {
-                continue;
-              }
+              if (!availability.available) continue;
             }
 
             // Check WEEK_PARITY rule
@@ -1188,32 +1165,31 @@ const processShiftAssignments = async () => {
               const weekNum = parseInt(wk.split('-W')[1]);
               const isOddWeek = weekNum % 2 !== 0;
               const wantsOdd = rotWpRules[0].config.parity === 'odd';
-              if ((wantsOdd && !isOddWeek) || (!wantsOdd && isOddWeek)) {
-                continue;
-              }
+              if ((wantsOdd && !isOddWeek) || (!wantsOdd && isOddWeek)) continue;
             }
 
-            // Check that the user is eligible for this shift/pikett
+            // Check consecutive shifts (now works because ALL rotation dates are processed first)
+            if (settings.avoidConsecutiveShifts && !rotSelectedPikett) {
+              const adjacent = dateAdjacentMap.get(date);
+              const hasConsecutiveNormalShift = adjacent ? (
+                assignedNormalShiftSet.has(`${adjacent.prev}|${rotationUser.id}`) ||
+                assignedNormalShiftSet.has(`${adjacent.next}|${rotationUser.id}`)
+              ) : false;
+              if (hasConsecutiveNormalShift) continue;
+            }
+
+            // Check eligibility
             const eligibleUsers = getEligibleUsersForShift(selectedItem);
             const isEligible = eligibleUsers.some(u => u.id === rotationUser.id);
-
-            if (!isEligible) {
-              continue;
-            }
+            if (!isEligible) continue;
 
             // Track the assignment
-            if (!userShiftsTracking[rotationUser.id]) {
-              userShiftsTracking[rotationUser.id] = {};
-            }
-            if (!userShiftsTracking[rotationUser.id][shiftId]) {
-              userShiftsTracking[rotationUser.id][shiftId] = 0;
-            }
+            if (!userShiftsTracking[rotationUser.id]) userShiftsTracking[rotationUser.id] = {};
+            if (!userShiftsTracking[rotationUser.id][shiftId]) userShiftsTracking[rotationUser.id][shiftId] = 0;
             userShiftsTracking[rotationUser.id][shiftId]++;
 
-            dailyAssignments[rotationUser.id] = [selectedItem.name];
-
             // Update fast-lookup sets
-            if (!selectedPikett) {
+            if (!rotSelectedPikett) {
               assignedNormalShiftSet.add(`${date}|${rotationUser.id}`);
             }
             assignedAnyShiftSet.add(`${date}|${rotationUser.id}`);
@@ -1236,12 +1212,22 @@ const processShiftAssignments = async () => {
                   conflictEvents: []
                 })),
               isRotationAssignment: true,
-              isPikett: !!selectedPikett,
-              rotationPriority: priority
+              isPikett: !!rotSelectedPikett,
             });
           }
         }
-        
+      }
+
+      // Track which week we're in to re-shuffle each week
+      const shiftWeekQueues: { [key: string]: any[] } = {};
+      const shiftWeekPointers: { [key: string]: number } = {};
+
+      // ========================================
+      // PART 2.2: Process normal shifts (non-rotation) for each date
+      // ========================================
+      for (const date of dates) {
+        const dailyAssignments: { [userId: string]: string[] } = {};
+
         // PART 2.2: Process shifts not assigned by rotation
         for (const shiftId of shiftsToProcess) {
           const shift = shiftMap.get(shiftId);
@@ -1643,6 +1629,21 @@ const processShiftAssignments = async () => {
                    a.assignedUsers.some((u: any) => u.id === assignedUser.id)
             );
             if (alreadyInAssignments) continue;
+
+            // Check part-time / work schedule for linked shift
+            if (settings.respectWorkPercentage && linkedShift) {
+              const worksThisDay = isUserWorkingOnDay(assignedUser, assignment.date, linkedItem.startTime, linkedItem.endTime);
+              if (!worksThisDay) continue;
+            }
+
+            // Check public holidays
+            if (isUserOnHoliday(assignedUser.location || '', assignment.date)) continue;
+
+            // Check calendar availability for linked shift
+            if (settings.checkCalendars) {
+              const availability = isUserAvailable(assignedUser, assignment.date, oofEvents, linkedItem);
+              if (!availability.available) continue;
+            }
 
             // DOUBLE_SHIFT replaces existing assignment (both piketts and shifts)
             // Check if another DS rule already claimed this shift+date
@@ -2730,14 +2731,6 @@ useEffect(() => {
                                 </div>
                               </div>
                               <div className="flex flex-col items-end gap-0.5">
-                                <Badge className={`text-xs border-0 ${
-                                  user.rotationConfig.priority === 'high' ? 'bg-red-100 text-red-700' :
-                                  user.rotationConfig.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                                  'bg-green-100 text-green-700'
-                                }`}>
-                                  {user.rotationConfig.priority === 'high' ? t('high') :
-                                   user.rotationConfig.priority === 'medium' ? t('medium') : t('low')}
-                                </Badge>
                                 <span className="text-xs text-slate-500">
                                   {pattern?.cycleLength || 0} sem.
                                 </span>
@@ -3275,13 +3268,9 @@ useEffect(() => {
 
                               <div className="flex items-center gap-2">
                                 {assignment.isRotationAssignment && !editingAssignment && (
-                                  <Badge className={`text-xs border-0 ${
-                                    assignment.rotationPriority === 'high' ? 'bg-red-100 text-red-700' :
-                                    assignment.rotationPriority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 
-                                    'bg-green-100 text-green-700'
-                                  }`}>
-                                    {t('priority')}: {assignment.rotationPriority === 'high' ? t('high') :
-                                              assignment.rotationPriority === 'medium' ? t('medium') : t('low')}
+                                  <Badge className="text-xs border-0 bg-purple-100 text-purple-700">
+                                    <RotateCw className="w-3 h-3 mr-1" />
+                                    {t('rotation')}
                                   </Badge>
                                 )}
                                 
