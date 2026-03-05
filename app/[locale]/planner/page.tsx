@@ -28,6 +28,7 @@ import {
   RotateCw,
   Maximize2,
   Shield,
+  Link2,
   Edit,
   X
 } from 'lucide-react';
@@ -1605,22 +1606,20 @@ const processShiftAssignments = async () => {
             );
             if (alreadyInAssignments) { console.log(`[DS-DEBUG] SKIP already assigned: ${assignedUser.displayName} ${assignment.date} ${linkedShiftId}`); continue; }
 
-            // For piketts: DOUBLE_SHIFT replaces normal rotation assignment
-            if (linkedPikett) {
-              // Check if another DS rule already claimed this pikett+date
-              if (dsAssignedSet.has(`${assignment.date}|${linkedShiftId}|*`)) {
-                console.log(`[DS-DEBUG] SKIP pikett already claimed by another DS: ${assignment.date} ${linkedShiftId}`);
-                continue;
-              }
-              // Remove all existing entries for this pikett+date (rotation + empty)
-              for (let i = assignments.length - 1; i >= 0; i--) {
-                if (assignments[i].date === assignment.date && assignments[i].shiftId === linkedShiftId) {
-                  const removedUser = assignments[i].assignedUsers[0];
-                  if (removedUser && userShiftsTracking[removedUser.id]?.[linkedShiftId]) {
-                    userShiftsTracking[removedUser.id][linkedShiftId]--;
-                  }
-                  assignments.splice(i, 1);
+            // DOUBLE_SHIFT replaces existing assignment (both piketts and shifts)
+            // Check if another DS rule already claimed this shift+date
+            if (dsAssignedSet.has(`${assignment.date}|${linkedShiftId}|*`)) {
+              console.log(`[DS-DEBUG] SKIP already claimed by another DS: ${assignment.date} ${linkedShiftId}`);
+              continue;
+            }
+            // Remove all existing entries for this shift+date so DS user takes over
+            for (let i = assignments.length - 1; i >= 0; i--) {
+              if (assignments[i].date === assignment.date && assignments[i].shiftId === linkedShiftId) {
+                const removedUser = assignments[i].assignedUsers[0];
+                if (removedUser && userShiftsTracking[removedUser.id]?.[linkedShiftId]) {
+                  userShiftsTracking[removedUser.id][linkedShiftId]--;
                 }
+                assignments.splice(i, 1);
               }
             }
 
@@ -2018,28 +2017,26 @@ const CalendarDay = ({ day }: { day: number | null }) => {
       
       <div className="space-y-0.5">
         {visibleAssignments.map((assignment, idx) => {
-          // Improved color management
-          let color = '#dc2626'; // Red by default for piketts
+          // Color management: pikett=violet, double-shift=teal, normal=shift color
+          let color = assignment.isPikett ? '#7c3aed' : assignment.isDoubleShift ? '#0d9488' : (assignment.shift?.color || '#6b7280');
 
-          if (!assignment.isPikett) {
-            // For regular shifts, use the shift color from the DB
-            color = assignment.shift?.color || '#6b7280';
-          }
-          
           return (
-            <div 
-              key={`${assignment.shiftId}-${idx}`} 
+            <div
+              key={`${assignment.shiftId}-${idx}`}
               className="rounded px-1 py-0.5 text-xs truncate relative"
-              style={{ 
-                backgroundColor: assignment.isPikett ? '#dc262615' : `${color}15`,
+              style={{
+                backgroundColor: `${color}15`,
                 borderLeft: `2px solid ${color}`
               }}
             >
               <div className="flex items-center gap-0.5">
-                {assignment.isPikett && (
-                  <Shield className="w-3 h-3 flex-shrink-0 text-red-600" />
+                {assignment.isPikett && !assignment.isDoubleShift && (
+                  <Shield className="w-3 h-3 flex-shrink-0 text-violet-600" />
                 )}
-                {assignment.isRotationAssignment && !assignment.isPikett && (
+                {assignment.isDoubleShift && (
+                  <Link2 className="w-3 h-3 flex-shrink-0" style={{ color: '#0d9488' }} />
+                )}
+                {assignment.isRotationAssignment && !assignment.isPikett && !assignment.isDoubleShift && (
                   <RotateCw className="w-3 h-3 flex-shrink-0" style={{ color }} />
                 )}
                 <span 
@@ -2635,6 +2632,14 @@ useEffect(() => {
                     <div className="flex items-center gap-1">
                       <AlertCircle className="w-3 h-3 text-violet-600" />
                       <span className="text-slate-600">{t('outOfOffice')}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Shield className="w-3 h-3 text-violet-600" />
+                      <span className="text-slate-600">Pikett</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Link2 className="w-3 h-3 text-teal-600" />
+                      <span className="text-slate-600">{t('doubleShiftAuto')}</span>
                     </div>
                     <div className="border-l pl-4 flex items-center gap-4">
                       <div className="flex items-center gap-1">
