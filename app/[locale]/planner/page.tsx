@@ -668,8 +668,12 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     const startDateObj = new Date(start);
     const endDateObj = new Date(end);
     
-    for (let d = new Date(startDateObj); d <= endDateObj; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
+    for (let d = new Date(startDateObj.getTime()); d <= endDateObj;) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      dates.push(`${yyyy}-${mm}-${dd}`);
+      d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 12);
     }
     
     return dates;

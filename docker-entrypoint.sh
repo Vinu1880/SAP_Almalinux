@@ -46,10 +46,10 @@ fi
 
 # Exécuter les migrations Prisma
 echo "[2/4] Application des migrations Prisma..."
-npx prisma migrate deploy 2>/dev/null || {
+npx prisma migrate deploy 2>&1 || {
     echo "Note: Pas de nouvelles migrations à appliquer ou première exécution"
     echo "Synchronisation du schéma..."
-    npx prisma db push --accept-data-loss 2>/dev/null || true
+    npx prisma db push --accept-data-loss 2>&1 || echo "ERREUR: prisma db push a échoué!"
 }
 
 # Fix permissions on mounted backup volume (host may own as root)
