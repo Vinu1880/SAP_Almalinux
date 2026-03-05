@@ -91,6 +91,7 @@ interface ShiftAssignment {
   overrideReason?: string;
   noAssignmentReason?: string;
   isDoubleShift?: boolean;
+  isDoubleShiftTrigger?: boolean;
 }
 
 interface RotationPattern {
@@ -1642,6 +1643,8 @@ const processShiftAssignments = async () => {
             }
             const countKey = `${assignedUser.id}|${linkedShiftId}`;
             dsUserShiftCounts.set(countKey, (dsUserShiftCounts.get(countKey) || 0) + 1);
+            // Mark the trigger assignment so it also shows the Link2 icon
+            assignment.isDoubleShiftTrigger = true;
             passAdditions.push({
               date: assignment.date,
               shiftId: linkedShiftId,
@@ -2033,7 +2036,7 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                 {assignment.isPikett && !assignment.isDoubleShift && (
                   <Shield className="w-3 h-3 flex-shrink-0 text-violet-600" />
                 )}
-                {assignment.isDoubleShift && (
+                {(assignment.isDoubleShift || assignment.isDoubleShiftTrigger) && (
                   <Link2 className="w-3 h-3 flex-shrink-0" style={{ color: '#0d9488' }} />
                 )}
                 {assignment.isRotationAssignment && !assignment.isPikett && !assignment.isDoubleShift && (
@@ -2265,16 +2268,16 @@ useEffect(() => {
                     </div>
                   </div>
                   
-                  <ScrollArea className="h-auto border rounded-lg p-2 bg-red-50/30">
+                  <ScrollArea className="h-auto border rounded-lg p-2 bg-violet-50/30">
                     <div className="space-y-2">
                       {piketts.filter((p: any) => p.status === 'ACTIVE').map((pikett: any) => {
                         const isSelected = selectedPiketts.includes(pikett.id);
-                        
+
                         return (
                           <label
                             key={pikett.id}
                             className={`flex items-center space-x-2 p-1.5 rounded cursor-pointer text-xs
-                              ${isSelected ? 'bg-red-100' : 'hover:bg-red-50'}`}
+                              ${isSelected ? 'bg-violet-100' : 'hover:bg-violet-50'}`}
                           >
                             <Checkbox
                               checked={isSelected}
@@ -2288,10 +2291,10 @@ useEffect(() => {
                             />
                             <div className="flex-1">
                               <div className="flex items-center gap-1">
-                                <Shield className="w-3 h-3 text-red-600" />
-                                <span className="font-medium text-red-900">{pikett.name}</span>
+                                <Shield className="w-3 h-3 text-violet-600" />
+                                <span className="font-medium text-violet-900">{pikett.name}</span>
                               </div>
-                              <span className="text-xs text-red-700">
+                              <span className="text-xs text-violet-700">
                                 {pikett.team?.name} • 24/7
                               </span>
                             </div>
