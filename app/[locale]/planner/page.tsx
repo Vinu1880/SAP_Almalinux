@@ -1608,17 +1608,14 @@ const processShiftAssignments = async () => {
                 console.log(`[DS-DEBUG] SKIP pikett already claimed by another DS: ${assignment.date} ${linkedShiftId}`);
                 continue;
               }
-              // Remove normal rotation user from this pikett so DS user takes over
-              const existingIdx = assignments.findIndex(
-                a => a.date === assignment.date && a.shiftId === linkedShiftId && a.assignedUsers.length > 0
-              );
-              if (existingIdx !== -1) {
-                const removedUser = assignments[existingIdx].assignedUsers[0];
-                console.log(`[DS-DEBUG] Replacing ${removedUser?.displayName} with ${assignedUser.displayName} on ${linkedPikett.name} ${assignment.date}`);
-                assignments[existingIdx].assignedUsers = [];
-                // Decrement tracking for removed user
-                if (removedUser && userShiftsTracking[removedUser.id]?.[linkedShiftId]) {
-                  userShiftsTracking[removedUser.id][linkedShiftId]--;
+              // Remove all existing entries for this pikett+date (rotation + empty)
+              for (let i = assignments.length - 1; i >= 0; i--) {
+                if (assignments[i].date === assignment.date && assignments[i].shiftId === linkedShiftId) {
+                  const removedUser = assignments[i].assignedUsers[0];
+                  if (removedUser && userShiftsTracking[removedUser.id]?.[linkedShiftId]) {
+                    userShiftsTracking[removedUser.id][linkedShiftId]--;
+                  }
+                  assignments.splice(i, 1);
                 }
               }
             }
