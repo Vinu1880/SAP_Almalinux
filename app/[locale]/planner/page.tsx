@@ -1511,7 +1511,19 @@ const processShiftAssignments = async () => {
               userShiftsTracking[selectedUser.id][shiftId] = 0;
             }
             userShiftsTracking[selectedUser.id][shiftId]++;
-            
+
+            // Pre-count DOUBLE_SHIFT linked shifts for fair distribution
+            const dsRulesForSelected = (selectedUser.rules || []).filter(
+              (r: any) => r.type === 'DOUBLE_SHIFT' && r.enabled && r.config.triggerShiftId === shiftId
+            );
+            for (const dsRule of dsRulesForSelected) {
+              const lsId = dsRule.config.linkedShiftId;
+              if (selectedShifts.includes(lsId) || selectedPiketts.includes(lsId)) {
+                if (!userShiftsTracking[selectedUser.id][lsId]) userShiftsTracking[selectedUser.id][lsId] = 0;
+                userShiftsTracking[selectedUser.id][lsId]++;
+              }
+            }
+
             dailyAssignments[selectedUser.id] = [shift.name];
             selectedUser.shiftsAssigned = { ...userShiftsTracking[selectedUser.id] };
             assignedUsers = [selectedUser];
@@ -1568,16 +1580,40 @@ const processShiftAssignments = async () => {
     // ========================================
     // DOUBLE_SHIFT POST-PROCESSING (with chaining support)
     // ========================================
+    // Fetch DB assignments first (for DS triggers from previously sent invitations)
+    let freshDbAssignments: any[] = [];
+    try {
+      const dbResponse = await authFetch(`/api/shift-assignments?startDate=${startDate}&endDate=${endDate}`);
+      if (dbResponse.ok) {
+        freshDbAssignments = await dbResponse.json();
+        setDbAssignments(freshDbAssignments);
+      }
+    } catch {
+      freshDbAssignments = dbAssignments;
+    }
+
+    // Convert DB assignments to triggers for shifts NOT in the current preview
+    const dbTriggerAssignments = freshDbAssignments
+      .filter(dbA => dbA.status !== 'CANCELLED' && dbA.status !== 'REFUSED')
+      .map(dbA => {
+        const fullUser = users.find(u => u.id === dbA.userId);
+        return {
+          date: normalizeDbDate(dbA.date),
+          shiftId: dbA.shiftId,
+          shift: dbA.shift,
+          assignedUsers: fullUser ? [fullUser] : [],
+          isFromDb: true,
+          isDoubleShiftTrigger: false as boolean | undefined,
+        };
+      })
+      .filter(dbA => dbA.assignedUsers.length > 0 && !assignments.some(a => a.date === dbA.date && a.shiftId === dbA.shiftId));
+
     // Process in multiple passes to support chains (e.g. SEC→CDC and CDC→SEC)
     // Max 5 passes to prevent infinite loops
     const allDoubleShiftAdditions: any[] = [];
     const dsAssignedSet = new Set<string>(); // "date|shiftId|userId" for O(1) dedup
     const dsUserShiftCounts = new Map<string, number>(); // "userId|shiftId" -> count for MAX_LOAD
-    let dsSourceAssignments = [...assignments];
-    console.log('[DS-DEBUG] Total assignments to scan:', dsSourceAssignments.length);
-    console.log('[DS-DEBUG] Assignments with users:', dsSourceAssignments.filter(a => a.assignedUsers.length > 0).length);
-    const allUsersWithRules = dsSourceAssignments.flatMap(a => a.assignedUsers).filter((u: any) => u.rules?.length > 0);
-    console.log('[DS-DEBUG] Users with rules in assignments:', allUsersWithRules.map((u: any) => ({ name: u.displayName, rules: u.rules?.map((r: any) => r.type) })));
+    let dsSourceAssignments = [...assignments, ...dbTriggerAssignments];
     for (let dsPass = 0; dsPass < 5; dsPass++) {
       const passAdditions: any[] = [];
       for (const assignment of dsSourceAssignments) {
@@ -1585,34 +1621,32 @@ const processShiftAssignments = async () => {
           const dsRules = (assignedUser.rules || []).filter(
             (r: any) => r.type === 'DOUBLE_SHIFT' && r.enabled && r.config.triggerShiftId === assignment.shiftId
           );
-          if (dsRules.length > 0) {
-            console.log(`[DS-DEBUG] ${assignedUser.displayName} on ${assignment.date} shift=${assignment.shiftId} has ${dsRules.length} matching DS rules`);
-          }
+          if (dsRules.length === 0) continue;
           for (const rule of dsRules) {
             const linkedShiftId = rule.config.linkedShiftId;
+            // Only create DS if the linked shift is selected in current preview
+            const linkedIsSelected = selectedShifts.includes(linkedShiftId) || selectedPiketts.includes(linkedShiftId);
+            if (!linkedIsSelected) continue;
             // Look up in shifts first, then piketts (O(1) via Map)
             const linkedShift = shiftMap.get(linkedShiftId) || null;
             const linkedPikett = !linkedShift ? (pikettMap.get(linkedShiftId) || null) : null;
             const linkedItem = linkedShift || (linkedPikett ? { ...linkedPikett, startTime: '00:00', endTime: '23:59' } : null);
-            if (!linkedItem) { console.log(`[DS-DEBUG] SKIP: linkedItem not found for ${linkedShiftId}`); continue; }
+            if (!linkedItem) continue;
 
             // Fast dedup check using Set
             const dsKey = `${assignment.date}|${linkedShiftId}|${assignedUser.id}`;
-            if (dsAssignedSet.has(dsKey)) { console.log(`[DS-DEBUG] SKIP dedup: ${dsKey}`); continue; }
+            if (dsAssignedSet.has(dsKey)) continue;
 
             // Also check existing assignments
             const alreadyInAssignments = assignments.some(
               a => a.date === assignment.date && a.shiftId === linkedShiftId &&
                    a.assignedUsers.some((u: any) => u.id === assignedUser.id)
             );
-            if (alreadyInAssignments) { console.log(`[DS-DEBUG] SKIP already assigned: ${assignedUser.displayName} ${assignment.date} ${linkedShiftId}`); continue; }
+            if (alreadyInAssignments) continue;
 
             // DOUBLE_SHIFT replaces existing assignment (both piketts and shifts)
             // Check if another DS rule already claimed this shift+date
-            if (dsAssignedSet.has(`${assignment.date}|${linkedShiftId}|*`)) {
-              console.log(`[DS-DEBUG] SKIP already claimed by another DS: ${assignment.date} ${linkedShiftId}`);
-              continue;
-            }
+            if (dsAssignedSet.has(`${assignment.date}|${linkedShiftId}|*`)) continue;
             // Remove all existing entries for this shift+date so DS user takes over
             for (let i = assignments.length - 1; i >= 0; i--) {
               if (assignments[i].date === assignment.date && assignments[i].shiftId === linkedShiftId) {
@@ -1652,6 +1686,7 @@ const processShiftAssignments = async () => {
               user: { ...assignedUser, isDoubleShift: true },
               userId: assignedUser.id,
               isPikett: !!linkedPikett,
+              isFromDb: !!(assignment as any).isFromDb,
             });
           }
         }
@@ -1669,7 +1704,6 @@ const processShiftAssignments = async () => {
       }));
     }
     for (const ds of allDoubleShiftAdditions) {
-      // Always create a separate assignment entry (each assignment shows 1 user in the calendar)
       assignments.push({
         date: ds.date,
         shiftId: ds.shiftId,
@@ -1681,28 +1715,16 @@ const processShiftAssignments = async () => {
         isDoubleShift: true,
         isPikett: ds.isPikett,
       });
-      if (!userShiftsTracking[ds.userId]) userShiftsTracking[ds.userId] = {};
-      if (!userShiftsTracking[ds.userId][ds.shiftId]) userShiftsTracking[ds.userId][ds.shiftId] = 0;
-      userShiftsTracking[ds.userId][ds.shiftId]++;
-    }
-
-    // Fetch fresh DB assignments to override with real users
-    let freshDbAssignments: any[] = [];
-    try {
-      const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-      const sDateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-01`;
-      const eDateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
-      const dbResponse = await authFetch(`/api/shift-assignments?startDate=${sDateStr}&endDate=${eDateStr}`);
-      if (dbResponse.ok) {
-        freshDbAssignments = await dbResponse.json();
-        setDbAssignments(freshDbAssignments);
+      // Only count DB-triggered DS (pre-counting already handled preview-triggered DS)
+      if (ds.isFromDb) {
+        if (!userShiftsTracking[ds.userId]) userShiftsTracking[ds.userId] = {};
+        if (!userShiftsTracking[ds.userId][ds.shiftId]) userShiftsTracking[ds.userId][ds.shiftId] = 0;
+        userShiftsTracking[ds.userId][ds.shiftId]++;
       }
-    } catch {
-      // Use existing state as fallback
-      freshDbAssignments = dbAssignments;
     }
 
     // Override assigned users with real DB data for already-sent date+shift combos
+    // (freshDbAssignments already fetched above before DOUBLE_SHIFT processing)
     for (const assignment of assignments) {
       const dbMatches = freshDbAssignments.filter((a: any) => {
         return normalizeDbDate(a.date) === assignment.date && a.shiftId === assignment.shiftId;

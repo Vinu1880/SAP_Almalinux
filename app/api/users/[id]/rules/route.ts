@@ -69,6 +69,24 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid config for rule type' }, { status: 400 });
     }
 
+    // Prevent duplicate rules
+    const existingRules = await prisma.userRule.findMany({ where: { userId: id, type } });
+    if (type === 'WEEK_PARITY' && existingRules.length > 0) {
+      return NextResponse.json({ error: 'Only one WEEK_PARITY rule allowed per user' }, { status: 400 });
+    }
+    if (type === 'MAX_LOAD') {
+      const duplicate = existingRules.find((r: any) => r.config?.shiftId === configResult.data.shiftId);
+      if (duplicate) {
+        return NextResponse.json({ error: 'Only one MAX_LOAD rule per shift allowed' }, { status: 400 });
+      }
+    }
+    if (type === 'DOUBLE_SHIFT') {
+      const duplicate = existingRules.find((r: any) => r.config?.triggerShiftId === configResult.data.triggerShiftId);
+      if (duplicate) {
+        return NextResponse.json({ error: 'Only one DOUBLE_SHIFT rule per trigger shift allowed' }, { status: 400 });
+      }
+    }
+
     const rule = await prisma.userRule.create({
       data: { userId: id, type, config: configResult.data, enabled },
     });
