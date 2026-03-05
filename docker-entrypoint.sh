@@ -44,14 +44,10 @@ if [ $retry_count -eq $max_retries ]; then
     exit 1
 fi
 
-# Exécuter les migrations Prisma
-echo "[2/4] Application des migrations Prisma..."
+# Synchroniser le schéma Prisma
+echo "[2/4] Synchronisation du schéma Prisma..."
 PRISMA="node node_modules/prisma/build/index.js"
-$PRISMA migrate deploy 2>&1 || {
-    echo "Note: Pas de nouvelles migrations à appliquer ou première exécution"
-    echo "Synchronisation du schéma..."
-    $PRISMA db push --accept-data-loss 2>&1 || echo "ERREUR: prisma db push a échoué!"
-}
+$PRISMA db push --accept-data-loss 2>&1 || echo "ERREUR: prisma db push a échoué!"
 
 # Fix permissions on mounted backup volume (host may own as root)
 echo "[3/4] Correction des permissions du dossier backups..."

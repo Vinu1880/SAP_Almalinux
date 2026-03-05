@@ -1990,9 +1990,15 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                   new Date().getMonth() === calendarMonth && 
                   new Date().getFullYear() === calendarYear;
   
-  const maxVisible = expandedCalendar ? assignments.length : 3;
-  const visibleAssignments = assignments.slice(0, maxVisible);
-  const hiddenCount = assignments.length - maxVisible;
+  // Sort: piketts first, then shifts
+  const sortedAssignments = [...assignments].sort((a, b) => {
+    if (a.isPikett && !b.isPikett) return -1;
+    if (!a.isPikett && b.isPikett) return 1;
+    return 0;
+  });
+  const maxVisible = expandedCalendar ? sortedAssignments.length : 3;
+  const visibleAssignments = sortedAssignments.slice(0, maxVisible);
+  const hiddenCount = sortedAssignments.length - maxVisible;
   
   return (
     <div
@@ -2033,11 +2039,11 @@ const CalendarDay = ({ day }: { day: number | null }) => {
               }}
             >
               <div className="flex items-center gap-0.5">
-                {assignment.isPikett && !assignment.isDoubleShift && (
-                  <Shield className="w-3 h-3 flex-shrink-0 text-violet-600" />
-                )}
                 {(assignment.isDoubleShift || assignment.isDoubleShiftTrigger) && (
                   <Link2 className="w-3 h-3 flex-shrink-0" style={{ color: '#0d9488' }} />
+                )}
+                {assignment.isPikett && (
+                  <Shield className="w-3 h-3 flex-shrink-0 text-violet-600" />
                 )}
                 {assignment.isRotationAssignment && !assignment.isPikett && !assignment.isDoubleShift && (
                   <RotateCw className="w-3 h-3 flex-shrink-0" style={{ color }} />
