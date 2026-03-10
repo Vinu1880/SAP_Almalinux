@@ -1232,7 +1232,7 @@ const DashboardPage = () => {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setDeletingAssignment(assignment)}
-                                    className="hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                                    className="hover:bg-red-100 hover:text-red-600 hover:border-red-300"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>

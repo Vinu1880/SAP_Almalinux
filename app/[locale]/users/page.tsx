@@ -592,7 +592,7 @@ const UsersPage = () => {
                                     setDeletePatternId(pattern.id);
                                     setIsDeletePatternDialogOpen(true);
                                   }}
-                                  className="text-red-600 hover:bg-red-50"
+                                  className="text-red-600 hover:bg-red-100"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </Button>
@@ -905,7 +905,7 @@ const UsersPage = () => {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="text-red-600 hover:bg-red-50"
+                    className="text-red-600 hover:bg-red-100"
                     onClick={() => handleRemoveFromTeam(user.id)}
                   >
                     <UserMinus className="w-3 h-3" />
@@ -1902,7 +1902,7 @@ const UsersPage = () => {
                             }}
                             variant="outline"
                             size="sm"
-                            className="text-red-600 hover:bg-red-50"
+                            className="text-red-600 hover:bg-red-100"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -2179,7 +2179,7 @@ const UsersPage = () => {
                         }}
                         variant="outline"
                         size="sm"
-                        className="text-red-600 hover:bg-red-50 h-8 px-2"
+                        className="text-red-600 hover:bg-red-100 h-8 px-2"
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
@@ -2338,7 +2338,7 @@ const UsersPage = () => {
                         <Button variant="outline" size="sm" className="hover:bg-secondary/20" onClick={() => handleStartEditRule(rule)}>
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50" onClick={() => handleDeleteRule(rule.id)}>
+                        <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-100" onClick={() => handleDeleteRule(rule.id)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>

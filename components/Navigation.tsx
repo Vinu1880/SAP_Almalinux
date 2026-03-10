@@ -183,7 +183,7 @@ const Navigation = () => {
                   <div className="p-2">
                     <Button
                       variant="ghost"
-                      className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 font-medium"
+                      className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-100 font-medium"
                       onClick={handleLogout}
                     >
                       <LogOut className="mr-3 h-5 w-5" />
@@ -275,7 +275,7 @@ const Navigation = () => {
                       <div className="px-4">
                         <Button
                           variant="ghost"
-                          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 font-medium py-3"
+                          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-100 font-medium py-3"
                           onClick={handleLogout}
                         >
                           <LogOut className="w-5 h-5 mr-3" />

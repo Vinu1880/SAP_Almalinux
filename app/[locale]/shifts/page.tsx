@@ -508,7 +508,7 @@ const ShiftsPage = () => {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="text-red-600 hover:bg-red-50"
+                    className="text-red-600 hover:bg-red-100"
                     onClick={() => handleRemoveFromShift(user.id)}
                   >
                     <UserMinus className="w-3 h-3" />
@@ -668,7 +668,7 @@ const ShiftsPage = () => {
             }}
             variant="outline"
             size="sm"
-            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+            className="text-red-600 hover:bg-red-100 hover:text-red-700"
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -786,7 +786,7 @@ const ShiftsPage = () => {
               }}
               variant="outline"
               size="sm"
-              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+              className="text-red-600 hover:bg-red-100 hover:text-red-700"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
