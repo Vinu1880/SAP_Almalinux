@@ -422,7 +422,7 @@ const UsersPage = () => {
 
     return (
       <div className="space-y-6">
-        {/* Contract type section */}
+        {/* Support rate section */}
         <div className="space-y-4">
           <div>
             <Label className="text-base font-semibold">{t("contractType")}</Label>
@@ -1799,7 +1799,7 @@ const UsersPage = () => {
                       {/* HIGHLY VISIBLE ROTATION INDICATOR */}
                       {hasRotation && (
                         <div className="absolute -top-2 -right-2 z-10">
-                          <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full p-2 shadow-lg">
+                          <div className="bg-gradient-to-br from-orange-400 to-orange-600 rounded-full p-2 shadow-lg">
                             <RotateCw className="w-5 h-5 text-white animate-spin-slow" />
                           </div>
                         </div>
@@ -1822,32 +1822,48 @@ const UsersPage = () => {
                           </div>
                         </div>
                         
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2 text-xs">
-                            <Mail className="w-3 h-3 text-slate-500" />
+                        <div className="mt-3 rounded-lg bg-slate-50 p-2.5 flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-2 text-xs min-w-0 flex-1">
+                            <div className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <Mail className="w-3 h-3 text-blue-600" />
+                            </div>
                             <span className="text-slate-600 truncate">{user.email}</span>
                           </div>
-                          {user.phone && (
-                            <div className="flex items-center space-x-2 text-xs">
-                              <Phone className="w-3 h-3 text-slate-500" />
-                              <span className="text-slate-600">{user.phone}</span>
-                            </div>)}
                           {user.location && (
-                            <div className="flex items-center space-x-2 text-xs">
-                              <Building2 className="w-3 h-3 text-slate-500" />
-                              <span className="text-slate-600">
-                                {user.location}
-                              </span>
+                            <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                              <div className="w-5 h-5 rounded-md bg-purple-100 flex items-center justify-center flex-shrink-0">
+                                <Building2 className="w-3 h-3 text-purple-600" />
+                              </div>
+                              <span className="text-slate-600">{user.location}</span>
+                            </div>
+                          )}
+                          {user.phone && (
+                            <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                              <div className="w-5 h-5 rounded-md bg-green-100 flex items-center justify-center flex-shrink-0">
+                                <Phone className="w-3 h-3 text-green-600" />
+                              </div>
+                              <span className="text-slate-600">{user.phone}</span>
                             </div>
                           )}
                         </div>
 
                         {hasRotation && rotationPattern && (
-                          <div className="mt-3 p-2 bg-purple-50 rounded-lg border border-purple-200">
-                            <p className="text-xs font-semibold text-purple-700 flex items-center">
+                          <div className="mt-3 p-2 bg-orange-50 rounded-lg border border-orange-200">
+                            <p className="text-xs font-semibold text-orange-700 flex items-center">
                               <RotateCw className="w-3 h-3 mr-1" />
                               {rotationPattern.name}
                             </p>
+                          </div>
+                        )}
+
+                        {/* User rules badges */}
+                        {user.rules && user.rules.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {user.rules.filter((r: any) => r.enabled).map((rule: any) => (
+                              <Badge key={rule.id} variant="outline" className="text-xs bg-amber-50 border-amber-200 text-amber-700">
+                                {getRuleTypeLabel(rule.type)}
+                              </Badge>
+                            ))}
                           </div>
                         )}
 
@@ -1908,6 +1924,7 @@ const UsersPage = () => {
                       <TableHead>{t("role")}</TableHead>
                       <TableHead>{t("work")}</TableHead>
                       <TableHead>{t("rotation")}</TableHead>
+                      <TableHead>{t("rules")}</TableHead>
                       <TableHead>{t("status")}</TableHead>
                       <TableHead className="text-right">{tCommon("actions")}</TableHead>
                     </TableRow>
@@ -1931,7 +1948,7 @@ const UsersPage = () => {
                                 <p className="font-medium">{user.firstName} {user.lastName}</p>
                               </div>
                               {hasRotation && (
-                                <RotateCw className="w-4 h-4 text-purple-600 animate-spin-slow" />
+                                <RotateCw className="w-4 h-4 text-orange-500 animate-spin-slow" />
                               )}
                             </div>
                           </TableCell>
@@ -1971,10 +1988,23 @@ const UsersPage = () => {
                           <TableCell>
                             {hasRotation ? (
                               <div className="flex items-center gap-1">
-                                <Badge className="bg-purple-100 text-purple-700 border-0 text-xs">
+                                <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
                                   <RotateCw className="w-3 h-3 mr-1" />
                                   {rotationPattern?.name || 'Rotation'}
                                 </Badge>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {user.rules && user.rules.filter((r: any) => r.enabled).length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {user.rules.filter((r: any) => r.enabled).map((rule: any) => (
+                                  <Badge key={rule.id} variant="outline" className="text-xs bg-amber-50 border-amber-200 text-amber-700">
+                                    {getRuleTypeLabel(rule.type)}
+                                  </Badge>
+                                ))}
                               </div>
                             ) : (
                               <span className="text-xs text-slate-400">-</span>
@@ -2057,7 +2087,7 @@ const UsersPage = () => {
                         </Badge>
                       )}
                       {rotationMembers.length > 0 && (
-                        <Badge className="bg-purple-100 text-purple-800 text-xs border-0">
+                        <Badge className="bg-orange-100 text-orange-700 text-xs border-0">
                           <RotateCw className="w-3 h-3 mr-1" />
                           {rotationMembers.length}
                         </Badge>
@@ -2099,7 +2129,7 @@ const UsersPage = () => {
                                 </div>
                                 <div className="flex items-center gap-1">
                                   {hasRotation && (
-                                    <RotateCw className="w-3 h-3 text-purple-600" />
+                                    <RotateCw className="w-3 h-3 text-orange-500" />
                                   )}
                                   {member.workPercent && member.workPercent < 100 && (
                                     <Badge variant="outline" className="text-xs h-5 px-1">

@@ -689,7 +689,7 @@ For each pass (max 5):
 
 - **RotationPattern**: Stores reusable multi-week rotation cycle templates (name, cycleLength, weeks JSON grid, userShifts list)
 - **OutOfOfficeEvent**: Synced OOF events from Outlook, linked by `userEmail`
-- **AuditLog**: Action audit trail with entity, action type, and JSON data
+- **AuditLog**: Action audit trail with entity, action type, and JSON data. **Auto-cleaned after 90 days** via daily cleanup triggered by `AutoBackupContext` (`DELETE /api/audit-logs/cleanup`)
 
 \newpage
 
@@ -1592,7 +1592,7 @@ If the planner produces unexpected results:
 ## 14.4 Logs and Audit Trail
 
 - **Application logs**: `docker logs -f sap-app`
-- **Audit trail**: The `AuditLog` table records all create/update/delete operations with timestamps, user ID, and data
+- **Audit trail**: The `AuditLog` table records all create/update/delete operations with timestamps, user ID, and data. Entries older than **90 days** are automatically deleted daily (hardcoded in `app/api/audit-logs/cleanup/route.ts`, triggered by `contexts/AutoBackupContext.tsx`)
 - **Security logs**: `lib/securityLogger.ts` logs authentication failures and suspicious activity
 
 \newpage

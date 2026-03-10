@@ -2485,7 +2485,7 @@ useEffect(() => {
                           <p className="text-xs text-green-700">{t('assigned')}</p>
                           <div className="flex items-center justify-center gap-2 mt-1">
                             {rotationCount > 0 && (
-                              <Badge className="bg-purple-100 text-purple-700 text-xs border-0">
+                              <Badge className="bg-orange-100 text-orange-700 text-xs border-0">
                                 <RotateCw className="w-3 h-3 mr-0.5" />
                                 {rotationCount}
                               </Badge>
@@ -2994,7 +2994,7 @@ useEffect(() => {
                             )}
                             {assignment.shift?.name}
                             {assignment.isRotationAssignment && !assignment.isPikett && (
-                              <Badge className="bg-purple-100 text-purple-800 text-xs">
+                              <Badge className="bg-orange-100 text-orange-700 text-xs">
                                 <RotateCw className="w-3 h-3 mr-1" />
                                 Rotation
                               </Badge>
@@ -3305,7 +3305,7 @@ useEffect(() => {
 
                               <div className="flex items-center gap-2">
                                 {assignment.isRotationAssignment && !editingAssignment && (
-                                  <Badge className="text-xs border-0 bg-purple-100 text-purple-700">
+                                  <Badge className="text-xs border-0 bg-orange-100 text-orange-700">
                                     <RotateCw className="w-3 h-3 mr-1" />
                                     {t('rotation')}
                                   </Badge>
@@ -3319,7 +3319,7 @@ useEffect(() => {
                                       onClick={() => {
                                         handleSaveAssignmentChange(assignment.date, assignment.shiftId);
                                       }}
-                                      className="hover:bg-purple-600/10 hover:text-purple-600 hover:border-purple-600 transition-colors"
+                                      className="hover:bg-orange-600/10 hover:text-orange-600 hover:border-orange-600 transition-colors"
                                     >
                                       <Save className="w-3 h-3" />
                                     </Button>
