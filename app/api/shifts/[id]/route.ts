@@ -73,6 +73,7 @@ export async function PUT(
     if (validation.data.endTime !== undefined) updateData.endTime = validation.data.endTime;
     if (validation.data.teamId !== undefined) updateData.teamId = validation.data.teamId;
     if (validation.data.membersRequired !== undefined) updateData.membersRequired = validation.data.membersRequired;
+    if (validation.data.minConsecutiveDays !== undefined) updateData.minConsecutiveDays = validation.data.minConsecutiveDays;
     if (validation.data.priority !== undefined) updateData.priority = validation.data.priority;
     if (validation.data.status !== undefined) updateData.status = validation.data.status;
     if (validation.data.color !== undefined) updateData.color = validation.data.color;

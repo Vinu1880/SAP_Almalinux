@@ -65,14 +65,13 @@ Controls how the automatic planner behaves.
 | Setting | What it does |
 |---------|-------------|
 | **Enable rotations** | Uses rotation patterns for assignment |
-| **Avoid consecutive shifts** | Prevents assigning a user on consecutive days |
 | **Fair distribution** | Balances workload using assignment ratio |
 | **Check calendars** | Checks Outlook OOF/busy status before assigning |
 | **Priority system** | Processes shifts with fewer eligible users first |
 
 Each toggle saves automatically.
 
-<!-- [Screenshot: Planning Rules tab with all 5 toggles] -->
+<!-- [Screenshot: Planning Rules tab with all 4 toggles] -->
 
 \newpage
 
@@ -244,8 +243,7 @@ Assign a repeating multi-week cycle to a user.
 **Step 1: Edit the user**
 1. Enable **"Automatic rotation"**
 2. Select a pattern from the dropdown (or create a new one)
-3. Set the **priority** (High / Medium / Low)
-4. Save
+3. Save
 
 **Step 2: The planner uses it**
 - When generating a plan with "Enable rotations" ON, the planner places rotation users on their designated shifts first
@@ -309,6 +307,7 @@ The Shifts page has 2 tabs: **Shifts** and **Piketts**.
 | **Priority** | LOW / MEDIUM / HIGH / CRITICAL |
 | **Color** | Color used in the planner calendar |
 | **Shared Mailbox** | Email address used to send Outlook invitations |
+| **Min consecutive days** | How many consecutive days the same person should be assigned (1-3). Default: 1 (no preference) |
 | **Status** | Active / Inactive / Archived |
 
 ### Eligible Personnel
@@ -382,7 +381,6 @@ Click the gear icon to open planning settings:
 | Setting | Default | Effect |
 |---------|---------|--------|
 | **Enable rotations** | ON | Uses rotation patterns |
-| **Avoid consecutive shifts** | ON | Prevents assigning a user 2 days in a row |
 | **Fair distribution** | ON | Balances workload across users |
 | **Check calendars** | ON | Checks Outlook OOF/busy before assigning |
 | **Priority system** | ON | Assigns shifts with fewer members first |
@@ -434,7 +432,7 @@ Click on any day in the calendar to see full details.
   - 📅 Out of Office
   - ⏰ Not working today (part-time)
   - 🔄 Already assigned to another shift
-  - ⚡ Consecutive shifts
+  - ⚡ Consecutive days (per-shift setting)
   - 📊 Max load reached
   - 🔢 Week parity (odd/even)
 
@@ -449,7 +447,7 @@ After previewing and reviewing the plan:
 1. Click **"Send Invitations"**
 2. The app creates Outlook calendar events for each assignment
 3. Each assigned user receives an invitation they can **Accept** or **Refuse**
-4. Progress is shown during sending
+4. A progress dialog shows real-time sending progress with success/error counts
 5. Once done, go to **Dashboard** to monitor responses
 
 **Important:**
@@ -499,7 +497,7 @@ Paginated table of all assignments with:
 ### Users View
 
 Per-user statistics with:
-- **Shift breakdown**: For each shift, shows total assignments and accepted count with colored progress bar
+- **Shift details**: For each shift, shows a donut ring visualization with segments for accepted (green), pending (orange), refused (red), and cancelled (gray) counts
 - **Pikett count**: Number of active piketts with names
 - **CSV export**: Download user statistics
 

@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
         endTime: validation.data.endTime,
         teamId: validation.data.teamId,
         membersRequired: validation.data.membersRequired || 1,
+        minConsecutiveDays: validation.data.minConsecutiveDays || 1,
         priority: validation.data.priority || 'MEDIUM',
         status: validation.data.status || 'ACTIVE',
         color: validation.data.color || '#3b82f6',

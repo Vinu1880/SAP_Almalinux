@@ -221,7 +221,7 @@ const {
     return 'PENDING';
   };
 
-  const defaultSettings = { avoidConsecutiveShifts: true, balanceShifts: true, checkCalendars: true, respectWorkPercentage: true, prioritySystem: true, enableRotations: true };
+  const defaultSettings = { balanceShifts: true, checkCalendars: true, respectWorkPercentage: true, prioritySystem: true, enableRotations: true };
   const loadSettings = () => {
     if (typeof window === 'undefined') return defaultSettings;
     try { const s = localStorage.getItem('shiftSettings'); return s ? JSON.parse(s) : defaultSettings; } catch { return defaultSettings; }
@@ -1169,14 +1169,14 @@ const processShiftAssignments = async () => {
               if ((wantsOdd && !isOddWeek) || (!wantsOdd && isOddWeek)) continue;
             }
 
-            // Check consecutive shifts (now works because ALL rotation dates are processed first)
-            if (settings.avoidConsecutiveShifts && !rotSelectedPikett) {
+            // Check consecutive shifts — only block if shift has minConsecutiveDays=1 (default)
+            if ((selectedItem.minConsecutiveDays || 1) <= 1 && !rotSelectedPikett) {
               const adjacent = dateAdjacentMap.get(date);
-              const hasConsecutiveNormalShift = adjacent ? (
-                assignedNormalShiftSet.has(`${adjacent.prev}|${rotationUser.id}`) ||
-                assignedNormalShiftSet.has(`${adjacent.next}|${rotationUser.id}`)
+              const hasConsecutiveForThisShift = adjacent ? (
+                assignments.some(a => a.date === adjacent.prev && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === rotationUser.id)) ||
+                assignments.some(a => a.date === adjacent.next && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === rotationUser.id))
               ) : false;
-              if (hasConsecutiveNormalShift) continue;
+              if (hasConsecutiveForThisShift) continue;
             }
 
             // Check eligibility
@@ -1222,6 +1222,9 @@ const processShiftAssignments = async () => {
       // Track which week we're in to re-shuffle each week
       const shiftWeekQueues: { [key: string]: any[] } = {};
       const shiftWeekPointers: { [key: string]: number } = {};
+
+      // Track consecutive assignment per shift: who's currently assigned and for how many days
+      const shiftConsecutiveTracker: { [shiftId: string]: { userId: string; count: number } } = {};
 
       // ========================================
       // PART 2.2: Process normal shifts (non-rotation) for each date
@@ -1352,20 +1355,20 @@ const processShiftAssignments = async () => {
           }
 
           // ========================================
-          // PRIORITY 5: CONSECUTIVE SHIFTS (if enabled)
+          // PRIORITY 5: CONSECUTIVE SHIFTS (per-shift minConsecutiveDays)
           // ========================================
-          // NOTE: This check only looks at shifts within the currently
-          // generated period. Consecutive shifts outside this period
-          // are not detected here. For a complete check, include at least
-          // one day before and after your period in the generation.
-          if (settings.avoidConsecutiveShifts) {
+          // For shifts with minConsecutiveDays=1 (default), avoid assigning
+          // the same user on adjacent days (original behavior).
+          // For shifts with minConsecutiveDays>1, this check is skipped
+          // because consecutive assignment is desired — handled in user selection.
+          if ((shift.minConsecutiveDays || 1) <= 1) {
             const adjacent = dateAdjacentMap.get(date);
-            const hasConsecutiveNormalShift = adjacent ? (
-              assignedNormalShiftSet.has(`${adjacent.prev}|${user.id}`) ||
-              assignedNormalShiftSet.has(`${adjacent.next}|${user.id}`)
+            const hasConsecutiveForThisShift = adjacent ? (
+              assignments.some(a => a.date === adjacent.prev && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id)) ||
+              assignments.some(a => a.date === adjacent.next && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id))
             ) : false;
 
-            if (hasConsecutiveNormalShift) {
+            if (hasConsecutiveForThisShift) {
               unavailableUsers.push({
                 user,
                 reason: t('reasonConsecutiveShifts'),
@@ -1441,9 +1444,35 @@ const processShiftAssignments = async () => {
 
             // Pick next user from queue who is available today and not yet assigned this week
             let selectedUser: any = null;
+            const minConsec = shift.minConsecutiveDays || 1;
+
+            // Pass 0: Consecutive days — keep the same user if minConsecutiveDays > 1
+            if (minConsec > 1) {
+              const tracker = shiftConsecutiveTracker[shiftId];
+              if (tracker) {
+                const prevUser = availableForThisDate.find(u => u.id === tracker.userId);
+                if (prevUser) {
+                  if (tracker.count < minConsec) {
+                    // Below minimum: always keep this user
+                    selectedUser = prevUser;
+                  } else {
+                    // At or above minimum: keep if ratio is still good vs others
+                    const userRatio = (userShiftsTracking[prevUser.id]?.[shiftId] || 0) / (userAvailableDays[prevUser.id]?.[shiftId] || 1);
+                    const othersAvg = availableForThisDate
+                      .filter(u => u.id !== prevUser.id)
+                      .reduce((sum, u) => sum + (userShiftsTracking[u.id]?.[shiftId] || 0) / (userAvailableDays[u.id]?.[shiftId] || 1), 0)
+                      / Math.max(1, availableForThisDate.length - 1);
+                    // Keep if user's ratio is not more than 20% above average
+                    if (userRatio <= othersAvg * 1.2) {
+                      selectedUser = prevUser;
+                    }
+                  }
+                }
+              }
+            }
 
             // Pass 1: find someone NOT on pikett and not yet assigned this week
-            if (nonPikettAvailable.length > 0) {
+            if (!selectedUser && nonPikettAvailable.length > 0) {
               for (let i = 0; i < queue.length; i++) {
                 const idx = (shiftWeekPointers[weekShiftKey] + i) % queue.length;
                 const user = queue[idx];
@@ -1518,6 +1547,16 @@ const processShiftAssignments = async () => {
             // Update fast-lookup sets
             assignedNormalShiftSet.add(`${date}|${selectedUser.id}`);
             assignedAnyShiftSet.add(`${date}|${selectedUser.id}`);
+
+            // Update consecutive tracker
+            if (minConsec > 1) {
+              const tracker = shiftConsecutiveTracker[shiftId];
+              if (tracker && tracker.userId === selectedUser.id) {
+                tracker.count++;
+              } else {
+                shiftConsecutiveTracker[shiftId] = { userId: selectedUser.id, count: 1 };
+              }
+            }
             
           } else {
             // Determine the main reason
@@ -2021,11 +2060,11 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                   new Date().getMonth() === calendarMonth && 
                   new Date().getFullYear() === calendarYear;
   
-  // Sort: piketts first, then shifts
+  // Sort: piketts first, then by shift name for consistent order
   const sortedAssignments = [...assignments].sort((a, b) => {
     if (a.isPikett && !b.isPikett) return -1;
     if (!a.isPikett && b.isPikett) return 1;
-    return 0;
+    return (a.shift?.name || a.shiftId).localeCompare(b.shift?.name || b.shiftId);
   });
   const maxVisible = expandedCalendar ? sortedAssignments.length : 3;
   const visibleAssignments = sortedAssignments.slice(0, maxVisible);
@@ -2571,16 +2610,6 @@ useEffect(() => {
                               checked={settings.enableRotations}
                               onCheckedChange={(checked) =>
                                 setSettings({...settings, enableRotations: !!checked})
-                              }
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="avoid-consecutive">{t('avoidConsecutive')}</Label>
-                            <Checkbox
-                              id="avoid-consecutive"
-                              checked={settings.avoidConsecutiveShifts}
-                              onCheckedChange={(checked) =>
-                                setSettings({...settings, avoidConsecutiveShifts: !!checked})
                               }
                             />
                           </div>

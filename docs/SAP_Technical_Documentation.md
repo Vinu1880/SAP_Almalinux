@@ -81,6 +81,8 @@ author: "BNC Internal Operations"
 **Step 2 — Send shift invitations:**
 - Creates events via `POST /users/{mailbox}/calendar/events`
 - Uses the shift's shared mailbox as organizer
+- Invitations are sent in **parallel batches of 5** using `Promise.allSettled` for performance
+- A real-time progress dialog shows success/error counts during sending
 - Outlook event ID stored in `ShiftAssignment.outlookEventId`
 
 **Step 3 — Sync responses:**
@@ -171,8 +173,10 @@ Places users who have an assigned rotation pattern on their designated shifts.
 
 Condition: Only runs if "Enable rotations" setting is ON.
 
+Rotation assignments use a **2-pass system**: all rotation assignments are processed across ALL dates BEFORE normal shift assignment begins. This ensures the `assignedNormalShiftSet` is fully populated before fair distribution runs.
+
 ```
-For each date:
+For ALL dates first (before any normal assignment):
   For each user with a rotation pattern:
     CHECK: Shift is in the selected shifts for this plan
     CHECK: Not already assigned (e.g., by PART 1)
@@ -180,6 +184,8 @@ For each date:
     CHECK: Not OOF (if calendar check enabled)
     CHECK: WEEK_PARITY rule matches
     CHECK: User is eligible for this shift
+    CHECK: Part-time / work schedule (respectWorkPercentage)
+    CHECK: Consecutive shift avoidance (per-shift minConsecutiveDays)
 
     If all pass → create assignment (marked as rotation assignment)
 ```
@@ -198,13 +204,20 @@ PRIORITY 2: WORK AVAILABILITY → morning/afternoon schedule
 PRIORITY 2.5: WEEK PARITY → WEEK_PARITY rule
 PRIORITY 3: ALREADY ASSIGNED → another shift today
 PRIORITY 4: OUTLOOK CALENDAR → OOF/busy check
-PRIORITY 5: CONSECUTIVE SHIFTS → if "Avoid consecutive" ON
+PRIORITY 5: CONSECUTIVE SHIFTS → per-shift minConsecutiveDays check
 PRIORITY 6: MAX LOAD → MAX_LOAD rule limit
 ```
 
 **Selection among available users:**
 
 ```
+PASS 0: Consecutive Days Preference
+  - Each shift has a `minConsecutiveDays` setting (1-3)
+  - If minConsecutiveDays > 1, the algorithm tries to keep the same person for N consecutive days
+  - Below minimum: always keep same user (do not rotate)
+  - At/above minimum: keep if user's ratio ≤ 1.2× average of others (fair distribution check)
+  - Uses a `shiftConsecutiveTracker` map per shift to track current streak
+
 PASS 1: Round-robin — pick next user in weekly queue, skip if already assigned this week
 PASS 2: Ratio-based — if all assigned this week, select user with lowest ratio
 ```
@@ -223,6 +236,9 @@ For each pass (max 5, for chaining):
         CHECK: Not already assigned to linked shift on this date
         CHECK: If linked is a pikett → replaces normal rotation user
         CHECK: MAX_LOAD rule on linked shift
+        CHECK: Part-time / work schedule for linked shift
+        CHECK: Public holiday for linked shift user
+        CHECK: OOF availability for linked shift (if calendar check enabled)
 
         If all pass → create linked assignment
 
@@ -269,7 +285,7 @@ Chaining: If A has SEC→CDC and CDC→Devops, Pass 1 adds CDC, Pass 2 adds Devo
 | role | String? | Job role |
 | workPercent | Int (0-100) | Default 100 |
 | status | ACTIVE / INACTIVE | User status |
-| rotationConfig | JSON? | `{ patternId, priority }` |
+| rotationConfig | JSON? | `{ patternId }` |
 | availability | JSON? | Weekly schedule (morning/afternoon per day) |
 | teamId | String? | FK to Team |
 
@@ -295,6 +311,7 @@ Chaining: If A has SEC→CDC and CDC→Devops, Pass 1 adds CDC, Pass 2 adds Devo
 | priority | LOW / MEDIUM / HIGH / CRITICAL | Shift priority |
 | status | ACTIVE / INACTIVE / ARCHIVED | Shift status |
 | color | String | Hex color code |
+| minConsecutiveDays | Int (default 1) | Consecutive days target (1-3) |
 | senderMailbox | String | Shared mailbox for invites |
 | includedUserIds / excludedUserIds | String[] | Allow/deny lists |
 | teamId | String | FK to Team |
@@ -451,9 +468,10 @@ All API inputs validated with Zod schemas (`lib/validation.ts`). Path traversal 
 
 ## 7.1 Prerequisites
 
-- Linux server (AlmaLinux 9.x recommended) with Docker 27.x, Docker Compose v2, Git
-- Microsoft Azure AD (Entra ID) app registration
+- AlmaLinux 9.x server (minimal install)
+- Microsoft Azure AD (Entra ID) app registration (see Section 7.2)
 - Network access to `login.microsoftonline.com` and `graph.microsoft.com`
+- SSH access to the server with sudo privileges
 
 ## 7.2 Azure AD App Registration
 
@@ -482,21 +500,107 @@ Grant admin consent.
 - `http://localhost:3000` (development)
 - Enable: Access tokens + ID tokens
 
-## 7.3 Server Setup
+## 7.3 Server Setup — Fresh AlmaLinux Installation
+
+### Step 1: System Update
 
 ```bash
-git clone <REPO_URL>
+sudo dnf update -y
+sudo dnf install -y git nano curl wget
+```
+
+### Step 2: Install Docker Engine
+
+```bash
+# Add Docker repository
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+# Install Docker + Compose plugin
+sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Start and enable Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add your user to docker group (avoids sudo for docker commands)
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### Step 3: Install Node.js (for local Prisma commands / development)
+
+```bash
+# Install Node.js 20 LTS via NodeSource
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
+
+# Verify
+node -v  # v20.x
+npm -v
+```
+
+> **Note:** Node.js on the host is optional — only needed if you want to run Prisma Studio locally (`npx prisma studio --url postgresql://...`), run tests, or develop directly on the server. The application itself runs inside Docker containers.
+
+### Step 4: Configure Firewall
+
+```bash
+# Allow HTTPS (8443) and HTTP (8080) for Nginx
+sudo firewall-cmd --permanent --add-port=8443/tcp
+sudo firewall-cmd --permanent --add-port=8080/tcp
+sudo firewall-cmd --reload
+
+# Verify
+sudo firewall-cmd --list-ports
+```
+
+### Step 5: Clone and Configure
+
+```bash
+cd /opt
+sudo git clone <REPO_URL> SAP_Almalinux
+sudo chown -R $USER:$USER SAP_Almalinux
 cd SAP_Almalinux
-cp .env.example .env
-nano .env  # Fill in all values
+
+# Create environment file
+cp .env.example .env   # or create manually
+nano .env              # Fill in all values (see Section 7.4)
 ```
 
-Edit `nginx/conf.d/sap.conf` — replace domain name.
+### Step 6: Configure Nginx Domain
+
+Edit the domain name in these files:
+- `nginx/conf.d/sap.conf` — replace `sap.lab.sr.bnc.ch` with your domain
+- `nginx/init-certs.sh` — replace `sap.lab.sr.bnc.ch` with your domain
+- `nginx/sap-san.cnf` — replace `sap.lab.sr.bnc.ch` with your domain
+
+### Step 7: Build and Start
 
 ```bash
+# Build the application image (first time, takes ~2-3 minutes)
 docker compose build --no-cache app
+
+# Start all services (postgres, app, nginx)
 docker compose up -d
+
+# Verify all 3 containers are running
+docker ps
 ```
+
+Expected output: 3 containers running — `sap-postgres`, `sap-app`, `sap-nginx`.
+
+### Step 8: Verify Deployment
+
+```bash
+# Check app logs
+docker logs -f sap-app
+
+# Expected: "Application disponible sur http://0.0.0.0:3000"
+
+# Test HTTPS access
+curl -k https://localhost:8443
+```
+
+Open `https://<YOUR_DOMAIN>:8443` in your browser. You should see the login page.
 
 ## 7.4 Environment Variables
 

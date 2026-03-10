@@ -64,6 +64,7 @@ export const createShiftSchema = z.object({
   endTime: timeFormatSchema,
   daysOfWeek: z.array(dayOfWeekSchema).optional().default([1, 2, 3, 4, 5]),
   membersRequired: z.number().int().min(1).max(100).optional().default(1),
+  minConsecutiveDays: z.number().int().min(1).max(5).optional().default(1),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional().default('MEDIUM'),
   status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional().default('ACTIVE'),
   color: hexColorSchema.optional().default('#3b82f6'),

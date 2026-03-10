@@ -69,7 +69,6 @@ const SettingsPage = () => {
   const authFetch = useAuthFetch();
   const isReady = useAuthReady();
   const [settings, setSettings] = useState({
-    avoidConsecutiveShifts: true,
     balanceShifts: true,
     checkCalendars: true,
     prioritySystem: true,
@@ -641,19 +640,6 @@ const SettingsPage = () => {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <SettingItem
-                  icon={Calendar}
-                  title={t("avoidConsecutive")}
-                  description={t("avoidConsecutiveDesc")}
-                >
-                  <Switch
-                    checked={settings.avoidConsecutiveShifts}
-                    onCheckedChange={(checked) => 
-                      setSettings({...settings, avoidConsecutiveShifts: checked})
-                    }
-                  />
-                </SettingItem>
-
                 <SettingItem
                   icon={Clock}
                   title={t("balanceShifts")}

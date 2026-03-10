@@ -103,7 +103,8 @@ const ShiftsPage = () => {
     includedUserIds: [] as string[],
     excludedUserIds: [] as string[],
     color: '#3b82f6',
-    daysOfWeek: [1, 2, 3, 4, 5]
+    daysOfWeek: [1, 2, 3, 4, 5],
+    minConsecutiveDays: 1
   });
 
   const [newPikett, setNewPikett] = useState({
@@ -147,6 +148,7 @@ const ShiftsPage = () => {
       await createShift({
         ...newShift,
         membersRequired: 1,
+        minConsecutiveDays: newShift.minConsecutiveDays || 1,
         priority: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
         daysOfWeek: newShift.daysOfWeek
       });
@@ -161,7 +163,8 @@ const ShiftsPage = () => {
         includedUserIds: [],
         excludedUserIds: [],
         color: '#3b82f6',
-        daysOfWeek: [1, 2, 3, 4, 5]
+        daysOfWeek: [1, 2, 3, 4, 5],
+        minConsecutiveDays: 1
       });
     } catch (error) {
       alert(t('shiftCreateError'));
@@ -285,6 +288,7 @@ const ShiftsPage = () => {
         endTime: selectedShift.endTime,
         teamId: selectedShift.teamId,
         membersRequired: selectedShift.membersRequired || 1,
+        minConsecutiveDays: selectedShift.minConsecutiveDays || 1,
         priority: selectedShift.priority || 'MEDIUM',
         status: selectedShift.status,
         color: selectedShift.color,
@@ -323,6 +327,7 @@ const ShiftsPage = () => {
         endTime: shift.endTime,
         teamId: shift.teamId,
         membersRequired: shift.membersRequired || 1,
+        minConsecutiveDays: shift.minConsecutiveDays || 1,
         priority: shift.priority || 'MEDIUM',
         color: shift.color,
         senderMailbox: shift.senderMailbox,
@@ -1010,6 +1015,24 @@ const ShiftsPage = () => {
                       />
 
                       <div className="space-y-2">
+                        <Label>{t("minConsecutiveDays")}</Label>
+                        <Select
+                          value={String(newShift.minConsecutiveDays || 1)}
+                          onValueChange={(value) => setNewShift({...newShift, minConsecutiveDays: parseInt(value)})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">{t("consecutiveDays1")}</SelectItem>
+                            <SelectItem value="2">{t("consecutiveDays2")}</SelectItem>
+                            <SelectItem value="3">{t("consecutiveDays3")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">{t("minConsecutiveDaysDesc")}</p>
+                      </div>
+
+                      <div className="space-y-2">
                         <Label>{t("shiftColor")}</Label>
                         <div className="flex items-center space-x-2">
                           {SHIFT_COLORS.map((color) => (
@@ -1210,6 +1233,24 @@ const ShiftsPage = () => {
                     selectedDays={selectedShift.daysOfWeek || [1, 2, 3, 4, 5]}
                     onChange={(days) => setSelectedShift({...selectedShift, daysOfWeek: days})}
                   />
+
+                  <div className="space-y-2">
+                    <Label>{t("minConsecutiveDays")}</Label>
+                    <Select
+                      value={String(selectedShift.minConsecutiveDays || 1)}
+                      onValueChange={(value) => setSelectedShift({...selectedShift, minConsecutiveDays: parseInt(value)})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">{t("consecutiveDays1")}</SelectItem>
+                        <SelectItem value="2">{t("consecutiveDays2")}</SelectItem>
+                        <SelectItem value="3">{t("consecutiveDays3")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">{t("minConsecutiveDaysDesc")}</p>
+                  </div>
 
                   <div className="space-y-2">
                     <Label>{t("shiftColor")}</Label>

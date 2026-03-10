@@ -1,7 +1,7 @@
 ---
 title: "Shift Auto Planner (SAP) - Technical Handover Documentation"
 subtitle: "BNC / Axians - Internal Operations"
-date: "February 2026"
+date: "March 2026"
 author: "BNC Internal Operations"
 ---
 
@@ -181,8 +181,7 @@ Rotation patterns define a repeating multi-week cycle for a user.
 1. Edit the user
 2. Enable **"Automatic rotation"**
 3. Select the pattern from the dropdown
-4. Set the **priority** (High / Medium / Low)
-5. Save the user
+4. Save the user
 
 <!-- [Screenshot: Rotation pattern grid with week configuration] -->
 
@@ -231,7 +230,6 @@ Limits the maximum percentage of assignments a user can receive for a specific s
 3. **Select piketts**: Check the piketts you want to schedule
 4. **Adjust settings** (gear icon):
    - Enable rotations
-   - Avoid consecutive shifts
    - Fair distribution
    - Check Outlook calendars
    - Priority system
@@ -431,13 +429,19 @@ For each pikett:
 
 **Key behavior:** If no user passes all checks, the pikett slot is left **unassigned** (no forced assignment). This respects WEEK_PARITY constraints.
 
-## 4.3 PART 2.1 — Rotation Pattern Assignment
+## 4.3 PART 2.1 — Rotation Pattern Assignment (2-Pass System)
 
 **Purpose:** Place users who have an assigned rotation pattern on their designated shifts.
 
 **Condition:** Only runs if "Enable rotations" setting is ON.
 
-**Process:**
+The rotation engine uses a **2-pass system** to maximize pattern adherence:
+
+**Pass 1 — Strict placement:** Assigns rotation shifts only where the slot is completely free (no conflicts with existing assignments, no constraint violations). This pass never displaces other assignments.
+
+**Pass 2 — Gap filling:** Reviews any rotation days that were skipped in Pass 1 and attempts to place them with relaxed constraints, filling gaps left by OOF or other temporary blockers.
+
+**Process (per pass):**
 
 ```
 For each date:
@@ -451,6 +455,7 @@ For each date:
     CHECK: Not OOF (if calendar check enabled)
     CHECK: WEEK_PARITY rule matches
     CHECK: User is eligible for this shift
+    CHECK: minConsecutiveDays respected (shift must allow enough consecutive days)
 
     If all pass → create assignment (marked as rotation assignment)
 ```
@@ -489,9 +494,10 @@ PRIORITY 4: OUTLOOK CALENDAR (OOF)
   → Is the user Out of Office or Busy? (only if "Check calendars" enabled)
   → If yes → unavailable (reason: "Out of Office")
 
-PRIORITY 5: CONSECUTIVE SHIFTS
-  → Was the user assigned yesterday or tomorrow? (only if "Avoid consecutive" enabled)
-  → If yes → unavailable (reason: "Consecutive shifts")
+PRIORITY 5: MINIMUM CONSECUTIVE DAYS
+  → Does the shift have minConsecutiveDays > 1?
+  → Would assigning this user create a block shorter than the minimum?
+  → If yes → unavailable (reason: "Min consecutive days not met")
 
 PRIORITY 6: MAX LOAD RULE
   → Does the user have a MAX_LOAD rule for this shift?
@@ -585,7 +591,7 @@ For each pass (max 5):
 | role | String? | Job role |
 | workPercent | Int (0-100) | Work percentage, default 100 |
 | status | ACTIVE / INACTIVE | User status |
-| rotationConfig | JSON? | Rotation pattern assignment (`{ patternId, priority }`) |
+| rotationConfig | JSON? | Rotation pattern assignment (`{ patternId }`) |
 | availability | JSON? | Weekly availability schedule (morning/afternoon per day) |
 | teamId | String? | FK to Team |
 
@@ -611,6 +617,7 @@ For each pass (max 5):
 | priority | LOW / MEDIUM / HIGH / CRITICAL | Shift priority |
 | status | ACTIVE / INACTIVE / ARCHIVED | Shift status |
 | color | String | Hex color code |
+| minConsecutiveDays | Int (default 1) | Minimum consecutive days a user must be assigned to this shift |
 | senderMailbox | String | Shared mailbox email for calendar invites |
 | includedUserIds / excludedUserIds | String[] | User allow/deny lists |
 | teamId | String | FK to Team |
@@ -747,7 +754,7 @@ For each pass (max 5):
 3. Week parity rule (WEEK_PARITY)
 4. Already assigned to another shift today
 5. Out-of-Office / Busy in Outlook
-6. Consecutive shift check + MAX_LOAD rule
+6. Minimum consecutive days (per-shift setting) + MAX_LOAD rule
 
 **Key features:**
 - **Configuration panel**: Select shifts, piketts, date range
@@ -755,14 +762,13 @@ For each pass (max 5):
 - **Monthly calendar view**: Color-coded assignment badges per day
 - **Day detail dialog**: Click a day to see all assignments, available/unavailable users with reasons
 - **Manual override**: Reassign any slot to a different user
-- **Send invitations**: Bulk-send Outlook calendar events for all assignments
+- **Send invitations**: Bulk-send Outlook calendar events for all assignments (sent in parallel batches of 5 with a real-time progress dialog)
 
 **Planning Settings:**
 
 | Setting | Default | Effect |
 |---------|---------|--------|
 | Enable rotations | ON | Uses rotation patterns for assignment (PART 2.1) |
-| Avoid consecutive shifts | ON | Prevents assigning a user on consecutive days |
 | Fair distribution | ON | Balances workload using assignment ratio |
 | Check calendars | ON | Checks Outlook OOF/busy status |
 | Priority system | ON | Processes shifts with fewer eligible users first |
@@ -788,7 +794,7 @@ For each pass (max 5):
 - Create/Edit user: personal info, team assignment, availability schedule
 - Availability editor: full-time / part-time with per-day morning/afternoon toggle
 - Work percentage auto-calculated from availability
-- **Rotation pattern**: Assign a rotation pattern to a user with priority
+- **Rotation pattern**: Assign a rotation pattern to a user
 - **Rules**: Add, edit, toggle, delete user rules (WEEK_PARITY, DOUBLE_SHIFT, MAX_LOAD)
 
 **Teams management:**
@@ -827,7 +833,7 @@ For each pass (max 5):
 
 **3 tabs:**
 
-1. **Planning Rules**: Toggle algorithm settings (avoid consecutive shifts, balance shifts, check OOF calendars, priority system, enable rotations). Saved to localStorage.
+1. **Planning Rules**: Toggle algorithm settings (balance shifts, check OOF calendars, priority system, enable rotations). Saved to localStorage.
 
 2. **Holidays**: Import Swiss public holidays (BE, ZH, VD cantons) per year. Import from CSV. Create/edit/delete custom holidays. Delete all holidays for a year. Used by the planner to skip holiday dates.
 
@@ -1086,7 +1092,87 @@ Go to **Authentication** > **Single-page application** > Add:
 
 Enable: **Access tokens** and **ID tokens** under "Implicit grant and hybrid flows".
 
-## 9.3 Server Setup
+## 9.3 Fresh AlmaLinux Installation
+
+If starting from a clean AlmaLinux 9.x server, follow these steps to prepare the environment.
+
+### Step 1: System Update
+
+```bash
+sudo dnf update -y
+sudo dnf install -y git nano curl wget
+```
+
+### Step 2: Install Docker Engine
+
+```bash
+# Add the Docker repository
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+# Install Docker and Compose plugin
+sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Start and enable Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add your user to the docker group (log out and back in after this)
+sudo usermod -aG docker $USER
+```
+
+### Step 3: Install Node.js 20 LTS (Optional — for local Prisma Studio)
+
+```bash
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
+```
+
+### Step 4: Configure Firewall
+
+```bash
+sudo firewall-cmd --permanent --add-port=8443/tcp
+sudo firewall-cmd --permanent --add-port=8080/tcp
+sudo firewall-cmd --reload
+```
+
+### Step 5: Clone and Configure
+
+```bash
+git clone https://gitlab.bnc.ch/bnc_internal_operations/SAP_Almalinux.git
+cd SAP_Almalinux
+cp .env.example .env
+nano .env   # Fill in all values (see Section 9.4 below)
+```
+
+### Step 6: Configure Nginx Domain
+
+Edit three files to set your domain name:
+
+- `nginx/conf.d/sap.conf` — replace `sap.lab.sr.bnc.ch` with your domain
+- `nginx/init-certs.sh` — update the domain for certificate generation
+- `nginx/sap-san.cnf` — update the DNS entries for the self-signed certificate
+
+### Step 7: Build and Start
+
+```bash
+docker compose build --no-cache app
+docker compose up -d
+```
+
+### Step 8: Verify
+
+```bash
+# Check all 3 containers are running
+docker ps
+
+# Check app logs (watch for successful startup)
+docker logs -f sap-app
+
+# Test HTTPS access
+curl -k https://localhost:8443
+```
+
+## 9.4 Server Setup (Application Configuration)
 
 ### Step 1: Clone the Repository
 
@@ -1543,7 +1629,7 @@ If the planner produces unexpected results:
 3. Week parity rule (WEEK_PARITY)   → If rule exists and enabled
 4. Already assigned today           → ALWAYS checked
 5. Out of Office (Outlook)          → If "Check calendars" ON
-6. Consecutive shifts               → If "Avoid consecutive" ON
+6. Min consecutive days             → If shift minConsecutiveDays > 1
 7. Max load (MAX_LOAD)              → If rule exists and enabled
 ```
 

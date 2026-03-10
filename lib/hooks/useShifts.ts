@@ -16,6 +16,7 @@ export interface Shift {
     name: string;
   };
   membersRequired: number;
+  minConsecutiveDays?: number;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   status: 'ACTIVE' | 'INACTIVE';
   color: string;
