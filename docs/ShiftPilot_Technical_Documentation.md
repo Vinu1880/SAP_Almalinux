@@ -1,5 +1,5 @@
 ---
-title: "Shift Auto Planner (SAP) - Technical Documentation"
+title: "ShiftPilot - Technical Documentation"
 subtitle: "BNC / Axians - Internal Operations"
 date: "March 2026"
 author: "BNC Internal Operations"
@@ -24,7 +24,6 @@ author: "BNC Internal Operations"
 | **JWT Validation** | jose | 6.1.3 |
 | **Internationalization** | next-intl | 4.8.3 |
 | **Schema Validation** | Zod | 4.3.6 |
-| **Reverse Proxy** | Nginx | stable |
 | **Container Runtime** | Docker + Docker Compose | 27.x |
 | **Container OS** | Alpine Linux (node:20-alpine) | Node 20.20 |
 | **Host OS (Production)** | AlmaLinux | 9.x |
@@ -39,7 +38,7 @@ author: "BNC Internal Operations"
 ```
 +----------------+     +-------------------+     +----------------+     +------------------+
 |                |     |                   |     |                |     |                  |
-|  User          +---->+  Login (Azure AD) +---->+  Entra ID MFA  +---->+  SAP Web UI      |
+|  User          +---->+  Login (Azure AD) +---->+  Entra ID MFA  +---->+  ShiftPilot UI      |
 |  (Browser)     |     |  Vinci Energies   |     |                |     |                  |
 +----------------+     +-------------------+     +----------------+     +------------------+
 ```
@@ -61,7 +60,7 @@ author: "BNC Internal Operations"
 ```
 +---------------------+                          +------------------+
 |                     |  1. Read calendars (OOF)  |                  |
-|  Shift Auto Planner +<-------------------------+  Microsoft       |
+|  ShiftPilot +<-------------------------+  Microsoft       |
 |                     |                           |  Outlook         |
 |                     +-------------------------->+  (Exchange       |
 |                     |  2. Send shift invitations |   Online)       |
@@ -76,7 +75,7 @@ author: "BNC Internal Operations"
 - Batches of 20 users (Graph API limit)
 - Timezone: `Europe/Zurich`
 - Both `oof` and `busy` statuses → unavailable
-- End date correction: Graph returns exclusive end dates, SAP subtracts 1 day
+- End date correction: Graph returns exclusive end dates, ShiftPilot subtracts 1 day
 
 **Step 2 — Send shift invitations:**
 - Creates events via `POST /users/{mailbox}/calendar/events`
@@ -88,8 +87,20 @@ author: "BNC Internal Operations"
 **Step 3 — Sync responses:**
 - Manual: Dashboard Sync button → `POST /api/outlook/sync`
 - Automated: `GET /api/cron/sync-outlook-responses` (secured by CRON_SECRET)
+- Auto-sync: Runs every 15 minutes via `AutoSyncContext` when the dashboard is open
 - Maps: `accepted` → ACCEPTED, `tentativelyaccepted` → TENTATIVE, `declined` → REFUSED
-- Refused: Attempts to cancel the Outlook event
+- Refused: Attempts to cancel the Outlook event (`POST /events/{id}/cancel`)
+- Cancellation detection: Syncs PENDING, TENTATIVE, and ACCEPTED assignments
+  - **404 Not Found**: Event deleted from Outlook → marks assignment as CANCELLED
+  - **isCancelled flag**: Event cancelled by organizer (shared mailbox) → marks as CANCELLED
+  - Both cases create an audit log entry with the cancellation reason
+
+**Step 4 — Resend refused assignments:**
+- From the Dashboard, refused assignments can be resent to a different user
+- Original assignment is marked with `resent: true` and `resentAt` timestamp
+- New assignment is created with `resentFromId` linking back to the original
+- Outlook event is cancelled for the original user and created for the new one
+- Resent assignments are visually marked in the Dashboard (amber border + icon)
 
 ## 2.3 Infrastructure
 
@@ -100,13 +111,13 @@ author: "BNC Internal Operations"
 |  +---------------------------------------------+ |
 |  | Docker Network: sap-network                  | |
 |  |                                              | |
-|  |  +-----------+   +----------+   +----------+ | |
-|  |  |           |   |          |   |          | | |
-|  |  |  nginx    +-->+  sap-app +-->+ postgres | | |
-|  |  |  :8443    |   |  :3000   |   |  :5432   | | |
-|  |  |  (HTTPS)  |   | (Next.js)|   | (DB)     | | |
-|  |  |           |   |          |   |          | | |
-|  |  +-----------+   +----------+   +----------+ | |
+|  |  +----------+   +----------+                 | |
+|  |  |          |   |          |                 | |
+|  |  |  sap-app +-->+ postgres |                 | |
+|  |  |  :3000   |   |  :5432   |                 | |
+|  |  | (Next.js)|   | (DB)     |                 | |
+|  |  |          |   |          |                 | |
+|  |  +----------+   +----------+                 | |
 |  |                                              | |
 |  +---------------------------------------------+ |
 +--------------------------------------------------+
@@ -114,12 +125,11 @@ author: "BNC Internal Operations"
 
 | Service | Image | Port | Role |
 |---------|-------|------|------|
-| `sap-nginx` | nginx:stable | 8080 (HTTP) / 8443 (HTTPS) | TLS termination, security headers, reverse proxy |
 | `sap-app` | sap-app:latest (custom) | 3000 | Next.js application server |
 | `sap-postgres` | postgres:16-alpine | 5432 (internal only) | PostgreSQL database |
 
 - PostgreSQL is **never exposed** outside the Docker network
-- Nginx handles TLS with a self-signed certificate (auto-generated on first boot)
+- TLS is handled by the production reverse proxy (not included in Docker setup)
 - The app runs as unprivileged user `nextjs:nodejs` (UID 1001)
 
 \newpage
@@ -257,7 +267,7 @@ Chaining: If A has SEC→CDC and CDC→Devops, Pass 1 adds CDC, Pass 2 adds Devo
 ```
  Team 1───* Shift 1───* ShiftAssignment *───1 User
   |                                           |
-  +───* Pikett                                |
+  +───* Pikett 1───* PikettAssignment *───1 User
   +───* User (members)                        |
   +───? User (lead, unique)                   |
                                        User ──* UserRule
@@ -335,13 +345,37 @@ Chaining: If A has SEC→CDC and CDC→Devops, Pass 1 adds CDC, Pass 2 adds Devo
 |-------|------|-------------|
 | id | String (CUID) | Primary key |
 | date | DateTime | Assignment date |
-| status | PENDING / ACCEPTED / REFUSED / CANCELLED | Response status |
+| status | PENDING / TENTATIVE / ACCEPTED / REFUSED / CANCELLED | Response status |
+| reason | String? | Reason (e.g., refusal reason) |
+| respondedAt | DateTime? | When the user responded |
 | outlookEventId | String? | Graph event ID |
 | resent | Boolean | Was this resent? |
+| resentAt | DateTime? | When it was resent |
+| resentFromId | String? | FK to original assignment (resend tracking) |
 | shiftId | String | FK to Shift |
 | userId | String | FK to User |
 
 Unique constraint: `[date, shiftId, userId]`
+
+### PikettAssignment
+
+Mirrors `ShiftAssignment` but for pikett (on-call) assignments.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | String (CUID) | Primary key |
+| date | DateTime | Assignment date |
+| status | PENDING / TENTATIVE / ACCEPTED / REFUSED / CANCELLED | Response status |
+| reason | String? | Reason |
+| respondedAt | DateTime? | When the user responded |
+| outlookEventId | String? | Graph event ID |
+| resent | Boolean | Was this resent? |
+| resentAt | DateTime? | When it was resent |
+| resentFromId | String? | FK to original assignment (resend tracking) |
+| pikettId | String | FK to Pikett |
+| userId | String | FK to User |
+
+Unique constraint: `[date, pikettId, userId]`
 
 ### UserRule
 
@@ -400,6 +434,9 @@ All endpoints require `Authorization: Bearer <token>` except:
 | `/api/shift-assignments` | GET, POST | List (filtered) / bulk create |
 | `/api/shift-assignments/{id}` | GET, PUT, PATCH, DELETE | CRUD assignment |
 | `/api/shift-assignments/stats` | GET | Statistics |
+| `/api/pikett-assignments` | GET, POST | List (filtered) / bulk create |
+| `/api/pikett-assignments/{id}` | GET, PUT, PATCH, DELETE | CRUD pikett assignment |
+| `/api/pikett-assignments/stats` | GET | Pikett statistics |
 | `/api/holidays` | GET, POST | List / create holidays |
 | `/api/holidays/{id}` | PUT, DELETE | CRUD holiday |
 | `/api/holidays/import` | POST | Import Swiss holidays |
@@ -439,17 +476,7 @@ Rate limits are per IP + pathname combination.
 - All API routes protected by `requireAuth()` middleware
 - CORS: Configured in `middleware.ts`
 
-## 6.2 Security Headers (Nginx)
-
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `X-XSS-Protection: 1; mode=block`
-- `Strict-Transport-Security: max-age=31536000`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
-- `server_tokens off`
-
-## 6.3 Security Logging
+## 6.2 Security Logging
 
 `lib/securityLogger.ts` logs events with `[SECURITY]` prefix:
 - AUTH_FAILURE, AUTH_SUCCESS
@@ -458,7 +485,7 @@ Rate limits are per IP + pathname combination.
 - BACKUP_CREATED, BACKUP_RESTORED
 - CRON_AUTH_FAILURE, AUDIT_LOGS_CLEANUP
 
-## 6.4 Input Validation
+## 6.3 Input Validation
 
 All API inputs validated with Zod schemas (`lib/validation.ts`). Path traversal protection on backup file operations.
 
@@ -476,8 +503,8 @@ All API inputs validated with Zod schemas (`lib/validation.ts`). Path traversal 
 ## 7.2 Azure AD App Registration
 
 1. Azure Portal > Entra ID > App registrations > New
-2. Name: `Shift Auto Planner`, Single tenant
-3. Redirect URI: SPA > `https://<DOMAIN>:8443`
+2. Name: `ShiftPilot`, Single tenant
+3. Redirect URI: SPA > `https://<DOMAIN>`
 
 **API Permissions (Delegated):**
 
@@ -496,7 +523,7 @@ Grant admin consent.
 - Client secret → `AZURE_AD_CLIENT_SECRET`
 
 **Redirect URIs:**
-- `https://<DOMAIN>:8443` (production)
+- `https://<DOMAIN>` (production)
 - `http://localhost:3000` (development)
 - Enable: Access tokens + ID tokens
 
@@ -544,9 +571,9 @@ npm -v
 ### Step 4: Configure Firewall
 
 ```bash
-# Allow HTTPS (8443) and HTTP (8080) for Nginx
-sudo firewall-cmd --permanent --add-port=8443/tcp
-sudo firewall-cmd --permanent --add-port=8080/tcp
+# Allow HTTPS (443) and the app port (3000)
+sudo firewall-cmd --permanent --add-port=443/tcp
+sudo firewall-cmd --permanent --add-port=3000/tcp
 sudo firewall-cmd --reload
 
 # Verify
@@ -557,38 +584,31 @@ sudo firewall-cmd --list-ports
 
 ```bash
 cd /opt
-sudo git clone <REPO_URL> SAP_Almalinux
-sudo chown -R $USER:$USER SAP_Almalinux
-cd SAP_Almalinux
+sudo git clone <REPO_URL> ShiftPilot
+sudo chown -R $USER:$USER ShiftPilot
+cd ShiftPilot
 
 # Create environment file
 cp .env.example .env   # or create manually
 nano .env              # Fill in all values (see Section 7.4)
 ```
 
-### Step 6: Configure Nginx Domain
-
-Edit the domain name in these files:
-- `nginx/conf.d/sap.conf` — replace `sap.lab.sr.bnc.ch` with your domain
-- `nginx/init-certs.sh` — replace `sap.lab.sr.bnc.ch` with your domain
-- `nginx/sap-san.cnf` — replace `sap.lab.sr.bnc.ch` with your domain
-
-### Step 7: Build and Start
+### Step 6: Build and Start
 
 ```bash
 # Build the application image (first time, takes ~2-3 minutes)
 docker compose build --no-cache app
 
-# Start all services (postgres, app, nginx)
+# Start all services (postgres, app)
 docker compose up -d
 
 # Verify all 3 containers are running
 docker ps
 ```
 
-Expected output: 3 containers running — `sap-postgres`, `sap-app`, `sap-nginx`.
+Expected output: 2 containers running — `sap-postgres`, `sap-app`.
 
-### Step 8: Verify Deployment
+### Step 7: Verify Deployment
 
 ```bash
 # Check app logs
@@ -596,11 +616,11 @@ docker logs -f sap-app
 
 # Expected: "Application disponible sur http://0.0.0.0:3000"
 
-# Test HTTPS access
-curl -k https://localhost:8443
+# Test access
+curl http://localhost:3000
 ```
 
-Open `https://<YOUR_DOMAIN>:8443` in your browser. You should see the login page.
+Open `https://<YOUR_DOMAIN>` in your browser (via your production reverse proxy). You should see the login page.
 
 ## 7.4 Environment Variables
 
@@ -638,16 +658,70 @@ docker compose up -d app
 
 Always use `--no-cache` to ensure code changes are included.
 
-## 7.7 Nginx Configuration
+## 7.7 Local Development — PostgreSQL & Prisma
 
-- HTTP :8080 → redirects to HTTPS :8443
-- Self-signed certificates auto-generated via `nginx/init-certs.sh`
-- TLS 1.2 + 1.3, RSA 2048-bit, 365-day validity
+### Option A: Use Docker PostgreSQL (recommended)
 
-**Change domain:**
-1. Edit `nginx/conf.d/sap.conf`
-2. Edit `nginx/sap-san.cnf`
-3. `docker volume rm sap_almalinux_nginx-certs && docker compose restart nginx`
+The `docker-compose.yml` already includes a PostgreSQL service. For local development, start only the database:
+
+```bash
+docker compose up -d postgres
+
+# Verify connection
+docker exec -it sap-postgres psql -U sa_sap -d shiftpilot -c "SELECT 1"
+```
+
+### Option B: Install PostgreSQL Locally
+
+```bash
+# Windows (via installer or chocolatey)
+choco install postgresql16
+
+# Linux (AlmaLinux / RHEL)
+sudo dnf install -y postgresql16-server
+sudo postgresql-setup --initdb
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+```
+
+Create the database and user:
+
+```bash
+sudo -u postgres psql
+
+CREATE USER sa_sap WITH PASSWORD 'your_password';
+CREATE DATABASE shiftpilot OWNER sa_sap;
+GRANT ALL PRIVILEGES ON DATABASE shiftpilot TO sa_sap;
+\q
+```
+
+### Prisma Setup
+
+1. Set the `DATABASE_URL` in `.env` pointing to your local database:
+
+```env
+DATABASE_URL="postgresql://sa_sap:your_password@localhost:5432/shiftpilot?schema=public"
+```
+
+2. Push the schema to the database (creates all tables):
+
+```bash
+npx prisma db push
+```
+
+3. Generate the Prisma client:
+
+```bash
+npx prisma generate
+```
+
+4. (Optional) Open Prisma Studio to browse the database:
+
+```bash
+npx prisma studio --url "postgresql://sa_sap:your_password@localhost:5432/shiftpilot"
+```
+
+> **Note:** The Docker container uses `sap-postgres` as hostname. For local development, use `localhost` instead. The `docker-entrypoint.sh` handles schema synchronization automatically at container startup.
 
 \newpage
 
@@ -665,7 +739,7 @@ git push main → Build Docker → Push to registry → SSH deploy → Health ch
 | `SSH_KNOWN_HOSTS` | No | `ssh-keyscan` output |
 | `SSH_USER` | No | SSH username |
 | `SSH_HOST` | No | Server IP/hostname |
-| `DEPLOY_PATH` | No | e.g., `/opt/SAP_Almalinux` |
+| `DEPLOY_PATH` | No | e.g., `/opt/ShiftPilot` |
 | `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` | No | Client ID |
 | `NEXT_PUBLIC_AZURE_AD_TENANT_ID` | No | Tenant ID |
 | `NEXT_PUBLIC_AZURE_AD_REDIRECT_URI` | No | Redirect URI |
@@ -704,7 +778,7 @@ Stay on LTS versions (20, 22, 24...).
 # 10. Project Structure
 
 ```
-SAP_Almalinux/
+ShiftPilot/
 |-- app/
 |   |-- [locale]/           # i18n pages (en, fr, de)
 |   |   |-- page.tsx         # Login page
@@ -721,6 +795,7 @@ SAP_Almalinux/
 |       |-- shifts/
 |       |-- piketts/
 |       |-- shift-assignments/
+|       |-- pikett-assignments/
 |       |-- holidays/
 |       |-- rotation-patterns/
 |       |-- outlook/
@@ -745,7 +820,6 @@ SAP_Almalinux/
 |   +-- migrations/
 |-- messages/                # i18n (en.json, fr.json, de.json)
 |-- i18n/                    # i18n config
-|-- nginx/                   # Nginx config + certs
 |-- scripts/                 # Backup/restore scripts
 |-- docs/                    # Documentation
 |-- docker-compose.yml
@@ -784,15 +858,15 @@ docker compose restart app                          # Restart app
 docker compose build --no-cache app && docker compose up -d app  # Rebuild
 
 # Database access
-docker exec -it sap-postgres psql -U sa_sap -d shiftautoplanner
-docker exec -it sap-postgres psql -U sa_sap -d shiftautoplanner -c "\dt"
+docker exec -it sap-postgres psql -U sa_sap -d shiftpilot
+docker exec -it sap-postgres psql -U sa_sap -d shiftpilot -c "\dt"
 
 # Check user rules
-docker exec -it sap-postgres psql -U sa_sap -d shiftautoplanner \
+docker exec -it sap-postgres psql -U sa_sap -d shiftpilot \
   -c 'SELECT u."firstName", u."lastName", r."type", r."config", r."enabled" FROM "UserRule" r JOIN "User" u ON r."userId" = u."id"'
 
 # Count assignments per user
-docker exec -it sap-postgres psql -U sa_sap -d shiftautoplanner \
+docker exec -it sap-postgres psql -U sa_sap -d shiftpilot \
   -c 'SELECT u."firstName", u."lastName", COUNT(a.id) as total FROM "User" u LEFT JOIN "ShiftAssignment" a ON u.id = a."userId" GROUP BY u.id ORDER BY total DESC'
 ```
 

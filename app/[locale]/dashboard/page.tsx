@@ -7,7 +7,7 @@ import Navigation from '@/components/Navigation';
 import { useTranslations } from 'next-intl';
 import {
   CheckCircle, XCircle, Clock3, TrendingUp, Users, Calendar, Filter,
-  Download, RefreshCw, Loader2, Send, AlertCircle, Building2, X,
+  Download, RefreshCw, Loader2, Send, AlertCircle, Building2, X, Network,
   FilterX, ArrowUpDown, ArrowUp, ArrowDown, Trash2, AlertTriangle,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
@@ -34,6 +34,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useShiftAssignments } from '@/lib/hooks/useShiftAssignments';
+import { usePikettAssignments } from '@/lib/hooks/usePikettAssignments';
 import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { useHolidays } from '@/lib/hooks/useHolidays';
@@ -52,6 +53,7 @@ const DashboardPage = () => {
   const [dateFilter, setDateFilter] = useState<'7d' | '30d' | '90d' | '180d' | 'all'>('7d');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedView, setSelectedView] = useState<'shifts' | 'users' | 'calendar'>('shifts');
+  const [mode, setMode] = useState<'shifts' | 'pikett'>('shifts');
   const { nextSyncIn, syncing, syncMessage, triggerSync, clearSyncMessage } = useAutoSync();
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [resendingAssignment, setResendingAssignment] = useState<any | null>(null);
@@ -93,19 +95,26 @@ const DashboardPage = () => {
     setCurrentPage(1);
   }, [selectedUser, selectedShift, selectedStatus, selectedDate, dateFilter, selectedTeam]);
 
-  // Fetch data with hook
-  const {
-    assignments,
-    stats,
-    userStats,
-    teamStats,
-    loading,
-    error,
-    refresh
-  } = useShiftAssignments({
+  // Reset filters when mode changes
+  React.useEffect(() => {
+    resetFilters();
+    setSelectedCalendarDay(null);
+  }, [mode]);
+
+  // Fetch data with hooks
+  const shiftData = useShiftAssignments({
     dateFilter: dateFilter === 'all' ? undefined : dateFilter,
     teamId: selectedTeam === 'all' ? undefined : selectedTeam
   });
+
+  const pikettData = usePikettAssignments({
+    dateFilter: dateFilter === 'all' ? undefined : dateFilter,
+    teamId: selectedTeam === 'all' ? undefined : selectedTeam
+  });
+
+  // Active data based on mode
+  const { assignments, stats, userStats, teamStats, loading, error, refresh } =
+    mode === 'shifts' ? shiftData : pikettData;
 
   const { users, loading: usersLoading } = useUsers();
   const { teams, loading: teamsLoading } = useTeams();
@@ -152,7 +161,8 @@ const DashboardPage = () => {
       const endDate = lastDay.toISOString().split('T')[0];
       const params = new URLSearchParams({ startDate, endDate });
       if (selectedTeam !== 'all') params.append('teamId', selectedTeam);
-      const res = await authFetch(`/api/shift-assignments?${params.toString()}`);
+      const apiBase = mode === 'shifts' ? '/api/shift-assignments' : '/api/pikett-assignments';
+      const res = await authFetch(`${apiBase}?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setCalendarAssignments(data);
@@ -162,7 +172,7 @@ const DashboardPage = () => {
     } finally {
       setCalendarLoading(false);
     }
-  }, [calendarMonth, calendarYear, selectedTeam, authFetch]);
+  }, [calendarMonth, calendarYear, selectedTeam, mode, authFetch]);
 
   React.useEffect(() => {
     if (isReady && selectedView === 'calendar') {
@@ -368,7 +378,7 @@ const DashboardPage = () => {
           const refusedAssignment = dateAssignments.find(a =>
             normalizeDate(a.date) === dateStr &&
             a.userId === user.id &&
-            a.shiftId === resendingAssignment.shiftId &&
+            (a as any).shiftId === (resendingAssignment as any).shiftId &&
             a.status === 'REFUSED'
           );
 
@@ -387,7 +397,7 @@ const DashboardPage = () => {
           );
 
           if (activeAssignmentToday) {
-            alreadyAssigned.push({ ...user, _assignedShiftName: activeAssignmentToday.shift?.name || 'Shift' });
+            alreadyAssigned.push({ ...user, _assignedShiftName: (activeAssignmentToday as any).shift?.name || (activeAssignmentToday as any).pikett?.name || 'Shift' });
             continue;
           }
 
@@ -444,7 +454,7 @@ const DashboardPage = () => {
                 a.status !== 'REFUSED' &&
                 a.status !== 'CANCELLED';
             });
-            const shiftNames = consecutiveAssignments.map(a => a.shift?.name || 'Shift').join(', ');
+            const shiftNames = consecutiveAssignments.map(a => (a as any).shift?.name || (a as any).pikett?.name || 'Shift').join(', ');
             unavailable.push({ user, reason: t('reasonConsecutiveShift', { shifts: shiftNames }) });
             continue;
           }
@@ -474,11 +484,15 @@ const DashboardPage = () => {
       const newUser = users?.find(u => u.id === selectedNewUser);
       if (!newUser) throw new Error(t('userNotFound'));
 
-      const shift = resendingAssignment.shift;
+      const shiftOrPikett = mode === 'shifts' ? resendingAssignment.shift : resendingAssignment.pikett;
       const date = new Date(resendingAssignment.date);
+      const itemName = shiftOrPikett.name;
 
-      const [startHour, startMinute] = (shift.startTime || '00:00').split(':');
-      const [endHour, endMinute] = (shift.endTime || '23:59').split(':');
+      const startTime = mode === 'shifts' ? (shiftOrPikett.startTime || '00:00') : '00:00';
+      const endTime = mode === 'shifts' ? (shiftOrPikett.endTime || '23:59') : '23:59';
+
+      const [startHour, startMinute] = startTime.split(':');
+      const [endHour, endMinute] = endTime.split(':');
 
       const startDateTime = new Date(date);
       startDateTime.setHours(parseInt(startHour), parseInt(startMinute), 0);
@@ -490,17 +504,17 @@ const DashboardPage = () => {
         endDateTime.setDate(endDateTime.getDate() + 1);
       }
 
-      const mailbox = shift.senderMailbox || 'me';
+      const mailbox = shiftOrPikett.senderMailbox || 'me';
 
       const event = {
-        subject: `${shift.name} - ${newUser.firstName} ${newUser.lastName}`,
+        subject: `${itemName} - ${newUser.firstName} ${newUser.lastName}`,
         body: {
           contentType: 'HTML',
           content: `
-            <h2>${shift.name}</h2>
+            <h2>${itemName}</h2>
             <p><strong>${t('invitationEmailDate')}</strong> ${date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-            <p><strong>${t('invitationEmailSchedule')}</strong> ${shift.startTime} - ${shift.endTime}</p>
-            ${shift.description ? `<p><strong>${t('invitationEmailDescription')}</strong> ${shift.description}</p>` : ''}
+            <p><strong>${t('invitationEmailSchedule')}</strong> ${startTime} - ${endTime}</p>
+            ${shiftOrPikett.description ? `<p><strong>${t('invitationEmailDescription')}</strong> ${shiftOrPikett.description}</p>` : ''}
             <hr>
             <p><em>${t('invitationSentFromDashboard')}</em></p>
           `
@@ -530,7 +544,7 @@ const DashboardPage = () => {
         responseRequested: true,
         allowNewTimeProposals: false,
         showAs: 'busy',
-        categories: ['Shift', shift.name]
+        categories: [mode === 'shifts' ? 'Shift' : 'Pikett', itemName]
       };
 
       const graphToken = await getAccessToken();
@@ -549,7 +563,9 @@ const DashboardPage = () => {
 
       const createdEvent = await outlookResponse.json();
 
-      const patchResponse = await authFetch(`/api/shift-assignments/${resendingAssignment.id}`, {
+      const apiBase = mode === 'shifts' ? '/api/shift-assignments' : '/api/pikett-assignments';
+
+      const patchResponse = await authFetch(`${apiBase}/${resendingAssignment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -562,17 +578,14 @@ const DashboardPage = () => {
         throw new Error(t('updateError'));
       }
 
-      const createResponse = await authFetch('/api/shift-assignments', {
+      const assignmentPayload = mode === 'shifts'
+        ? { date: resendingAssignment.date, shiftId: shiftOrPikett.id, userId: newUser.id, status: 'PENDING' }
+        : { date: resendingAssignment.date, pikettId: shiftOrPikett.id, userId: newUser.id, status: 'PENDING' };
+
+      const createResponse = await authFetch(apiBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          assignments: [{
-            date: resendingAssignment.date,
-            shiftId: shift.id,
-            userId: newUser.id,
-            status: 'PENDING'
-          }]
-        })
+        body: JSON.stringify({ assignments: [assignmentPayload] })
       });
 
       if (!createResponse.ok) {
@@ -582,10 +595,10 @@ const DashboardPage = () => {
       const createResult = await createResponse.json();
       const newAssignment = createResult.assignments?.find((a: any) => a.userId === newUser.id);
       if (newAssignment) {
-        await authFetch(`/api/shift-assignments/${newAssignment.id}`, {
+        await authFetch(`${apiBase}/${newAssignment.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ outlookEventId: createdEvent.eventId })
+          body: JSON.stringify({ outlookEventId: createdEvent.eventId, resentFromId: resendingAssignment.id })
         });
       }
 
@@ -636,7 +649,7 @@ const DashboardPage = () => {
       if (deletingAssignment.outlookEventId) {
         const graphToken = await getAccessToken();
         if (graphToken) {
-          const mailbox = deletingAssignment.shift?.senderMailbox || 'me';
+          const mailbox = (mode === 'shifts' ? deletingAssignment.shift?.senderMailbox : deletingAssignment.pikett?.senderMailbox) || 'me';
           try {
             await authFetch('/api/outlook/send-event', {
               method: 'DELETE',
@@ -649,7 +662,8 @@ const DashboardPage = () => {
         }
       }
 
-      const res = await authFetch(`/api/shift-assignments/${deletingAssignment.id}`, { method: 'DELETE' });
+      const apiBase = mode === 'shifts' ? '/api/shift-assignments' : '/api/pikett-assignments';
+      const res = await authFetch(`${apiBase}/${deletingAssignment.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(t('deleteError'));
 
       await refresh(); fetchCalendarAssignments();
@@ -682,32 +696,33 @@ const DashboardPage = () => {
       const user = users.find(u => u.id === stat.userId);
       const userAssignments = assignments.filter(a => a.userId === stat.userId);
 
-      // Per-shift breakdown
-      const shiftMap = new Map<string, { name: string; color: string; total: number; accepted: number; pending: number; refused: number; cancelled: number }>();
+      // Per-shift/pikett breakdown
+      const itemMap = new Map<string, { name: string; color: string; total: number; accepted: number; pending: number; refused: number; cancelled: number }>();
       userAssignments.forEach(a => {
-        const key = a.shift?.id || 'unknown';
-        const entry = shiftMap.get(key) || { name: a.shift?.name || '?', color: a.shift?.color || '#94a3b8', total: 0, accepted: 0, pending: 0, refused: 0, cancelled: 0 };
+        const item = mode === 'shifts' ? (a as any).shift : (a as any).pikett;
+        const key = item?.id || 'unknown';
+        const entry = itemMap.get(key) || { name: item?.name || '?', color: item?.color || '#94a3b8', total: 0, accepted: 0, pending: 0, refused: 0, cancelled: 0 };
         entry.total++;
         if (a.status === 'ACCEPTED') entry.accepted++;
         else if (a.status === 'PENDING') entry.pending++;
         else if (a.status === 'REFUSED') entry.refused++;
         else if (a.status === 'CANCELLED') entry.cancelled++;
-        shiftMap.set(key, entry);
+        itemMap.set(key, entry);
       });
 
-      // Count piketts assigned to this user
+      // Count piketts assigned to this user (only shown in shift mode)
       const userPiketts = piketts.filter(p => p.userId === stat.userId && p.status === 'ACTIVE');
 
       return {
         ...stat,
         user,
         assignments: userAssignments,
-        shiftBreakdown: Array.from(shiftMap.values()).sort((a, b) => b.total - a.total),
+        shiftBreakdown: Array.from(itemMap.values()).sort((a, b) => b.total - a.total),
         pikettCount: userPiketts.length,
         pikettNames: userPiketts.map(p => p.name)
       };
     }).filter(stat => stat.user);
-  }, [userStats, users, assignments, piketts]);
+  }, [userStats, users, assignments, piketts, mode]);
 
   // Filter assignments based on all filters
   const filteredAssignments = useMemo(() => {
@@ -718,9 +733,11 @@ const DashboardPage = () => {
       filtered = filtered.filter(a => a.userId === selectedUser);
     }
 
-    // Filter by shift
+    // Filter by shift/pikett
     if (selectedShift !== 'all') {
-      filtered = filtered.filter(a => a.shift?.id === selectedShift);
+      filtered = filtered.filter(a =>
+        mode === 'shifts' ? (a as any).shift?.id === selectedShift : (a as any).pikett?.id === selectedShift
+      );
     }
 
     // Filter by status
@@ -806,15 +823,20 @@ const DashboardPage = () => {
   const handleExport = () => {
     const date = new Date().toISOString().split('T')[0];
     if (selectedView === 'shifts') {
+      const itemLabel = mode === 'shifts' ? t('shift') : t('pikett');
       const csv = [
-        [t('user'), t('team'), t('shift'), t('schedule'), t('date'), t('status')].join(';'),
-        ...assignments.map(a => [
-          `${a.user.firstName} ${a.user.lastName}`, a.user.team?.name || tCommon('noTeam'),
-          a.shift.name, `${a.shift.startTime} - ${a.shift.endTime}`,
-          new Date(a.date).toLocaleDateString('fr-FR'), getStatusLabel(a.status)
-        ].join(';'))
+        [t('user'), t('team'), itemLabel, t('schedule'), t('date'), t('status')].join(';'),
+        ...assignments.map(a => {
+          const item = mode === 'shifts' ? (a as any).shift : (a as any).pikett;
+          const schedule = mode === 'shifts' ? `${item?.startTime} - ${item?.endTime}` : (item?.is24_7 ? '24/7' : '');
+          return [
+            `${a.user.firstName} ${a.user.lastName}`, a.user.team?.name || tCommon('noTeam'),
+            item?.name || '', schedule,
+            new Date(a.date).toLocaleDateString('fr-FR'), getStatusLabel(a.status)
+          ].join(';');
+        })
       ].join('\n');
-      downloadCsv(csv, `dashboard_shifts_${date}.csv`);
+      downloadCsv(csv, `dashboard_${mode}_${date}.csv`);
     } else {
       const csv = [
         [t('user'), t('team'), t('totalShifts'), t('accepted'), t('pending'), t('refused'), t('cancelled'), t('acceptanceRate'), t('shiftBreakdown'), 'Pikett'].join(';'),
@@ -937,15 +959,62 @@ const DashboardPage = () => {
           </div>
         </div>
 
-        {/* Filter by team */}
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            icon={CheckCircle}
+            title={mode === 'shifts' ? t('shiftsAccepted') : t('pikettsAccepted')}
+            value={stats.accepted}
+            color="text-green-600"
+          />
+          <StatCard
+            icon={XCircle}
+            title={mode === 'shifts' ? t('shiftsRefused') : t('pikettsRefused')}
+            value={stats.refused}
+            color="text-red-600"
+          />
+          <StatCard
+            icon={Clock3}
+            title={t('pending')}
+            value={stats.pending}
+            color="text-orange-600"
+          />
+          <StatCard
+            icon={TrendingUp}
+            title={mode === 'shifts' ? t('totalShifts') : t('totalPiketts')}
+            value={stats.total}
+            color="text-blue-600"
+          />
+        </div>
+
+        {/* Mode toggle + Filter by team */}
         <Card className="bg-white border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center gap-4">
+              <div className="flex items-center border rounded-lg">
+                <Button
+                  variant={mode === 'shifts' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setMode('shifts')}
+                  className={mode === 'shifts' ? 'rounded-r-none' : 'rounded-r-none hover:bg-secondary/20'}
+                >
+                  {t('modeShifts')}
+                </Button>
+                <Button
+                  variant={mode === 'pikett' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setMode('pikett')}
+                  className={mode === 'pikett' ? 'rounded-l-none' : 'rounded-l-none hover:bg-secondary/20'}
+                >
+                  {t('modePikett')}
+                </Button>
+              </div>
+              <div className="w-px h-6 bg-slate-200" />
               <Filter className="w-5 h-5 text-slate-600" />
               <span className="text-sm font-medium text-slate-700">{t('filterByTeam')}</span>
               <Select value={selectedTeam} onValueChange={setSelectedTeam}>
                 <SelectTrigger className="w-auto">
-                  <Building2 className="w-4 h-4 mr-2 text-slate-500" />
+                  <Network className="w-4 h-4 mr-2 text-slate-500" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -972,55 +1041,12 @@ const DashboardPage = () => {
           </CardContent>
         </Card>
 
-        {/* Stats Grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => (
-              <Card key={i} className="bg-white border-0 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="animate-pulse">
-                    <div className="h-4 bg-slate-200 rounded w-24 mb-3"></div>
-                    <div className="h-8 bg-slate-200 rounded w-16"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard
-              icon={CheckCircle}
-              title={t('shiftsAccepted')}
-              value={stats.accepted}
-              color="text-green-600"
-            />
-            <StatCard
-              icon={XCircle}
-              title={t('shiftsRefused')}
-              value={stats.refused}
-              color="text-red-600"
-            />
-            <StatCard
-              icon={Clock3}
-              title={t('pending')}
-              value={stats.pending}
-              color="text-orange-600"
-            />
-            <StatCard
-              icon={TrendingUp}
-              title={t('totalShifts')}
-              value={stats.total}
-              color="text-blue-600"
-            />
-          </div>
-        )}
-
         {/* Tabs for different views */}
         <Tabs value={selectedView} onValueChange={(v) => setSelectedView(v as any)} className="space-y-4">
           <TabsList>
             <TabsTrigger value="shifts" className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              {t('recentShifts')}
+              {mode === 'shifts' ? t('recentShifts') : t('recentPiketts')}
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
@@ -1038,10 +1064,10 @@ const DashboardPage = () => {
               <CardHeader>
                 <div>
                   <CardTitle className="text-xl font-semibold text-slate-800">
-                    {t('recentShifts')}
+                    {mode === 'shifts' ? t('recentShifts') : t('recentPiketts')}
                   </CardTitle>
                   <p className="text-sm text-slate-600 mt-1">
-                    {t('recentShiftsSubtitle')}
+                    {mode === 'shifts' ? t('recentShiftsSubtitle') : t('recentPikettsSubtitle')}
                   </p>
                 </div>
 
@@ -1066,20 +1092,29 @@ const DashboardPage = () => {
                       </Select>
                     </div>
 
-                    {/* Filter by shift */}
+                    {/* Filter by shift/pikett */}
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-medium text-slate-600">{t('shiftFilter')}</label>
+                      <label className="text-xs font-medium text-slate-600">
+                        {mode === 'shifts' ? t('shiftFilter') : t('pikettFilter')}
+                      </label>
                       <Select value={selectedShift} onValueChange={setSelectedShift}>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder={t('allFilter')} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">{t('allFilter')}</SelectItem>
-                          {shifts?.map(shift => (
-                            <SelectItem key={shift.id} value={shift.id}>
-                              {shift.name}
-                            </SelectItem>
-                          ))}
+                          {mode === 'shifts'
+                            ? shifts?.map(shift => (
+                                <SelectItem key={shift.id} value={shift.id}>
+                                  {shift.name}
+                                </SelectItem>
+                              ))
+                            : piketts?.map(pikett => (
+                                <SelectItem key={pikett.id} value={pikett.id}>
+                                  {pikett.name}
+                                </SelectItem>
+                              ))
+                          }
                         </SelectContent>
                       </Select>
                     </div>
@@ -1139,10 +1174,10 @@ const DashboardPage = () => {
                   <div className="text-center py-12">
                     <Send className="w-16 h-16 mx-auto mb-4 text-slate-300" />
                     <h3 className="text-lg font-medium text-slate-800 mb-2">
-                      {t('noShiftsSent')}
+                      {mode === 'shifts' ? t('noShiftsSent') : t('noPikettsSent')}
                     </h3>
                     <p className="text-slate-600 mb-6">
-                      {t('noShiftsSentDesc')}
+                      {mode === 'shifts' ? t('noShiftsSentDesc') : t('noPikettsSentDesc')}
                     </p>
                     <Button className="bg-primary hover:bg-primary/90" onClick={() => window.location.href = '/planner'}>
                       <Calendar className="w-4 h-4 mr-2" />
@@ -1156,7 +1191,7 @@ const DashboardPage = () => {
                         <thead>
                           <tr className="border-b border-slate-200">
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('user')}</th>
-                            <th className="text-left text-slate-600 font-medium py-3 px-2">{t('shift')}</th>
+                            <th className="text-left text-slate-600 font-medium py-3 px-2">{mode === 'shifts' ? t('shift') : t('pikett')}</th>
                             <th
                               className="text-left text-slate-600 font-medium py-3 px-2 cursor-pointer select-none group"
                               onClick={() => setSortByDate(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc')}
@@ -1175,13 +1210,20 @@ const DashboardPage = () => {
                         <tbody>
                           {recentAssignments.map((assignment) => {
                             return (
-                            <tr key={assignment.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                            <tr key={assignment.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${(assignment as any).resentFromId ? 'border-l-3 border-l-amber-400 bg-amber-50/30' : ''}`}>
                               <td className="py-4 px-2">
                                 <div className="flex items-center space-x-3">
-                                  <div className="w-10 h-10 bg-gradient-to-br from-slate-600 to-slate-700 rounded-full flex items-center justify-center">
-                                    <span className="text-white text-sm font-medium">
-                                      {assignment.user.firstName[0]}{assignment.user.lastName[0]}
-                                    </span>
+                                  <div className="relative">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-slate-600 to-slate-700 rounded-full flex items-center justify-center">
+                                      <span className="text-white text-sm font-medium">
+                                        {assignment.user.firstName[0]}{assignment.user.lastName[0]}
+                                      </span>
+                                    </div>
+                                    {(assignment as any).resentFromId && (
+                                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
+                                        <RefreshCw className="w-3 h-3 text-white" />
+                                      </div>
+                                    )}
                                   </div>
                                   <div>
                                     <p className="font-medium text-slate-800">
@@ -1195,9 +1237,14 @@ const DashboardPage = () => {
                               </td>
                               <td className="py-4 px-2">
                                 <div>
-                                  <p className="font-medium text-slate-800">{assignment.shift.name}</p>
+                                  <p className="font-medium text-slate-800">
+                                    {mode === 'shifts' ? (assignment as any).shift?.name : (assignment as any).pikett?.name}
+                                  </p>
                                   <p className="text-xs text-slate-500">
-                                    {assignment.shift.startTime} - {assignment.shift.endTime}
+                                    {mode === 'shifts'
+                                      ? `${(assignment as any).shift?.startTime} - ${(assignment as any).shift?.endTime}`
+                                      : (assignment as any).pikett?.is24_7 ? '24/7' : ''
+                                    }
                                   </p>
                                 </div>
                               </td>
@@ -1523,7 +1570,20 @@ const DashboardPage = () => {
                           return <div key={`empty-${idx}`} className="border-b border-r bg-slate-50/50 min-h-[100px]" />;
                         }
                         const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-                        const dayAssignments = calendarByDate[dateStr] || [];
+                        const rawDayAssignments = calendarByDate[dateStr] || [];
+                        // If a shift/pikett has been accepted, hide refused/cancelled for that same shift/pikett
+                        const acceptedItemIds = new Set(
+                          rawDayAssignments
+                            .filter((a: any) => a.status === 'ACCEPTED')
+                            .map((a: any) => mode === 'shifts' ? a.shiftId : a.pikettId)
+                        );
+                        const dayAssignments = rawDayAssignments.filter((a: any) => {
+                          if (a.status === 'REFUSED' || a.status === 'CANCELLED') {
+                            const itemId = mode === 'shifts' ? a.shiftId : a.pikettId;
+                            return !acceptedItemIds.has(itemId);
+                          }
+                          return true;
+                        });
                         const isWeekend = day.getDay() === 0 || day.getDay() === 6;
                         const isToday = dateStr === new Date().toISOString().split('T')[0];
                         const maxVisible = 3;
@@ -1542,7 +1602,7 @@ const DashboardPage = () => {
                                 <div key={a.id} className="flex items-center gap-1 text-xs leading-tight truncate">
                                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(a.status)}`} />
                                   <span className="truncate text-slate-700">
-                                    {a.shift?.name} — {a.user?.firstName} {a.user?.lastName}
+                                    {(mode === 'shifts' ? a.shift?.name : a.pikett?.name) || ''} — {a.user?.firstName} {a.user?.lastName}
                                   </span>
                                 </div>
                               ))}
@@ -1573,11 +1633,24 @@ const DashboardPage = () => {
             </DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[500px] pr-4">
-            {selectedCalendarDay && (calendarByDate[selectedCalendarDay] || []).length === 0 ? (
-              <div className="text-center py-8 text-slate-500">{t('noAssignmentsDay')}</div>
-            ) : (
+            {(() => {
+              const raw = selectedCalendarDay ? (calendarByDate[selectedCalendarDay] || []) : [];
+              const acceptedIds = new Set(
+                raw.filter((a: any) => a.status === 'ACCEPTED')
+                  .map((a: any) => mode === 'shifts' ? a.shiftId : a.pikettId)
+              );
+              const filtered = raw.filter((a: any) => {
+                if (a.status === 'REFUSED' || a.status === 'CANCELLED') {
+                  const itemId = mode === 'shifts' ? a.shiftId : a.pikettId;
+                  return !acceptedIds.has(itemId);
+                }
+                return true;
+              });
+              return filtered.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">{t('noAssignmentsDay')}</div>
+              ) : (
               <div className="space-y-2">
-                {selectedCalendarDay && (calendarByDate[selectedCalendarDay] || []).map((a: any) => (
+                {filtered.map((a: any) => (
                   <div key={a.id} className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg">
                     <Avatar className="w-8 h-8 flex-shrink-0">
                       <AvatarFallback className="text-xs bg-gradient-to-br from-slate-600 to-slate-700 text-white">
@@ -1589,14 +1662,15 @@ const DashboardPage = () => {
                         {a.user?.firstName} {a.user?.lastName}
                       </p>
                       <p className="text-xs text-slate-500 truncate">
-                        {a.shift?.name} • {a.shift?.startTime} - {a.shift?.endTime}
+                        {mode === 'shifts' ? `${a.shift?.name} • ${a.shift?.startTime} - ${a.shift?.endTime}` : `${a.pikett?.name}${a.pikett?.is24_7 ? ' • 24/7' : ''}`}
                       </p>
                     </div>
                     {getStatusBadge(a.status)}
                   </div>
                 ))}
               </div>
-            )}
+              );
+            })()}
           </ScrollArea>
         </DialogContent>
       </Dialog>
@@ -1613,7 +1687,7 @@ const DashboardPage = () => {
             <DialogTitle>{t('resendTitle')}</DialogTitle>
             <DialogDescription>
               {t('resendDescription', {
-                shift: resendingAssignment?.shift?.name || '',
+                shift: (mode === 'shifts' ? resendingAssignment?.shift?.name : resendingAssignment?.pikett?.name) || '',
                 date: resendingAssignment ? new Date(resendingAssignment.date).toLocaleDateString('fr-FR') : ''
               })}
             </DialogDescription>
@@ -1888,11 +1962,11 @@ const DashboardPage = () => {
             {deletingAssignment && (
               <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
                 <p className="font-medium text-red-800">
-                  {deletingAssignment.shift?.name} — {deletingAssignment.user?.firstName} {deletingAssignment.user?.lastName}
+                  {(mode === 'shifts' ? deletingAssignment.shift?.name : deletingAssignment.pikett?.name) || ''} — {deletingAssignment.user?.firstName} {deletingAssignment.user?.lastName}
                 </p>
                 <p className="text-sm text-red-600 mt-1">
                   {new Date(deletingAssignment.date).toLocaleDateString('fr-FR')}
-                  {deletingAssignment.outlookEventId && ` • ${t('deleteWarningOutlook')}`}
+                  {deletingAssignment.outlookEventId && ` • ${t('deleteWarningOutlookOnly')}`}
                 </p>
                 <p className="text-sm text-red-600 mt-1">
                   {t('deleteWarningDb')}

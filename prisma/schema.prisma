@@ -30,8 +30,9 @@ model User {
   team          Team?       @relation("TeamMembers", fields: [teamId], references: [id])
   leadingTeam   Team?       @relation("TeamLead")
   
-  assignments   ShiftAssignment[]
-  rules         UserRule[]
+  assignments        ShiftAssignment[]
+  pikettAssignments  PikettAssignment[]
+  rules              UserRule[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -95,9 +96,11 @@ model Pikett {
   includedUserIds String[]
   excludedUserIds String[]
   
+  assignments     PikettAssignment[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  
+
   @@index([teamId])
   @@index([status])
   @@index([startWeek])
@@ -143,8 +146,9 @@ model ShiftAssignment {
   reason          String?
   respondedAt     DateTime?
   outlookEventId  String?          // Outlook event ID for synchronization
-  resent          Boolean          @default(false) // Indicates if this is a resend
+  resent          Boolean          @default(false) // Indicates this assignment was resent to someone else
   resentAt        DateTime?        // Date of resend
+  resentFromId    String?          // ID of the original refused assignment this was created from
 
   shiftId         String
   shift           Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
@@ -161,6 +165,36 @@ model ShiftAssignment {
   @@index([date])
   @@index([status])
   @@index([outlookEventId])
+  @@index([resentFromId])
+}
+
+model PikettAssignment {
+  id              String           @id @default(cuid())
+  date            DateTime
+  status          AssignmentStatus @default(PENDING)
+  reason          String?
+  respondedAt     DateTime?
+  outlookEventId  String?
+  resent          Boolean          @default(false)
+  resentAt        DateTime?
+  resentFromId    String?
+
+  pikettId        String
+  pikett          Pikett           @relation(fields: [pikettId], references: [id], onDelete: Cascade)
+
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([date, pikettId, userId])
+  @@index([userId])
+  @@index([pikettId])
+  @@index([date])
+  @@index([status])
+  @@index([outlookEventId])
+  @@index([resentFromId])
 }
 
 model OutOfOfficeEvent {

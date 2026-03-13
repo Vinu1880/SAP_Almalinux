@@ -1,5 +1,5 @@
 ---
-title: "Shift Auto Planner (SAP) - User Guide"
+title: "ShiftPilot - User Guide"
 subtitle: "BNC / Axians - Internal Operations"
 date: "March 2026"
 author: "BNC Internal Operations"
@@ -11,7 +11,7 @@ author: "BNC Internal Operations"
 
 ## 1.1 Logging In
 
-Open your browser and go to `https://<YOUR_DOMAIN>:8443`.
+Open your browser and go to `https://<YOUR_DOMAIN>`.
 
 Click **"Sign in with Azure AD"** and authenticate with your Microsoft account (MFA required). You are redirected to the Dashboard.
 
@@ -138,6 +138,16 @@ The Users page has 3 tabs: **Users**, **Teams**, and **Rotation Patterns**.
 ## 4.1 Teams Tab
 
 Teams group users together. Every user and shift belongs to a team.
+
+### Sort & Filter
+
+| Sort option | Description |
+|-------------|-------------|
+| **By name** | Sort teams alphabetically |
+| **By members** | Sort teams by number of members |
+| **Ascending / Descending** | Toggle sort order |
+
+The team count is shown in the filter bar.
 
 ### Buttons
 
@@ -283,7 +293,15 @@ Assign a repeating multi-week cycle to a user.
 
 # 5. Shifts Page
 
-The Shifts page has 2 tabs: **Shifts** and **Piketts**.
+The Shifts page has 2 tabs: **Shifts** and **Piketts**. Use the toggle buttons to switch between them. Filters (search, shift/pikett dropdown, status) reset when switching tabs.
+
+### Filters
+
+| Filter | Description |
+|--------|-------------|
+| **Search** | Search by shift or pikett name |
+| **Shift/Pikett filter** | Filter by a specific shift or pikett (dropdown lists all items with their color) |
+| **Status** | Filter by Active / Inactive |
 
 ## 5.1 Shifts Tab
 
@@ -463,72 +481,84 @@ After previewing and reviewing the plan:
 
 # 7. Dashboard Page
 
-The Dashboard monitors all sent assignments and their responses.
+The Dashboard monitors all sent assignments and their responses. It supports both **Shift** and **Pikett** assignments via a mode toggle.
 
-## 7.1 KPI Cards (Top)
+## 7.1 Mode Toggle (Shifts / Pikett)
+
+At the top of the dashboard, a toggle switches between **Shifts** and **Pikett** mode. All data — KPI cards, table, user stats, calendar, and export — updates to reflect the selected mode.
+
+## 7.2 KPI Cards
 
 | Card | What it shows |
 |------|--------------|
-| **Total** | Total number of assignments |
 | **Accepted** | Assignments accepted by users |
-| **Pending** | Waiting for user response |
 | **Refused** | Declined by users |
+| **Pending** | Waiting for user response |
+| **Total** | Total number of assignments |
 
-<!-- [Screenshot: Dashboard KPI cards] -->
+Cards display data for the selected mode (Shifts or Pikett) and the active date filter.
 
-\newpage
-
-## 7.2 Filters
+## 7.3 Filters
 
 | Filter | Options |
 |--------|---------|
 | **Date range** | 7 days / 30 days / 90 days / 180 days / All |
+| **Mode** | Shifts / Pikett (toggle button) |
 | **Team** | Filter by team |
 | **User** | Filter by specific user |
-| **Shift** | Filter by shift |
-| **Status** | Accepted / Pending / Refused / Cancelled |
+| **Shift/Pikett** | Filter by specific shift or pikett |
+| **Status** | Accepted / Pending / Tentative / Refused / Cancelled |
 
-## 7.3 Views
+Filters reset when switching between Shifts and Pikett modes.
 
-### Shifts View (Table)
+## 7.4 Views
+
+### Recent Assignments View (Table)
 
 Paginated table of all assignments with:
-- Date, shift name, assigned user, status badge
+- Date, shift/pikett name, assigned user, status badge
 - Sortable by date (ascending/descending)
+- **Resent assignments** are visually marked with an amber left border and a refresh icon, indicating they were created to replace a refused assignment
 
 ### Users View
 
 Per-user statistics with:
-- **Shift details**: For each shift, shows a donut ring visualization with segments for accepted (green), pending (orange), refused (red), and cancelled (gray) counts
-- **Pikett count**: Number of active piketts with names
+- **Shift/Pikett details**: For each shift or pikett, shows a donut ring visualization with segments for accepted (green), pending (orange), refused (red), and cancelled (gray) counts
 - **CSV export**: Download user statistics
 
 ### Calendar View
 
-Monthly calendar with assignment badges (similar to the Planner view but read-only).
-
-<!-- [Screenshot: Dashboard with all 3 views] -->
+Monthly calendar with assignment badges:
+- Each badge shows the shift/pikett color and assigned user initials
+- **Smart filtering**: When an assignment has been accepted for a date, refused/cancelled assignments for the same shift/pikett are hidden — only the accepted assignment is shown
+- Click on any day to see the full detail dialog with all assignments
 
 \newpage
 
-## 7.4 Action Buttons
+## 7.5 Action Buttons
 
 | Button | Action |
 |--------|--------|
-| **Sync** (🔄) | Fetch latest Accept/Refuse responses from Outlook |
-| **Resend** | Reassign a refused shift to a different available user |
-| **Delete** (trash icon) | Remove an assignment and cancel the Outlook event |
+| **Sync** | Fetch latest Accept/Refuse/Tentative responses from Outlook |
+| **Resend** | Reassign a refused assignment to a different available user |
+| **Delete** (trash icon) | Remove an assignment and cancel the Outlook event (attendees are notified) |
 | **Export CSV** | Download assignments or user statistics as CSV |
 
 ### How Sync Works
 
-1. Click **Sync** to check Outlook for new responses
-2. The app reads each assignment's Outlook event
-3. Updates status: Accepted / Refused / Tentative
-4. Refused assignments can be **resent** to another user
-5. **Auto-sync** runs automatically if configured (shown in the status bar)
+1. Click **Sync** or wait for **auto-sync** (runs every 15 minutes, countdown shown next to the Sync button)
+2. The app reads each assignment's Outlook event via Microsoft Graph API
+3. Updates status: Accepted / Tentative / Refused
+4. Detects cancellations: if an event was deleted or cancelled from the shared mailbox in Outlook, the assignment is automatically marked as **Cancelled**
+5. Refused assignments can be **resent** to another user
 
-<!-- [Screenshot: Dashboard with Sync button and status indicators] -->
+### How Resend Works
+
+1. Click the **Resend** button on a refused assignment
+2. A dialog shows available users for that date/shift (respecting availability rules)
+3. Select a new user — the original assignment is marked as resent, and a new assignment is created
+4. The Outlook event is cancelled for the original user and a new invitation is sent to the replacement
+5. The new assignment row is visually marked with an amber border to show it was resent
 
 \newpage
 
@@ -559,6 +589,11 @@ Monthly workflow:
 - **WEEK_PARITY** is useful for pikett alternation — user A on odd weeks, user B on even weeks
 - **DOUBLE_SHIFT** ensures linked assignments — if a user is on one pikett, they are automatically on the linked one too
 - **MAX_LOAD** prevents overloading part-time users — set their max percentage to match their work contract
-- **After sending invitations**, always come back to the Dashboard and **Sync** to see responses
+- **After sending invitations**, come back to the Dashboard — **auto-sync** checks for responses every 15 minutes, or click **Sync** manually
+- **Tentative responses** (orange) mean the user has provisionally accepted — follow up if needed
 - **Resend refused shifts promptly** — the replacement user is checked for availability in real-time
+- **Calendar view hides refused users** once someone has accepted the same shift for that date
+- **If you cancel an event from the shared mailbox** in Outlook, the next sync will automatically mark it as Cancelled in ShiftPilot
+- **Deleting an assignment** from the Dashboard will also cancel the Outlook event and notify the user
+- **Use Pikett mode** in the Dashboard to monitor on-call assignments separately from regular shifts
 - **Backup regularly** — use scheduled backup or create manual backups before major changes

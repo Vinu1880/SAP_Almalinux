@@ -151,6 +151,8 @@ const UsersPage = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [sortBy, setSortBy] = useState<'name' | 'firstName' | 'team'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [teamSortBy, setTeamSortBy] = useState<'name' | 'members'>('name');
+  const [teamSortOrder, setTeamSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Helper function to get sort label
   const getSortLabel = () => {
@@ -1392,10 +1394,22 @@ const UsersPage = () => {
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
-  const filteredTeams = teams.filter(team => {
-    const matchesSearch = team.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredTeams = teams
+    .filter(team => {
+      const matchesSearch = team.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
+    })
+    .sort((a, b) => {
+      let comparison = 0;
+      if (teamSortBy === 'name') {
+        comparison = a.name.localeCompare(b.name);
+      } else if (teamSortBy === 'members') {
+        const aMembers = users.filter(u => u.teamId === a.id).length;
+        const bMembers = users.filter(u => u.teamId === b.id).length;
+        comparison = aMembers - bMembers;
+      }
+      return teamSortOrder === 'asc' ? comparison : -comparison;
+    });
 
   // Constants for the pattern editor
   const days: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -1593,8 +1607,52 @@ const UsersPage = () => {
                     </Select>
                   </>
                 )}
+
+                {viewMode === 'teams' && (
+                  <Select
+                    value={`${teamSortBy}-${teamSortOrder}`}
+                    onValueChange={(value) => {
+                      const [field, order] = value.split('-');
+                      setTeamSortBy(field as 'name' | 'members');
+                      setTeamSortOrder(order as 'asc' | 'desc');
+                    }}
+                  >
+                    <SelectTrigger className="w-auto">
+                      <ArrowUpDown className="w-4 h-4 mr-2" />
+                      <span className="text-sm">
+                        {teamSortOrder === 'asc' ? '↑' : '↓'} {teamSortBy === 'name' ? tCommon("name") : t("members")}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="name-asc">
+                        <div className="flex items-center gap-2">
+                          <ArrowUp className="w-4 h-4 text-blue-600" />
+                          <span>{tCommon("name")}</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="name-desc">
+                        <div className="flex items-center gap-2">
+                          <ArrowDown className="w-4 h-4 text-orange-600" />
+                          <span>{tCommon("name")}</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="members-asc">
+                        <div className="flex items-center gap-2">
+                          <ArrowUp className="w-4 h-4 text-blue-600" />
+                          <span>{t("members")}</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="members-desc">
+                        <div className="flex items-center gap-2">
+                          <ArrowDown className="w-4 h-4 text-orange-600" />
+                          <span>{t("members")}</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
-              
+
               <div className="flex items-center space-x-3">
                 {viewMode === 'users' && (
                   <>
@@ -1620,6 +1678,12 @@ const UsersPage = () => {
                       {filteredUsers.length} {filteredUsers.length > 1 ? t("users") : t("user")}
                     </span>
                   </>
+                )}
+
+                {viewMode === 'teams' && (
+                  <span className="text-sm text-slate-600">
+                    {filteredTeams.length} {filteredTeams.length > 1 ? t("teams") : tCommon("team")}
+                  </span>
                 )}
                 
                 {viewMode === 'users' ? (

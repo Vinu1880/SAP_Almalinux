@@ -1,9 +1,9 @@
-// lib/hooks/useShiftAssignments.ts
+// lib/hooks/usePikettAssignments.ts
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthFetch, useAuthReady } from './useAuthFetch';
 
-export interface ShiftAssignment {
+export interface PikettAssignment {
   id: string;
   date: Date;
   status: 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
@@ -13,14 +13,15 @@ export interface ShiftAssignment {
   resent?: boolean;
   resentAt?: Date;
   resentFromId?: string;
-  shiftId: string;
-  shift: {
+  pikettId: string;
+  pikett: {
     id: string;
     name: string;
     description?: string;
-    startTime: string;
-    endTime: string;
+    startWeek: string;
+    endWeek?: string;
     color: string;
+    is24_7: boolean;
     teamId: string;
     team: {
       id: string;
@@ -45,7 +46,7 @@ export interface ShiftAssignment {
   updatedAt: Date;
 }
 
-export interface ShiftAssignmentStats {
+export interface PikettAssignmentStats {
   accepted: number;
   refused: number;
   pending: number;
@@ -74,18 +75,18 @@ export interface TeamStats {
   cancelled: number;
 }
 
-interface UseShiftAssignmentsOptions {
+interface UsePikettAssignmentsOptions {
   dateFilter?: '24h' | '7d' | '30d' | '90d' | '180d';
   teamId?: string;
   userId?: string;
   status?: 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
 }
 
-export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
+export function usePikettAssignments(options: UsePikettAssignmentsOptions = {}) {
   const authFetch = useAuthFetch();
   const isReady = useAuthReady();
-  const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
-  const [stats, setStats] = useState<ShiftAssignmentStats>({
+  const [assignments, setAssignments] = useState<PikettAssignment[]>([]);
+  const [stats, setStats] = useState<PikettAssignmentStats>({
     accepted: 0,
     refused: 0,
     pending: 0,
@@ -103,21 +104,20 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
     setError(null);
 
     try {
-      // Build query parameters
       const params = new URLSearchParams();
       if (options.dateFilter) params.append('dateFilter', options.dateFilter);
       if (options.teamId) params.append('teamId', options.teamId);
       if (options.userId) params.append('userId', options.userId);
       if (options.status) params.append('status', options.status);
 
-      const response = await authFetch(`/api/shift-assignments?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch assignments');
+      const response = await authFetch(`/api/pikett-assignments?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch pikett assignments');
 
       const data = await response.json();
       setAssignments(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
-      console.error('Error fetching shift assignments:', err);
+      console.error('Error fetching pikett assignments:', err);
     } finally {
       setLoading(false);
     }
@@ -129,27 +129,27 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
       if (options.dateFilter) params.append('dateFilter', options.dateFilter);
       if (options.teamId) params.append('teamId', options.teamId);
 
-      const response = await authFetch(`/api/shift-assignments/stats?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch stats');
+      const response = await authFetch(`/api/pikett-assignments/stats?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch pikett stats');
 
       const data = await response.json();
       setStats(data.stats);
       setUserStats(data.userStats);
       setTeamStats(data.teamStats);
     } catch (err) {
-      console.error('Error fetching stats:', err);
+      console.error('Error fetching pikett stats:', err);
     }
   }, [options.dateFilter, options.teamId]);
 
   const createAssignments = async (assignmentsData: Array<{
     date: string;
-    shiftId: string;
+    pikettId: string;
     userId: string;
     status?: 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
     reason?: string;
   }>) => {
     try {
-      const response = await authFetch('/api/shift-assignments', {
+      const response = await authFetch('/api/pikett-assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assignments: assignmentsData })
@@ -157,12 +157,11 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create assignments');
+        throw new Error(errorData.error || 'Failed to create pikett assignments');
       }
 
       const result = await response.json();
 
-      // Refresh data after creation
       await fetchAssignments();
       await fetchStats();
 
@@ -178,7 +177,7 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
     reason?: string;
   }) => {
     try {
-      const response = await authFetch(`/api/shift-assignments/${id}`, {
+      const response = await authFetch(`/api/pikett-assignments/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData)
@@ -186,17 +185,15 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update assignment');
+        throw new Error(errorData.error || 'Failed to update pikett assignment');
       }
 
       const updated = await response.json();
 
-      // Update locally
       setAssignments(prev =>
         prev.map(a => a.id === id ? updated : a)
       );
 
-      // Refresh stats
       await fetchStats();
 
       return updated;
@@ -208,19 +205,17 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
 
   const deleteAssignment = async (id: string) => {
     try {
-      const response = await authFetch(`/api/shift-assignments/${id}`, {
+      const response = await authFetch(`/api/pikett-assignments/${id}`, {
         method: 'DELETE'
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete assignment');
+        throw new Error(errorData.error || 'Failed to delete pikett assignment');
       }
 
-      // Remove locally
       setAssignments(prev => prev.filter(a => a.id !== id));
 
-      // Refresh stats
       await fetchStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');

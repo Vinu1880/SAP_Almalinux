@@ -98,12 +98,24 @@ export const updateAssignmentSchema = z.object({
   respondedAt: z.string().nullable().optional(),
   resent: z.boolean().optional(),
   resentAt: z.string().nullable().optional(),
+  resentFromId: z.string().max(255).nullable().optional(),
 });
 
 export const createBulkShiftAssignmentsSchema = z.object({
   assignments: z.array(z.object({
     date: z.string(),
     shiftId: cuidSchema,
+    userId: cuidSchema,
+    status: z.enum(['PENDING', 'TENTATIVE', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional().default('PENDING'),
+    reason: z.string().max(500).nullable().optional(),
+    outlookEventId: z.string().max(255).nullable().optional(),
+  })).min(1).max(1000),
+});
+
+export const createBulkPikettAssignmentsSchema = z.object({
+  assignments: z.array(z.object({
+    date: z.string(),
+    pikettId: cuidSchema,
     userId: cuidSchema,
     status: z.enum(['PENDING', 'TENTATIVE', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional().default('PENDING'),
     reason: z.string().max(500).nullable().optional(),

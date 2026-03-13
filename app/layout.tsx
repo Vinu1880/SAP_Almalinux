@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: "Shift Manager",
-  description: "Gestion intelligente des équipes",
+  title: "ShiftPilot",
+  description: "Shift & Pikett Management",
 };
 
 export default function RootLayout({

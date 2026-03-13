@@ -1,12 +1,12 @@
 #!/bin/sh
 # =============================================
-# Script d'entrée Docker pour Autoplanner
+# Script d'entrée Docker pour ShiftPilot
 # =============================================
 
 set -e
 
 echo "==================================="
-echo "Autoplanner - Démarrage du conteneur"
+echo "ShiftPilot - Démarrage du conteneur"
 echo "==================================="
 
 # Attendre que la base de données soit prête

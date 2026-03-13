@@ -33,9 +33,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing Graph access token' }, { status: 401 });
     }
 
+    // Include ACCEPTED to detect cancellations from shared mailbox
     const pendingAssignments = await prisma.shiftAssignment.findMany({
       where: {
-        status: { in: ['PENDING', 'TENTATIVE'] },
+        status: { in: ['PENDING', 'TENTATIVE', 'ACCEPTED'] },
         outlookEventId: { not: null }
       },
       include: { user: true, shift: true }
@@ -63,12 +64,62 @@ export async function POST(request: NextRequest) {
         });
 
         if (!eventResponse.ok) {
-          if (eventResponse.status === 404) continue;
+          if (eventResponse.status === 404) {
+            // Event was deleted/cancelled from Outlook — mark as CANCELLED
+            if (assignment.status !== 'CANCELLED') {
+              await prisma.shiftAssignment.update({
+                where: { id },
+                data: { status: 'CANCELLED', respondedAt: new Date() }
+              });
+              await prisma.auditLog.create({
+                data: {
+                  action: 'UPDATE',
+                  entity: 'SHIFT_ASSIGNMENT',
+                  entityId: id,
+                  userId: auth.user.id,
+                  data: {
+                    source: 'outlook-sync',
+                    oldStatus: assignment.status,
+                    newStatus: 'CANCELLED',
+                    reason: 'Event deleted from Outlook'
+                  }
+                }
+              });
+              updatedCount++;
+            }
+            continue;
+          }
           errorCount++;
           continue;
         }
 
         const event = await eventResponse.json();
+
+        // Check if event was cancelled by organizer (shared mailbox)
+        if (event.isCancelled === true) {
+          if (assignment.status !== 'CANCELLED') {
+            await prisma.shiftAssignment.update({
+              where: { id },
+              data: { status: 'CANCELLED', respondedAt: new Date() }
+            });
+            await prisma.auditLog.create({
+              data: {
+                action: 'UPDATE',
+                entity: 'SHIFT_ASSIGNMENT',
+                entityId: id,
+                userId: auth.user.id,
+                data: {
+                  source: 'outlook-sync',
+                  oldStatus: assignment.status,
+                  newStatus: 'CANCELLED',
+                  reason: 'Event cancelled from Outlook'
+                }
+              }
+            });
+            updatedCount++;
+          }
+          continue;
+        }
 
         const attendee = event.attendees?.find(
           (a: any) => a.emailAddress?.address?.toLowerCase() === user.email.toLowerCase()

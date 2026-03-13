@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import {
   Clock, Plus, Edit, Trash2, Users, Search, Filter, Copy,
   AlertCircle, Loader2, Save, UserPlus, UserMinus,
-  CalendarDays, Shield, AlertTriangle, Building2, Mail, Network
+  CalendarDays, Shield, AlertTriangle, Mail, Network
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -354,18 +354,18 @@ const ShiftsPage = () => {
 
   const filteredShifts = shifts.filter(shift => {
     const matchesSearch = shift.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTeam = filterTeam === 'all' || shift.teamId === filterTeam;
+    const matchesFilter = filterTeam === 'all' || shift.id === filterTeam;
     const matchesStatus = filterStatus === 'all' || shift.status === filterStatus;
-    
-    return matchesSearch && matchesTeam && matchesStatus;
+
+    return matchesSearch && matchesFilter && matchesStatus;
   });
 
   const filteredPiketts = piketts.filter(pikett => {
     const matchesSearch = pikett.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTeam = filterTeam === 'all' || pikett.teamId === filterTeam;
+    const matchesFilter = filterTeam === 'all' || pikett.id === filterTeam;
     const matchesStatus = filterStatus === 'all' || pikett.status === filterStatus;
-    
-    return matchesSearch && matchesTeam && matchesStatus;
+
+    return matchesSearch && matchesFilter && matchesStatus;
   });
 
   const calculateDuration = (start: string, end: string) => {
@@ -617,8 +617,8 @@ const ShiftsPage = () => {
 
         <div className="rounded-lg bg-slate-50 p-2.5 space-y-1.5">
           <div className="flex items-center gap-2 text-xs">
-            <div className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <Users className="w-3 h-3 text-blue-600" />
+            <div className="w-5 h-5 rounded-md bg-purple-100 flex items-center justify-center flex-shrink-0">
+              <Network className="w-3 h-3 text-purple-600" />
             </div>
             <span className="text-slate-600 truncate">{shift.team?.name}</span>
           </div>
@@ -845,7 +845,7 @@ const ShiftsPage = () => {
             <div className="flex items-center space-x-4">
               <Button
                 variant={viewType === 'shifts' ? 'default' : 'outline'}
-                onClick={() => setViewType('shifts')}
+                onClick={() => { setViewType('shifts'); setFilterTeam('all'); setSearchQuery(''); }}
                 className={viewType === 'shifts' ? 'bg-primary hover:bg-primary/90' : ''}
                 size="lg"
               >
@@ -857,7 +857,7 @@ const ShiftsPage = () => {
               </Button>
               <Button
                 variant={viewType === 'piketts' ? 'default' : 'outline'}
-                onClick={() => setViewType('piketts')}
+                onClick={() => { setViewType('piketts'); setFilterTeam('all'); setSearchQuery(''); }}
                 className={viewType === 'piketts' ? 'bg-red-600 hover:bg-red-700' : ''}
                 size="lg"
               >
@@ -1351,8 +1351,12 @@ const ShiftsPage = () => {
                 
                 <Select value={filterTeam} onValueChange={setFilterTeam}>
                   <SelectTrigger className="w-auto">
-                    <Network className="w-4 h-4 mr-2 text-slate-500" />
-                    <SelectValue placeholder={tCommon("team")} />
+                    {viewType === 'shifts' ? (
+                      <Clock className="w-4 h-4 mr-2 text-slate-500" />
+                    ) : (
+                      <Shield className="w-4 h-4 mr-2 text-slate-500" />
+                    )}
+                    <SelectValue placeholder={viewType === 'shifts' ? t("allShifts") : t("allPiketts")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">
@@ -1361,14 +1365,24 @@ const ShiftsPage = () => {
                         <span>{viewType === 'shifts' ? t("allShifts") : t("allPiketts")}</span>
                       </div>
                     </SelectItem>
-                    {teams.map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: team.color }}></div>
-                          <span>{team.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                    {viewType === 'shifts'
+                      ? shifts.map((shift) => (
+                          <SelectItem key={shift.id} value={shift.id}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: shift.color }}></div>
+                              <span>{shift.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      : piketts.map((pikett) => (
+                          <SelectItem key={pikett.id} value={pikett.id}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: pikett.color }}></div>
+                              <span>{pikett.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                    }
                   </SelectContent>
                 </Select>
 

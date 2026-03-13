@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toTimeString().substring(0, 8).replace(/:/g, '');
-    const fileName = `backup_ShiftAutoPlanner_${dateStr}_${timeStr}.json`;
+    const fileName = `backup_ShiftPilot_${dateStr}_${timeStr}.json`;
     const filePath = path.join(backupsDir, fileName);
 
     fs.writeFileSync(filePath, jsonString, 'utf-8');
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     // Rotate old backups: keep only maxBackups most recent
     if (maxBackups > 0) {
       const allBackups = fs.readdirSync(backupsDir)
-        .filter(f => f.startsWith('backup_ShiftAutoPlanner_') && f.endsWith('.json'))
+        .filter(f => f.startsWith('backup_ShiftPilot_') && f.endsWith('.json'))
         .sort((a, b) => b.localeCompare(a));
       if (allBackups.length > maxBackups) {
         for (const old of allBackups.slice(maxBackups)) {

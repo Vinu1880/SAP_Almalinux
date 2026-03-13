@@ -10,8 +10,8 @@ import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 
 export const metadata: Metadata = {
-  title: "Shift Manager",
-  description: "Gestion intelligente des équipes",
+  title: "ShiftPilot",
+  description: "Shift & Pikett Management",
 };
 
 export const dynamic = 'force-dynamic';
