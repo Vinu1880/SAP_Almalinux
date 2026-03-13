@@ -839,13 +839,12 @@ const processShiftAssignments = async () => {
     const pikettMap = new Map(piketts.map((p: any) => [p.id, p]));
     // Pre-compute day-of-week and adjacent dates for each date (avoid repeated new Date() calls)
     const dateDowMap = new Map(dates.map(d => [d, new Date(d).getDay()]));
-    const dateAdjacentMap = new Map(dates.map(d => {
-      const dt = new Date(d);
-      const prev = new Date(dt); prev.setDate(prev.getDate() - 1);
-      const next = new Date(dt); next.setDate(next.getDate() + 1);
+    // Build adjacent map using working days (not calendar days)
+    // e.g., Friday's next = Monday, Monday's prev = Friday
+    const dateAdjacentMap = new Map(dates.map((d, i) => {
       return [d, {
-        prev: prev.toISOString().split('T')[0],
-        next: next.toISOString().split('T')[0]
+        prev: i > 0 ? dates[i - 1] : undefined,
+        next: i < dates.length - 1 ? dates[i + 1] : undefined
       }];
     }));
     // Fast lookup: "date|userId" -> assigned (non-pikett) for O(1) checks
@@ -1229,11 +1228,14 @@ const processShiftAssignments = async () => {
       // ========================================
       // PART 2.2: Process normal shifts (non-rotation) for each date
       // ========================================
-      for (const date of dates) {
+      for (let dateIdx = 0; dateIdx < dates.length; dateIdx++) {
+        const date = dates[dateIdx];
         const dailyAssignments: { [userId: string]: string[] } = {};
 
         // PART 2.2: Process shifts not assigned by rotation
-        for (const shiftId of shiftsToProcess) {
+        // Alternate processing order to avoid persistent user pairing
+        const orderedShifts = dateIdx % 2 === 0 ? shiftsToProcess : [...shiftsToProcess].reverse();
+        for (const shiftId of orderedShifts) {
           const shift = shiftMap.get(shiftId);
           if (!shift) continue;
 
@@ -1358,15 +1360,16 @@ const processShiftAssignments = async () => {
           // PRIORITY 5: CONSECUTIVE SHIFTS (per-shift minConsecutiveDays)
           // ========================================
           // For shifts with minConsecutiveDays=1 (default), avoid assigning
-          // the same user on adjacent days (original behavior).
+          // the same user on adjacent days — checks BOTH same-shift and cross-shift.
           // For shifts with minConsecutiveDays>1, this check is skipped
           // because consecutive assignment is desired — handled in user selection.
           if ((shift.minConsecutiveDays || 1) <= 1) {
             const adjacent = dateAdjacentMap.get(date);
-            const hasConsecutiveForThisShift = adjacent ? (
-              assignments.some(a => a.date === adjacent.prev && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id)) ||
-              assignments.some(a => a.date === adjacent.next && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id))
-            ) : false;
+            // Check same-shift consecutive on working days (prev/next use working day order, not calendar)
+            const hasConsecutiveForThisShift = (
+              (adjacent?.prev ? assignments.some(a => a.date === adjacent.prev && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id)) : false) ||
+              (adjacent?.next ? assignments.some(a => a.date === adjacent.next && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id)) : false)
+            );
 
             if (hasConsecutiveForThisShift) {
               unavailableUsers.push({
@@ -1485,10 +1488,16 @@ const processShiftAssignments = async () => {
             }
 
             // Pass 1b: if no non-pikett user found without week repeat, try non-pikett with week repeat
+            // Sort by total assignments across ALL shifts (not just this shift) for true fair distribution
             if (!selectedUser && nonPikettAvailable.length > 0) {
               let candidateUsers = [...nonPikettAvailable];
               if (settings.balanceShifts) {
                 candidateUsers.sort((a, b) => {
+                  // Primary: total assignments across all shifts (global fairness)
+                  const aTotalAll = Object.values(userShiftsTracking[a.id] || {}).reduce((s: number, v: any) => s + (v as number), 0);
+                  const bTotalAll = Object.values(userShiftsTracking[b.id] || {}).reduce((s: number, v: any) => s + (v as number), 0);
+                  if (aTotalAll !== bTotalAll) return aTotalAll - bTotalAll;
+                  // Secondary: ratio for this specific shift
                   const aRatio = (userShiftsTracking[a.id]?.[shiftId] || 0) / (userAvailableDays[a.id]?.[shiftId] || 1);
                   const bRatio = (userShiftsTracking[b.id]?.[shiftId] || 0) / (userAvailableDays[b.id]?.[shiftId] || 1);
                   return aRatio - bRatio;
