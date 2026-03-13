@@ -2868,7 +2868,7 @@ useEffect(() => {
                           );
                         }
 
-                        const dateFormat = { day: 'numeric', month: 'short' } as const;
+                        const dateFormat = { day: 'numeric', month: 'short', year: 'numeric' } as const;
 
                         return groupedUsers.map(({ user, events }) => {
                           // Sort events by start date and merge overlapping/adjacent ranges
