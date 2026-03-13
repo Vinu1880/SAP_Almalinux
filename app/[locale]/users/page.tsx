@@ -2161,37 +2161,36 @@ const UsersPage = () => {
                   <CardHeader className="pb-2 pt-4 px-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-3">
-                        <div 
+                        <div
                           className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow"
                           style={{ backgroundColor: team.color }}
                         >
                           {team.name.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <CardTitle className="text-lg font-bold text-slate-800">
+                          <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
                             {team.name}
+                            <Badge variant="outline" className="text-xs font-normal">
+                              <Users className="w-3 h-3 mr-1" />
+                              {teamMembers.length}
+                            </Badge>
                           </CardTitle>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            {activeMembers.length !== teamMembers.length && (
+                              <Badge variant="outline" className="text-xs bg-green-50">
+                                <UserCheck className="w-3 h-3 mr-1" />
+                                {activeMembers.length} {activeMembers.length > 1 ? t("activeMembers") : t("activeMember")}
+                              </Badge>
+                            )}
+                            {rotationMembers.length > 0 && (
+                              <Badge className="bg-orange-100 text-orange-700 text-xs border-0">
+                                <RotateCw className="w-3 h-3 mr-1" />
+                                {rotationMembers.length}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge variant="outline" className="text-xs">
-                        <Users className="w-3 h-3 mr-1" />
-                        {teamMembers.length}
-                      </Badge>
-                      {activeMembers.length !== teamMembers.length && (
-                        <Badge variant="outline" className="text-xs bg-green-50">
-                          <UserCheck className="w-3 h-3 mr-1" />
-                          {activeMembers.length} {activeMembers.length > 1 ? t("activeMembers") : t("activeMember")}
-                        </Badge>
-                      )}
-                      {rotationMembers.length > 0 && (
-                        <Badge className="bg-orange-100 text-orange-700 text-xs border-0">
-                          <RotateCw className="w-3 h-3 mr-1" />
-                          {rotationMembers.length}
-                        </Badge>
-                      )}
                     </div>
                   </CardHeader>
                   
