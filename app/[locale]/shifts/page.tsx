@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import {
   Clock, Plus, Edit, Trash2, Users, Search, Filter, Copy,
   AlertCircle, Loader2, Save, UserPlus, UserMinus,
-  CalendarDays, Shield, AlertTriangle, Building2, Mail
+  CalendarDays, Shield, AlertTriangle, Building2, Mail, Network
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -319,25 +319,37 @@ const ShiftsPage = () => {
     }
   };
 
-  const handleDuplicateShift = async (shift: any) => {
-    try {
-      await createShift({
-        name: `${shift.name} ${t('copy')}`,
-        startTime: shift.startTime,
-        endTime: shift.endTime,
-        teamId: shift.teamId,
-        membersRequired: shift.membersRequired || 1,
-        minConsecutiveDays: shift.minConsecutiveDays || 1,
-        priority: shift.priority || 'MEDIUM',
-        color: shift.color,
-        senderMailbox: shift.senderMailbox,
-        daysOfWeek: shift.daysOfWeek,
-        includedUserIds: shift.includedUserIds || [],
-        excludedUserIds: shift.excludedUserIds || [],
-      });
-    } catch (error) {
-      alert(t('shiftDuplicateError'));
-    }
+  const handleDuplicateShift = (shift: any) => {
+    setNewShift({
+      name: `${shift.name} ${t('copy')}`,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      teamId: shift.teamId,
+      membersRequired: shift.membersRequired || 1,
+      minConsecutiveDays: shift.minConsecutiveDays || 1,
+      priority: shift.priority || 'MEDIUM',
+      color: shift.color,
+      senderMailbox: shift.senderMailbox || '',
+      daysOfWeek: shift.daysOfWeek || [1, 2, 3, 4, 5],
+      includedUserIds: shift.includedUserIds || [],
+      excludedUserIds: shift.excludedUserIds || [],
+    });
+    setIsCreateDialogOpen(true);
+  };
+
+  const handleDuplicatePikett = (pikett: any) => {
+    setNewPikett({
+      id: '',
+      name: `${pikett.name} ${t('copy')}`,
+      teamId: pikett.teamId,
+      includedUserIds: pikett.includedUserIds || [],
+      excludedUserIds: pikett.excludedUserIds || [],
+      color: pikett.color,
+      status: pikett.status || 'ACTIVE',
+      is24_7: pikett.is24_7,
+      daysOfWeek: pikett.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
+    });
+    setIsCreatePikettDialogOpen(true);
   };
 
   const filteredShifts = shifts.filter(shift => {
@@ -508,7 +520,7 @@ const ShiftsPage = () => {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="text-red-600 hover:bg-red-100"
+                    className="hover:bg-red-100 hover:text-red-600"
                     onClick={() => handleRemoveFromShift(user.id)}
                   >
                     <UserMinus className="w-3 h-3" />
@@ -580,62 +592,53 @@ const ShiftsPage = () => {
   };
 
   const ShiftCard = ({ shift }: { shift: any }) => (
-    <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-300">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
+    <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-300 relative">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
-            <div 
-              className="w-3 h-8 rounded-full"
+            <div
+              className="w-3 h-10 rounded-full"
               style={{ backgroundColor: shift.color }}
             ></div>
             <div>
-              <CardTitle className="text-lg font-semibold text-slate-800">
-                {shift.name}
-              </CardTitle>
+              <h4 className="font-semibold text-slate-800">{shift.name}</h4>
+              <p className="text-xs text-slate-500">{shift.startTime} - {shift.endTime} ({calculateDuration(shift.startTime, shift.endTime)}h)</p>
             </div>
           </div>
-        </div>
-      </CardHeader>
-      
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center space-x-2">
-            <Clock className="w-4 h-4 text-slate-500" />
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                {shift.startTime} - {shift.endTime}
-              </p>
-              <p className="text-xs text-slate-500">
-                {calculateDuration(shift.startTime, shift.endTime)}h
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Users className="w-4 h-4 text-slate-500" />
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                {shift.team?.name}
-              </p>
-              <p className="text-xs text-slate-500">
-                {shift.excludedUserIds?.length || 0} {t("exclusions")}
-              </p>
-            </div>
+          <div className="flex items-center gap-2">
+            {shift.membersRequired > 1 && (
+              <Badge variant="outline" className="text-xs">{t('reqLabel', { count: shift.membersRequired })}</Badge>
+            )}
+            {shift.minConsecutiveDays > 1 && (
+              <Badge variant="outline" className="text-xs">{t('minDaysLabel', { count: shift.minConsecutiveDays })}</Badge>
+            )}
           </div>
         </div>
 
-        {shift.senderMailbox && (
-          <div className="flex items-center space-x-2">
-            <Mail className="w-4 h-4 text-slate-500" />
-            <p className="text-xs text-slate-500 truncate">{shift.senderMailbox}</p>
+        <div className="rounded-lg bg-slate-50 p-2.5 space-y-1.5">
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <Users className="w-3 h-3 text-blue-600" />
+            </div>
+            <span className="text-slate-600 truncate">{shift.team?.name}</span>
           </div>
-        )}
-
-        <div className="flex items-center space-x-2">
-          {getStatusBadge(shift.status)}
+          {shift.senderMailbox && (
+            <div className="flex items-center gap-2 text-xs">
+              <div className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Mail className="w-3 h-3 text-blue-600" />
+              </div>
+              <span className="text-slate-600 truncate">{shift.senderMailbox}</span>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center space-x-2 pt-3 border-t">
+        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+          <div className="flex items-center gap-2">
+            {getStatusBadge(shift.status)}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 pt-3 mt-3 border-t">
           <Button
             onClick={() => {
               setSelectedShift({
@@ -668,7 +671,7 @@ const ShiftsPage = () => {
             }}
             variant="outline"
             size="sm"
-            className="text-red-600 hover:bg-red-100 hover:text-red-700"
+            className="hover:bg-red-100 hover:text-red-600"
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -780,13 +783,21 @@ const ShiftsPage = () => {
               {t("editPikett")}
             </Button>
             <Button
+              onClick={() => handleDuplicatePikett(pikett)}
+              variant="outline"
+              size="sm"
+              className="hover:bg-secondary/20"
+            >
+              <Copy className="w-4 h-4" />
+            </Button>
+            <Button
               onClick={() => {
                 setDeletePikettId(pikett.id);
                 setIsDeletePikettDialogOpen(true);
               }}
               variant="outline"
               size="sm"
-              className="text-red-600 hover:bg-red-100 hover:text-red-700"
+              className="hover:bg-red-100 hover:text-red-600"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
@@ -1340,14 +1351,14 @@ const ShiftsPage = () => {
                 
                 <Select value={filterTeam} onValueChange={setFilterTeam}>
                   <SelectTrigger className="w-auto">
-                    <Building2 className="w-4 h-4 mr-2 text-slate-500" />
+                    <Network className="w-4 h-4 mr-2 text-slate-500" />
                     <SelectValue placeholder={tCommon("team")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-gradient-to-r from-blue-400 to-purple-400"></div>
-                        <span>{tCommon("allTeams")}</span>
+                        <span>{viewType === 'shifts' ? t("allShifts") : t("allPiketts")}</span>
                       </div>
                     </SelectItem>
                     {teams.map((team) => (

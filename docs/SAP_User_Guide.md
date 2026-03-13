@@ -169,6 +169,7 @@ Teams group users together. Every user and shift belongs to a team.
 | **Create user** | Opens the user creation dialog |
 | **Grid/List view** | Switch between card view and table view |
 | **Edit** (pencil icon) | Edit user details, availability, rules, rotation |
+| **Duplicate** (copy icon) | Create a copy of the user (opens creation dialog pre-filled) |
 | **Delete** (trash icon) | Delete the user |
 
 ### User Fields
@@ -292,7 +293,7 @@ The Shifts page has 2 tabs: **Shifts** and **Piketts**.
 |--------|--------|
 | **Create Shift** | Opens the shift creation dialog |
 | **Edit** (pencil icon) | Edit shift details |
-| **Duplicate** (copy icon) | Create a copy of the shift |
+| **Duplicate** (copy icon) | Create a copy of the shift (opens creation dialog pre-filled) |
 | **Delete** (trash icon) | Delete the shift |
 
 ### Shift Fields
@@ -330,6 +331,7 @@ Piketts are weekly on-call assignments — typically one person per week.
 |--------|--------|
 | **Create Pikett** | Opens the pikett creation dialog |
 | **Edit** (pencil icon) | Edit pikett details |
+| **Duplicate** (copy icon) | Create a copy of the pikett (opens creation dialog pre-filled) |
 | **Delete** (trash icon) | Delete the pikett |
 
 ### Pikett Fields

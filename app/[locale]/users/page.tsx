@@ -10,7 +10,7 @@ import {
   UserCheck, Loader2, AlertCircle, Save, X, Sun, Moon,
   Building2, Crown, RotateCw, Info, AlertTriangle,
   UserPlus, UserMinus, Grid3X3, List, Filter,
-  ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal
+  ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal, Copy, Network
 } from 'lucide-react';
 import { useShifts } from '@/lib/hooks/useShifts';
 import { usePiketts } from '@/lib/hooks/usePiketts';
@@ -592,7 +592,7 @@ const UsersPage = () => {
                                     setDeletePatternId(pattern.id);
                                     setIsDeletePatternDialogOpen(true);
                                   }}
-                                  className="text-red-600 hover:bg-red-100"
+                                  className="hover:bg-red-100 hover:text-red-600"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </Button>
@@ -905,7 +905,7 @@ const UsersPage = () => {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="text-red-600 hover:bg-red-100"
+                    className="hover:bg-red-100 hover:text-red-600"
                     onClick={() => handleRemoveFromTeam(user.id)}
                   >
                     <UserMinus className="w-3 h-3" />
@@ -1031,6 +1031,34 @@ const UsersPage = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDuplicateUser = (user: any) => {
+    setNewUser({
+      firstName: user.firstName,
+      lastName: `${user.lastName} (Copy)`,
+      email: '',
+      phone: user.phone || '',
+      location: user.location || '',
+      teamId: user.teamId || '',
+      role: user.role || '',
+      workPercent: user.workPercent || 100,
+      notes: user.notes || '',
+      availability: user.availability || fullTimeAvailability,
+      rotationConfig: user.rotationConfig ? getRotationConfig(user) : null,
+    });
+    setWorkType(user.workPercent && user.workPercent < 100 ? 'partial' : 'full');
+    setIsCreateUserDialogOpen(true);
+  };
+
+  const handleDuplicateTeam = (team: any) => {
+    setNewTeam({
+      name: `${team.name} (Copy)`,
+      description: team.description || '',
+      color: team.color || '#3b82f6',
+      leadId: '',
+    });
+    setIsCreateTeamDialogOpen(true);
   };
 
   // === Rules handlers ===
@@ -1424,7 +1452,7 @@ const UsersPage = () => {
               className={viewMode === 'teams' ? 'bg-primary hover:bg-primary/90' : 'hover:bg-secondary/20'}
               size="lg"
             >
-              <Building2 className="w-5 h-5 mr-2" />
+              <Network className="w-5 h-5 mr-2" />
               {t("teams")}
               <Badge variant="secondary" className="ml-2">
                 {teams.length}
@@ -1464,7 +1492,7 @@ const UsersPage = () => {
                   <>
                     <Select value={filterTeam} onValueChange={setFilterTeam}>
                       <SelectTrigger className="w-auto">
-                        <Building2 className="w-4 h-4 mr-2 text-slate-500" />
+                        <Network className="w-4 h-4 mr-2 text-slate-500" />
                         <SelectValue placeholder={t("team")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -1890,10 +1918,18 @@ const UsersPage = () => {
                           {getStatusBadge(user.status)}
                         </div>
 
-                        <div className="flex items-center justify-between pt-3 mt-3 border-t">
-                          <Button onClick={() => openEditUser(user)} variant="outline" size="sm" className="flex-1 mr-2 hover:bg-secondary/20">
+                        <div className="flex items-center gap-2 pt-3 mt-3 border-t">
+                          <Button onClick={() => openEditUser(user)} variant="outline" size="sm" className="flex-1 hover:bg-secondary/20">
                             <Edit className="w-4 h-4 mr-1" />
                             {tCommon("edit")}
+                          </Button>
+                          <Button
+                            onClick={() => handleDuplicateUser(user)}
+                            variant="outline"
+                            size="sm"
+                            className="hover:bg-secondary/20"
+                          >
+                            <Copy className="w-4 h-4" />
                           </Button>
                           <Button
                             onClick={() => {
@@ -1902,7 +1938,7 @@ const UsersPage = () => {
                             }}
                             variant="outline"
                             size="sm"
-                            className="text-red-600 hover:bg-red-100"
+                            className="hover:bg-red-100 hover:text-red-600"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -2148,7 +2184,7 @@ const UsersPage = () => {
                       </div>
                     </div>
                   
-                    <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="flex items-center gap-2 pt-2 border-t">
                       <Button
                         onClick={() => {
                           const teamMemberIds = users
@@ -2167,10 +2203,18 @@ const UsersPage = () => {
                         }}
                         variant="outline"
                         size="sm"
-                        className="flex-1 mr-2 h-8 text-xs hover:bg-secondary/20"
+                        className="flex-1 h-8 text-xs hover:bg-secondary/20"
                       >
                         <Edit className="w-3 h-3 mr-1" />
                         {tCommon("edit")}
+                      </Button>
+                      <Button
+                        onClick={() => handleDuplicateTeam(team)}
+                        variant="outline"
+                        size="sm"
+                        className="hover:bg-secondary/20 h-8 px-2"
+                      >
+                        <Copy className="w-3 h-3" />
                       </Button>
                       <Button
                         onClick={() => {
@@ -2179,7 +2223,7 @@ const UsersPage = () => {
                         }}
                         variant="outline"
                         size="sm"
-                        className="text-red-600 hover:bg-red-100 h-8 px-2"
+                        className="hover:bg-red-100 hover:text-red-600 h-8 px-2"
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
@@ -2338,7 +2382,7 @@ const UsersPage = () => {
                         <Button variant="outline" size="sm" className="hover:bg-secondary/20" onClick={() => handleStartEditRule(rule)}>
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-100" onClick={() => handleDeleteRule(rule.id)}>
+                        <Button variant="outline" size="sm" className="hover:bg-red-100 hover:text-red-600" onClick={() => handleDeleteRule(rule.id)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>

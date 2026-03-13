@@ -795,7 +795,7 @@ const SettingsPage = () => {
                         onClick={() => setIsDeleteAllHolidaysDialogOpen(true)}
                         variant="outline"
                         size="sm"
-                        className="text-red-600 hover:bg-red-100 hover:text-red-700 border-red-200"
+                        className="hover:bg-red-100 hover:text-red-600"
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
                         {t("deleteAll") || "Delete all"}
@@ -878,7 +878,7 @@ const SettingsPage = () => {
                             }}
                             variant="outline"
                             size="sm"
-                            className="text-red-600 hover:bg-red-100"
+                            className="hover:bg-red-100 hover:text-red-600"
                           >
                             <Trash className="w-4 h-4" />
                           </Button>
@@ -1124,7 +1124,7 @@ const SettingsPage = () => {
                               }}
                               variant="outline"
                               size="sm"
-                              className="text-red-600 hover:bg-red-100 hover:text-red-700"
+                              className="hover:bg-red-100 hover:text-red-600"
                               title={tCommon("delete")}
                             >
                               <Trash2 className="w-4 h-4" />
