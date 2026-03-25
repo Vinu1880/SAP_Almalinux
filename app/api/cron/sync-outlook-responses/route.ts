@@ -9,9 +9,9 @@ import { logSecurityEvent } from '@/lib/securityLogger';
 
 // Acquires a Graph API token via refresh token or client credentials flow
 async function getAccessToken(): Promise<string> {
-  const clientId = process.env.AZURE_AD_CLIENT_ID!;
+  const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID!;
   const clientSecret = process.env.AZURE_AD_CLIENT_SECRET!;
-  const tenantId = process.env.AZURE_AD_TENANT_ID!;
+  const tenantId = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID!;
   const refreshToken = process.env.MICROSOFT_GRAPH_REFRESH_TOKEN;
 
   if (refreshToken) {

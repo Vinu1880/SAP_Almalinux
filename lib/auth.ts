@@ -11,8 +11,8 @@ export interface AuthUser {
 }
 
 // JWKS setup (jose handles caching and key rotation automatically)
-const tenantId = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || process.env.AZURE_AD_TENANT_ID;
-const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || process.env.AZURE_AD_CLIENT_ID;
+const tenantId = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID;
+const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
 const JWKS_URI = `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`;
 const ISSUER = `https://login.microsoftonline.com/${tenantId}/v2.0`;
 
