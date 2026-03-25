@@ -9,7 +9,7 @@ import { resolve } from 'path';
 // Load environment variables
 config({ path: resolve(process.cwd(), '.env') });
 
-const CRON_SECRET = process.env.CRON_SECRET || 'dev-secret-change-in-production';
+const CRON_SECRET = process.env.NEXT_PUBLIC_CRON_SECRET || 'dev-secret-change-in-production';
 const BASE_URL = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
 
 async function syncOutlookResponses() {

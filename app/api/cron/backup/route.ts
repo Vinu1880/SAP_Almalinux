@@ -11,7 +11,7 @@ import path from 'path';
 // GET - Check scheduled backup status
 export async function GET(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret') || new URL(request.url).searchParams.get('secret');
-  const expected = process.env.CRON_SECRET;
+  const expected = process.env.NEXT_PUBLIC_CRON_SECRET;
 
   if (!expected || expected === 'dev-secret-change-in-production') {
     return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 // POST - Create a scheduled backup with rotation
 export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret') || new URL(request.url).searchParams.get('secret');
-  const expected = process.env.CRON_SECRET;
+  const expected = process.env.NEXT_PUBLIC_CRON_SECRET;
 
   if (!expected || expected === 'dev-secret-change-in-production') {
     return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });

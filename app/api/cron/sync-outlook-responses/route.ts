@@ -77,7 +77,7 @@ function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'TENTATIVE' 
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
+    const cronSecret = process.env.NEXT_PUBLIC_CRON_SECRET;
 
     if (!cronSecret || cronSecret === 'dev-secret-change-in-production') {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
