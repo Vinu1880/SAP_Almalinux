@@ -8,8 +8,8 @@ const intlMiddleware = createMiddleware(routing);
 // Allowed origins for CORS
 const ALLOWED_ORIGINS = [
   process.env.NEXT_PUBLIC_URL || '',
-  'https://sap.lab.sr.bnc.ch:8443',
-  'https://sap.lab.sr.bnc.ch',
+  'https://shiftpilot.lab.sr.bnc.ch:8443',
+  'https://shiftpilot.lab.sr.bnc.ch',
   'http://localhost:3000',
 ].filter(Boolean);
 

@@ -1,17 +1,17 @@
 {
   "version": "1.0.0",
-  "backupDate": "2026-03-05T10:21:44.449Z",
+  "backupDate": "2026-03-13T12:37:22.671Z",
   "counts": {
     "teams": 6,
     "users": 46,
     "shifts": 10,
     "piketts": 4,
-    "rotationPatterns": 1,
+    "rotationPatterns": 2,
     "shiftAssignments": 0,
     "outOfOfficeEvents": 0,
-    "auditLogs": 168,
-    "usersWithRotation": 1,
-    "userRules": 8,
+    "auditLogs": 201,
+    "usersWithRotation": 2,
+    "userRules": 6,
     "holidays": 18
   },
   "data": {
@@ -72,6 +72,52 @@
       }
     ],
     "users": [
+      {
+        "id": "cmfy8s7vc000lqvpcps046mz7",
+        "email": "jeremy@bnc.ch",
+        "firstName": "Jeremy",
+        "lastName": "G",
+        "phone": null,
+        "location": null,
+        "role": null,
+        "workPercent": 100,
+        "status": "ACTIVE",
+        "notes": null,
+        "rotationConfig": null,
+        "availability": {
+          "friday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "monday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "sunday": {
+            "morning": false,
+            "afternoon": false
+          },
+          "tuesday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "saturday": {
+            "morning": false,
+            "afternoon": false
+          },
+          "thursday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "wednesday": {
+            "morning": true,
+            "afternoon": true
+          }
+        },
+        "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+        "createdAt": "2025-09-24T17:12:28.632Z",
+        "updatedAt": "2026-03-05T11:05:55.092Z"
+      },
       {
         "id": "cmfy8rsvy000iqvpc4v52yov1",
         "email": "william@bnc.ch",
@@ -671,52 +717,6 @@
         "updatedAt": "2025-10-14T18:05:44.822Z"
       },
       {
-        "id": "cmfy8s7vc000lqvpcps046mz7",
-        "email": "jeremy@bnc.ch",
-        "firstName": "Jeremy",
-        "lastName": "G",
-        "phone": null,
-        "location": null,
-        "role": null,
-        "workPercent": 100,
-        "status": "ACTIVE",
-        "notes": null,
-        "rotationConfig": null,
-        "availability": {
-          "friday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "monday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "sunday": {
-            "morning": false,
-            "afternoon": false
-          },
-          "tuesday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "saturday": {
-            "morning": false,
-            "afternoon": false
-          },
-          "thursday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "wednesday": {
-            "morning": true,
-            "afternoon": true
-          }
-        },
-        "teamId": "cmfy8p9kn0004qvpc03ha36pv",
-        "createdAt": "2025-09-24T17:12:28.632Z",
-        "updatedAt": "2026-03-05T08:54:31.499Z"
-      },
-      {
         "id": "cmfy8x9r9001bqvpc5299oys5",
         "email": "michael@bnc.ch",
         "firstName": "Michael",
@@ -807,52 +807,6 @@
         "teamId": "cmfy8opm00000qvpct2faz46u",
         "createdAt": "2025-09-24T17:13:06.626Z",
         "updatedAt": "2025-10-11T11:31:23.121Z"
-      },
-      {
-        "id": "cmfy8wu8o0018qvpcv8vncqs3",
-        "email": "siu@bnc.ch",
-        "firstName": "Siu",
-        "lastName": "O",
-        "phone": null,
-        "location": "BE",
-        "role": null,
-        "workPercent": 100,
-        "status": "ACTIVE",
-        "notes": null,
-        "rotationConfig": null,
-        "availability": {
-          "friday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "monday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "sunday": {
-            "morning": false,
-            "afternoon": false
-          },
-          "tuesday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "saturday": {
-            "morning": false,
-            "afternoon": false
-          },
-          "thursday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "wednesday": {
-            "morning": true,
-            "afternoon": true
-          }
-        },
-        "teamId": "cmfy8opm00000qvpct2faz46u",
-        "createdAt": "2025-09-24T17:16:04.248Z",
-        "updatedAt": "2025-10-11T11:32:07.519Z"
       },
       {
         "id": "cmfy8vl2i000zqvpcx9ypq3l1",
@@ -991,6 +945,56 @@
         "teamId": "cmfy8pf6f0006qvpcffnsrmb4",
         "createdAt": "2025-09-24T17:26:00.796Z",
         "updatedAt": "2025-09-28T14:28:34.596Z"
+      },
+      {
+        "id": "cmfy8wu8o0018qvpcv8vncqs3",
+        "email": "siu@bnc.ch",
+        "firstName": "Siu",
+        "lastName": "O",
+        "phone": null,
+        "location": "BE",
+        "role": null,
+        "workPercent": 100,
+        "status": "ACTIVE",
+        "notes": null,
+        "rotationConfig": {
+          "priority": "high",
+          "patternId": "cmmdkwl4e000001o4anuj4ejx",
+          "allowedShiftTypes": []
+        },
+        "availability": {
+          "friday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "monday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "sunday": {
+            "morning": false,
+            "afternoon": false
+          },
+          "tuesday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "saturday": {
+            "morning": false,
+            "afternoon": false
+          },
+          "thursday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "wednesday": {
+            "morning": true,
+            "afternoon": true
+          }
+        },
+        "teamId": "cmfy8opm00000qvpct2faz46u",
+        "createdAt": "2025-09-24T17:16:04.248Z",
+        "updatedAt": "2026-03-05T14:47:05.420Z"
       },
       {
         "id": "cmfy973xk002sqvpc5n1t6nrb",
@@ -1687,52 +1691,6 @@
         "updatedAt": "2026-02-08T21:39:27.013Z"
       },
       {
-        "id": "cmfy95cb2002jqvpcflpt7zow",
-        "email": "matthias@bnc.ch",
-        "firstName": "Matthias",
-        "lastName": "A",
-        "phone": null,
-        "location": "ZH",
-        "role": null,
-        "workPercent": 70,
-        "status": "ACTIVE",
-        "notes": null,
-        "rotationConfig": null,
-        "availability": {
-          "friday": {
-            "morning": false,
-            "afternoon": true
-          },
-          "monday": {
-            "morning": true,
-            "afternoon": true
-          },
-          "sunday": {
-            "morning": false,
-            "afternoon": false
-          },
-          "tuesday": {
-            "morning": false,
-            "afternoon": true
-          },
-          "saturday": {
-            "morning": false,
-            "afternoon": false
-          },
-          "thursday": {
-            "morning": true,
-            "afternoon": false
-          },
-          "wednesday": {
-            "morning": true,
-            "afternoon": true
-          }
-        },
-        "teamId": "cmfy8p0h80002qvpch6xrbtns",
-        "createdAt": "2025-09-24T17:22:40.910Z",
-        "updatedAt": "2026-02-12T17:19:16.129Z"
-      },
-      {
         "id": "cmfy8w1a20012qvpc57o4zk9s",
         "email": "allison@bnc.ch",
         "firstName": "Allison",
@@ -2152,7 +2110,7 @@
         "firstName": "Jean-Marc",
         "lastName": "B",
         "phone": null,
-        "location": null,
+        "location": "ZH",
         "role": null,
         "workPercent": 100,
         "status": "ACTIVE",
@@ -2190,108 +2148,56 @@
         },
         "teamId": "cmfy8p0h80002qvpch6xrbtns",
         "createdAt": "2025-09-24T17:24:32.553Z",
-        "updatedAt": "2026-03-05T09:08:46.478Z"
+        "updatedAt": "2026-03-10T19:53:03.150Z"
+      },
+      {
+        "id": "cmfy95cb2002jqvpcflpt7zow",
+        "email": "matthias@bnc.ch",
+        "firstName": "Matthias",
+        "lastName": "A",
+        "phone": null,
+        "location": "ZH",
+        "role": null,
+        "workPercent": 70,
+        "status": "ACTIVE",
+        "notes": null,
+        "rotationConfig": null,
+        "availability": {
+          "friday": {
+            "morning": false,
+            "afternoon": true
+          },
+          "monday": {
+            "morning": true,
+            "afternoon": true
+          },
+          "sunday": {
+            "morning": false,
+            "afternoon": false
+          },
+          "tuesday": {
+            "morning": false,
+            "afternoon": true
+          },
+          "saturday": {
+            "morning": false,
+            "afternoon": false
+          },
+          "thursday": {
+            "morning": true,
+            "afternoon": false
+          },
+          "wednesday": {
+            "morning": true,
+            "afternoon": true
+          }
+        },
+        "teamId": "cmfy8p0h80002qvpch6xrbtns",
+        "createdAt": "2025-09-24T17:22:40.910Z",
+        "updatedAt": "2026-03-10T19:59:57.802Z"
       }
     ],
     "shifts": [
-      {
-        "id": "cmfy9gs0s003rqvpchac23o45",
-        "name": "NET Support",
-        "description": null,
-        "startTime": "08:00",
-        "endTime": "17:30",
-        "daysOfWeek": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "membersRequired": 1,
-        "priority": "MEDIUM",
-        "status": "ACTIVE",
-        "color": "#6b7280",
-        "senderMailbox": "",
-        "includedUserIds": [],
-        "excludedUserIds": [],
-        "teamId": "cmfy8pf6f0006qvpcffnsrmb4",
-        "usageCount": 0,
-        "lastUsedAt": null,
-        "createdAt": "2025-09-24T17:31:34.491Z",
-        "updatedAt": "2025-10-14T17:38:53.403Z"
-      },
-      {
-        "id": "cmfy9ebho003eqvpc1t32egoe",
-        "name": "Morning Dispatcher",
-        "description": null,
-        "startTime": "08:00",
-        "endTime": "12:30",
-        "daysOfWeek": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "membersRequired": 1,
-        "priority": "MEDIUM",
-        "status": "ACTIVE",
-        "color": "#f97316",
-        "senderMailbox": "",
-        "includedUserIds": [],
-        "excludedUserIds": [],
-        "teamId": "cmfy8opm00000qvpct2faz46u",
-        "usageCount": 0,
-        "lastUsedAt": null,
-        "createdAt": "2025-09-24T17:29:39.756Z",
-        "updatedAt": "2025-10-14T17:39:06.627Z"
-      },
-      {
-        "id": "cmfy9jads0045qvpcy6ryh2h1",
-        "name": "Skyguide Support",
-        "description": null,
-        "startTime": "08:00",
-        "endTime": "17:30",
-        "daysOfWeek": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "membersRequired": 1,
-        "priority": "MEDIUM",
-        "status": "ACTIVE",
-        "color": "#eab308",
-        "senderMailbox": "",
-        "includedUserIds": [
-          "cmfy8t16q000rqvpcyf35pyyq",
-          "cmfy93ex10027qvpcn18ffs2h"
-        ],
-        "excludedUserIds": [
-          "cmfy8w1a20012qvpc57o4zk9s",
-          "cmfy8vl2i000zqvpcx9ypq3l1",
-          "cmfy8utx9000wqvpcrualp1er",
-          "cmfy8x9r9001bqvpc5299oys5",
-          "cmfy8tr6w000uqvpchbg4brn8",
-          "cmfy92ezq0021qvpco8y43ozn",
-          "cmfy8wu8o0018qvpcv8vncqs3",
-          "cmfy91mw2001yqvpcfiimq4pq",
-          "cmfy98n0v002yqvpca126zl90",
-          "cmfy8qxyy000cqvpckow5fcaq",
-          "cmfy8s7vc000lqvpcps046mz7",
-          "cmfy9bpjj003aqvpcit3wqy2f",
-          "cmfy8qieg0009qvpcu40be6ql",
-          "cmfy947dc002dqvpcveus9ggy",
-          "cmfy9b4710037qvpcexefu4yh",
-          "cmfy8rd6c000fqvpc9mydoo9s"
-        ],
-        "teamId": "cmfy8p9kn0004qvpc03ha36pv",
-        "usageCount": 0,
-        "lastUsedAt": null,
-        "createdAt": "2025-09-24T17:33:31.601Z",
-        "updatedAt": "2025-10-14T17:39:49.694Z"
-      },
       {
         "id": "cmfy9ectb003hqvpc4b0xi6qj",
         "name": "Afternoon Dispatcher",
@@ -2306,6 +2212,7 @@
           5
         ],
         "membersRequired": 1,
+        "minConsecutiveDays": 1,
         "priority": "MEDIUM",
         "status": "ACTIVE",
         "color": "#f97316",
@@ -2317,62 +2224,6 @@
         "lastUsedAt": null,
         "createdAt": "2025-09-24T17:29:41.471Z",
         "updatedAt": "2025-10-28T18:47:07.597Z"
-      },
-      {
-        "id": "cmfy9haws003yqvpckgwg3zgz",
-        "name": "CDC Support",
-        "description": null,
-        "startTime": "08:00",
-        "endTime": "17:30",
-        "daysOfWeek": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "membersRequired": 1,
-        "priority": "MEDIUM",
-        "status": "ACTIVE",
-        "color": "#10b981",
-        "senderMailbox": "",
-        "includedUserIds": [
-          "cmfy97qg9002vqvpcd24r34rc"
-        ],
-        "excludedUserIds": [],
-        "teamId": "cmfy8p0h80002qvpch6xrbtns",
-        "usageCount": 0,
-        "lastUsedAt": null,
-        "createdAt": "2025-09-24T17:31:58.973Z",
-        "updatedAt": "2025-10-14T17:39:12.294Z"
-      },
-      {
-        "id": "cmfy9gudm003uqvpcrp0at260",
-        "name": "SEC Support ",
-        "description": null,
-        "startTime": "08:00",
-        "endTime": "17:30",
-        "daysOfWeek": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "membersRequired": 1,
-        "priority": "MEDIUM",
-        "status": "ACTIVE",
-        "color": "#ef4444",
-        "senderMailbox": "",
-        "includedUserIds": [
-          "cmfy97qg9002vqvpcd24r34rc"
-        ],
-        "excludedUserIds": [],
-        "teamId": "cmfy8p9kn0004qvpc03ha36pv",
-        "usageCount": 0,
-        "lastUsedAt": null,
-        "createdAt": "2025-09-24T17:31:37.546Z",
-        "updatedAt": "2025-10-14T17:39:24.887Z"
       },
       {
         "id": "cmfy9j5sg0042qvpc8gxz1wm7",
@@ -2388,6 +2239,7 @@
           5
         ],
         "membersRequired": 1,
+        "minConsecutiveDays": 1,
         "priority": "MEDIUM",
         "status": "ACTIVE",
         "color": "#06b6d4",
@@ -2423,6 +2275,7 @@
           5
         ],
         "membersRequired": 1,
+        "minConsecutiveDays": 1,
         "priority": "MEDIUM",
         "status": "ACTIVE",
         "color": "#8b5cf6",
@@ -2454,6 +2307,7 @@
           5
         ],
         "membersRequired": 1,
+        "minConsecutiveDays": 1,
         "priority": "MEDIUM",
         "status": "ACTIVE",
         "color": "#3b82f6",
@@ -2480,6 +2334,7 @@
           5
         ],
         "membersRequired": 1,
+        "minConsecutiveDays": 1,
         "priority": "MEDIUM",
         "status": "ACTIVE",
         "color": "#3b82f6",
@@ -2491,6 +2346,165 @@
         "lastUsedAt": null,
         "createdAt": "2026-02-26T16:32:45.464Z",
         "updatedAt": "2026-02-26T16:33:01.099Z"
+      },
+      {
+        "id": "cmfy9ebho003eqvpc1t32egoe",
+        "name": "Morning Dispatcher",
+        "description": null,
+        "startTime": "08:00",
+        "endTime": "12:30",
+        "daysOfWeek": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "membersRequired": 1,
+        "minConsecutiveDays": 1,
+        "priority": "MEDIUM",
+        "status": "ACTIVE",
+        "color": "#f97316",
+        "senderMailbox": "",
+        "includedUserIds": [],
+        "excludedUserIds": [],
+        "teamId": "cmfy8opm00000qvpct2faz46u",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2025-09-24T17:29:39.756Z",
+        "updatedAt": "2025-10-14T17:39:06.627Z"
+      },
+      {
+        "id": "cmfy9jads0045qvpcy6ryh2h1",
+        "name": "Skyguide Support",
+        "description": null,
+        "startTime": "08:00",
+        "endTime": "17:30",
+        "daysOfWeek": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "membersRequired": 1,
+        "minConsecutiveDays": 1,
+        "priority": "MEDIUM",
+        "status": "ACTIVE",
+        "color": "#eab308",
+        "senderMailbox": "",
+        "includedUserIds": [
+          "cmfy8t16q000rqvpcyf35pyyq",
+          "cmfy93ex10027qvpcn18ffs2h"
+        ],
+        "excludedUserIds": [
+          "cmfy8w1a20012qvpc57o4zk9s",
+          "cmfy8vl2i000zqvpcx9ypq3l1",
+          "cmfy8utx9000wqvpcrualp1er",
+          "cmfy8x9r9001bqvpc5299oys5",
+          "cmfy8tr6w000uqvpchbg4brn8",
+          "cmfy92ezq0021qvpco8y43ozn",
+          "cmfy8wu8o0018qvpcv8vncqs3",
+          "cmfy91mw2001yqvpcfiimq4pq",
+          "cmfy98n0v002yqvpca126zl90",
+          "cmfy8qxyy000cqvpckow5fcaq",
+          "cmfy8s7vc000lqvpcps046mz7",
+          "cmfy9bpjj003aqvpcit3wqy2f",
+          "cmfy8qieg0009qvpcu40be6ql",
+          "cmfy947dc002dqvpcveus9ggy",
+          "cmfy9b4710037qvpcexefu4yh",
+          "cmfy8rd6c000fqvpc9mydoo9s"
+        ],
+        "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2025-09-24T17:33:31.601Z",
+        "updatedAt": "2025-10-14T17:39:49.694Z"
+      },
+      {
+        "id": "cmfy9haws003yqvpckgwg3zgz",
+        "name": "CDC Support",
+        "description": null,
+        "startTime": "08:00",
+        "endTime": "17:30",
+        "daysOfWeek": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "membersRequired": 1,
+        "minConsecutiveDays": 2,
+        "priority": "MEDIUM",
+        "status": "ACTIVE",
+        "color": "#10b981",
+        "senderMailbox": "test@test.ch",
+        "includedUserIds": [
+          "cmfy97qg9002vqvpcd24r34rc"
+        ],
+        "excludedUserIds": [],
+        "teamId": "cmfy8p0h80002qvpch6xrbtns",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2025-09-24T17:31:58.973Z",
+        "updatedAt": "2026-03-10T17:29:16.036Z"
+      },
+      {
+        "id": "cmfy9gs0s003rqvpchac23o45",
+        "name": "NET Support",
+        "description": null,
+        "startTime": "08:00",
+        "endTime": "17:30",
+        "daysOfWeek": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "membersRequired": 1,
+        "minConsecutiveDays": 2,
+        "priority": "MEDIUM",
+        "status": "ACTIVE",
+        "color": "#6b7280",
+        "senderMailbox": "test@test.ch",
+        "includedUserIds": [],
+        "excludedUserIds": [],
+        "teamId": "cmfy8pf6f0006qvpcffnsrmb4",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2025-09-24T17:31:34.491Z",
+        "updatedAt": "2026-03-10T17:29:24.896Z"
+      },
+      {
+        "id": "cmfy9gudm003uqvpcrp0at260",
+        "name": "SEC Support ",
+        "description": null,
+        "startTime": "08:00",
+        "endTime": "17:30",
+        "daysOfWeek": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "membersRequired": 1,
+        "minConsecutiveDays": 2,
+        "priority": "MEDIUM",
+        "status": "ACTIVE",
+        "color": "#ef4444",
+        "senderMailbox": "test@test.ch",
+        "includedUserIds": [
+          "cmfy97qg9002vqvpcd24r34rc"
+        ],
+        "excludedUserIds": [],
+        "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2025-09-24T17:31:37.546Z",
+        "updatedAt": "2026-03-10T17:29:34.729Z"
       }
     ],
     "piketts": [
@@ -2643,11 +2657,1915 @@
         "userShifts": null,
         "createdAt": "2025-10-14T15:27:28.900Z",
         "updatedAt": "2026-02-08T21:39:21.876Z"
+      },
+      {
+        "id": "cmmdkwl4e000001o4anuj4ejx",
+        "name": "Pattern Siu O",
+        "description": null,
+        "cycleLength": 1,
+        "weeks": [
+          {
+            "friday": [],
+            "monday": [],
+            "sunday": [],
+            "tuesday": [],
+            "saturday": [],
+            "thursday": [
+              "cmfy9ectb003hqvpc4b0xi6qj"
+            ],
+            "wednesday": []
+          }
+        ],
+        "userShifts": [
+          "cmfy9ectb003hqvpc4b0xi6qj",
+          "cmfy9ebho003eqvpc1t32egoe"
+        ],
+        "createdAt": "2026-03-05T14:46:34.478Z",
+        "updatedAt": "2026-03-05T14:46:34.478Z"
       }
     ],
     "shiftAssignments": [],
     "outOfOfficeEvents": [],
     "auditLogs": [
+      {
+        "id": "cmmdc0ve8000101r3io1kw8av",
+        "action": "CREATE",
+        "entity": "USER_RULE",
+        "entityId": "cmmdc0vdw000001r3axto0rpo",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "type": "WEEK_PARITY",
+          "config": {
+            "parity": "odd"
+          },
+          "targetUserId": "cmfy8s7vc000lqvpcps046mz7"
+        },
+        "createdAt": "2026-03-05T10:37:57.872Z"
+      },
+      {
+        "id": "cmmkvx2jy000001ozm6jyt6zn",
+        "action": "UPDATE",
+        "entity": "SHIFT",
+        "entityId": "cmfy9haws003yqvpckgwg3zgz",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy9haws003yqvpckgwg3zgz",
+            "name": "CDC Support",
+            "team": {
+              "id": "cmfy8p0h80002qvpch6xrbtns",
+              "name": "CDC Engineer",
+              "color": "#f59e0b",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:09:59.084Z",
+              "updatedAt": "2025-10-21T19:20:08.626Z",
+              "description": null
+            },
+            "color": "#10b981",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p0h80002qvpch6xrbtns",
+            "endTime": "17:30",
+            "priority": "MEDIUM",
+            "createdAt": "2025-09-24T17:31:58.973Z",
+            "startTime": "08:00",
+            "updatedAt": "2026-03-10T17:29:16.036Z",
+            "daysOfWeek": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "lastUsedAt": null,
+            "usageCount": 0,
+            "description": null,
+            "senderMailbox": "test@test.ch",
+            "excludedUserIds": [],
+            "includedUserIds": [
+              "cmfy97qg9002vqvpcd24r34rc"
+            ],
+            "membersRequired": 1,
+            "minConsecutiveDays": 2
+          },
+          "before": {
+            "name": "CDC Support",
+            "color": "#10b981",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p0h80002qvpch6xrbtns",
+            "endTime": "17:30",
+            "priority": "MEDIUM",
+            "startTime": "08:00",
+            "daysOfWeek": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "senderMailbox": "test@test.ch",
+            "excludedUserIds": [],
+            "includedUserIds": [
+              "cmfy97qg9002vqvpcd24r34rc"
+            ],
+            "membersRequired": 1,
+            "minConsecutiveDays": 2
+          }
+        },
+        "createdAt": "2026-03-10T17:29:16.078Z"
+      },
+      {
+        "id": "cmmkvx9db000101oz7h4vjl90",
+        "action": "UPDATE",
+        "entity": "SHIFT",
+        "entityId": "cmfy9gs0s003rqvpchac23o45",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy9gs0s003rqvpchac23o45",
+            "name": "NET Support",
+            "team": {
+              "id": "cmfy8pf6f0006qvpcffnsrmb4",
+              "name": "NET Engineer",
+              "color": "#06b6d4",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:10:18.135Z",
+              "updatedAt": "2025-10-12T10:47:36.794Z",
+              "description": null
+            },
+            "color": "#6b7280",
+            "status": "ACTIVE",
+            "teamId": "cmfy8pf6f0006qvpcffnsrmb4",
+            "endTime": "17:30",
+            "priority": "MEDIUM",
+            "createdAt": "2025-09-24T17:31:34.491Z",
+            "startTime": "08:00",
+            "updatedAt": "2026-03-10T17:29:24.896Z",
+            "daysOfWeek": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "lastUsedAt": null,
+            "usageCount": 0,
+            "description": null,
+            "senderMailbox": "test@test.ch",
+            "excludedUserIds": [],
+            "includedUserIds": [],
+            "membersRequired": 1,
+            "minConsecutiveDays": 2
+          },
+          "before": {
+            "name": "NET Support",
+            "color": "#6b7280",
+            "status": "ACTIVE",
+            "teamId": "cmfy8pf6f0006qvpcffnsrmb4",
+            "endTime": "17:30",
+            "priority": "MEDIUM",
+            "startTime": "08:00",
+            "daysOfWeek": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "senderMailbox": "test@test.ch",
+            "excludedUserIds": [],
+            "includedUserIds": [],
+            "membersRequired": 1,
+            "minConsecutiveDays": 2
+          }
+        },
+        "createdAt": "2026-03-10T17:29:24.911Z"
+      },
+      {
+        "id": "cmmkvxgyb000201ozfy8l8hwj",
+        "action": "UPDATE",
+        "entity": "SHIFT",
+        "entityId": "cmfy9gudm003uqvpcrp0at260",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy9gudm003uqvpcrp0at260",
+            "name": "SEC Support ",
+            "team": {
+              "id": "cmfy8p9kn0004qvpc03ha36pv",
+              "name": "SEC Engineer",
+              "color": "#f43f5e",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:10:10.871Z",
+              "updatedAt": "2025-10-12T10:47:41.195Z",
+              "description": null
+            },
+            "color": "#ef4444",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+            "endTime": "17:30",
+            "priority": "MEDIUM",
+            "createdAt": "2025-09-24T17:31:37.546Z",
+            "startTime": "08:00",
+            "updatedAt": "2026-03-10T17:29:34.729Z",
+            "daysOfWeek": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "lastUsedAt": null,
+            "usageCount": 0,
+            "description": null,
+            "senderMailbox": "test@test.ch",
+            "excludedUserIds": [],
+            "includedUserIds": [
+              "cmfy97qg9002vqvpcd24r34rc"
+            ],
+            "membersRequired": 1,
+            "minConsecutiveDays": 2
+          },
+          "before": {
+            "name": "SEC Support ",
+            "color": "#ef4444",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+            "endTime": "17:30",
+            "priority": "MEDIUM",
+            "startTime": "08:00",
+            "daysOfWeek": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "senderMailbox": "test@test.ch",
+            "excludedUserIds": [],
+            "includedUserIds": [
+              "cmfy97qg9002vqvpcd24r34rc"
+            ],
+            "membersRequired": 1,
+            "minConsecutiveDays": 2
+          }
+        },
+        "createdAt": "2026-03-10T17:29:34.739Z"
+      },
+      {
+        "id": "cmml2p5a9000301nn18gw0kw0",
+        "action": "DELETE",
+        "entity": "SHIFT",
+        "entityId": "cmml2iqeq000901o34lf15vy6",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml2iqeq000901o34lf15vy6",
+          "name": "CDC Support (Copie)",
+          "color": "#10b981",
+          "status": "ACTIVE",
+          "teamId": "cmfy8p0h80002qvpch6xrbtns",
+          "endTime": "17:30",
+          "priority": "MEDIUM",
+          "createdAt": "2026-03-10T20:34:04.465Z",
+          "startTime": "08:00",
+          "updatedAt": "2026-03-10T20:34:04.465Z",
+          "daysOfWeek": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lastUsedAt": null,
+          "usageCount": 0,
+          "description": null,
+          "senderMailbox": "test@test.ch",
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc"
+          ],
+          "membersRequired": 1,
+          "minConsecutiveDays": 2
+        },
+        "createdAt": "2026-03-10T20:39:03.681Z"
+      },
+      {
+        "id": "cmmdc15o8000201r3mmdg7q83",
+        "action": "UPDATE",
+        "entity": "USER",
+        "entityId": "cmfy8s7vc000lqvpcps046mz7",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy8s7vc000lqvpcps046mz7",
+            "role": null,
+            "team": {
+              "id": "cmfy8p9kn0004qvpc03ha36pv",
+              "name": "SEC Engineer",
+              "color": "#f43f5e",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:10:10.871Z",
+              "updatedAt": "2025-10-12T10:47:41.195Z",
+              "description": null
+            },
+            "email": "jeremy@bnc.ch",
+            "notes": null,
+            "phone": null,
+            "rules": [
+              {
+                "id": "cmmd8bd8l000j01nppra3hfy9",
+                "type": "DOUBLE_SHIFT",
+                "config": {
+                  "linkedShiftId": "cmmd8915h000d01npedm7gc80",
+                  "triggerShiftId": "cmg3swo6n0010qvb88icco8rb"
+                },
+                "userId": "cmfy8s7vc000lqvpcps046mz7",
+                "enabled": true,
+                "createdAt": "2026-03-05T08:54:09.093Z",
+                "updatedAt": "2026-03-05T08:54:09.093Z"
+              },
+              {
+                "id": "cmmd8bpsh000l01nptp0qscvs",
+                "type": "DOUBLE_SHIFT",
+                "config": {
+                  "linkedShiftId": "cmg3swo6n0010qvb88icco8rb",
+                  "triggerShiftId": "cmmd8915h000d01npedm7gc80"
+                },
+                "userId": "cmfy8s7vc000lqvpcps046mz7",
+                "enabled": true,
+                "createdAt": "2026-03-05T08:54:25.361Z",
+                "updatedAt": "2026-03-05T08:54:25.361Z"
+              },
+              {
+                "id": "cmmdc0vdw000001r3axto0rpo",
+                "type": "WEEK_PARITY",
+                "config": {
+                  "parity": "odd"
+                },
+                "userId": "cmfy8s7vc000lqvpcps046mz7",
+                "enabled": true,
+                "createdAt": "2026-03-05T10:37:57.859Z",
+                "updatedAt": "2026-03-05T10:37:57.859Z"
+              }
+            ],
+            "status": "ACTIVE",
+            "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+            "lastName": "G",
+            "location": null,
+            "createdAt": "2025-09-24T17:12:28.632Z",
+            "firstName": "Jeremy",
+            "updatedAt": "2026-03-05T10:38:11.158Z",
+            "leadingTeam": null,
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          },
+          "before": {
+            "email": "jeremy@bnc.ch",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+            "lastName": "G",
+            "firstName": "Jeremy",
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          }
+        },
+        "createdAt": "2026-03-05T10:38:11.192Z"
+      },
+      {
+        "id": "cmml11z9j000001pad0hrsbeu",
+        "action": "UPDATE",
+        "entity": "USER",
+        "entityId": "cmfy97qg9002vqvpcd24r34rc",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy97qg9002vqvpcd24r34rc",
+            "role": null,
+            "team": {
+              "id": "cmfy8p0h80002qvpch6xrbtns",
+              "name": "CDC Engineer",
+              "color": "#f59e0b",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:09:59.084Z",
+              "updatedAt": "2025-10-21T19:20:08.626Z",
+              "description": null
+            },
+            "email": "jeanmarc@bnc.ch",
+            "notes": null,
+            "phone": null,
+            "rules": [
+              {
+                "id": "cmmd8aqmf000g01np109xwoch",
+                "type": "MAX_LOAD",
+                "config": {
+                  "shiftId": "cmfy9gudm003uqvpcrp0at260",
+                  "maxPercentage": 50
+                },
+                "userId": "cmfy97qg9002vqvpcd24r34rc",
+                "enabled": true,
+                "createdAt": "2026-03-05T08:53:39.783Z",
+                "updatedAt": "2026-03-05T08:53:45.046Z"
+              },
+              {
+                "id": "cmmd8qqrk000q01npw5a4q98v",
+                "type": "DOUBLE_SHIFT",
+                "config": {
+                  "linkedShiftId": "cmmd8915h000d01npedm7gc80",
+                  "triggerShiftId": "cmg3sx68p0014qvb8df3xotl5"
+                },
+                "userId": "cmfy97qg9002vqvpcd24r34rc",
+                "enabled": true,
+                "createdAt": "2026-03-05T09:06:06.464Z",
+                "updatedAt": "2026-03-05T10:44:38.293Z"
+              },
+              {
+                "id": "cmmd8u2sv000s01npknc76x0w",
+                "type": "DOUBLE_SHIFT",
+                "config": {
+                  "linkedShiftId": "cmfy9haws003yqvpckgwg3zgz",
+                  "triggerShiftId": "cmfy9gudm003uqvpcrp0at260"
+                },
+                "userId": "cmfy97qg9002vqvpcd24r34rc",
+                "enabled": true,
+                "createdAt": "2026-03-05T09:08:42.031Z",
+                "updatedAt": "2026-03-05T09:08:42.031Z"
+              }
+            ],
+            "status": "ACTIVE",
+            "teamId": "cmfy8p0h80002qvpch6xrbtns",
+            "lastName": "B",
+            "location": "ZH",
+            "createdAt": "2025-09-24T17:24:32.553Z",
+            "firstName": "Jean-Marc",
+            "updatedAt": "2026-03-10T19:53:03.150Z",
+            "leadingTeam": null,
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          },
+          "before": {
+            "email": "jeanmarc@bnc.ch",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p0h80002qvpch6xrbtns",
+            "lastName": "B",
+            "location": "ZH",
+            "firstName": "Jean-Marc",
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          }
+        },
+        "createdAt": "2026-03-10T19:53:03.175Z"
+      },
+      {
+        "id": "cmml34511000001mwq63ij88n",
+        "action": "DELETE",
+        "entity": "PIKETT",
+        "entityId": "cmml28fh0000201o36yolufdf",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml28fh0000201o36yolufdf"
+        },
+        "createdAt": "2026-03-10T20:50:43.189Z"
+      },
+      {
+        "id": "cmml347a1000101mwusaf8ruz",
+        "action": "DELETE",
+        "entity": "PIKETT",
+        "entityId": "cmml2c552000601o37h0z8pxo",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml2c552000601o37h0z8pxo"
+        },
+        "createdAt": "2026-03-10T20:50:46.105Z"
+      },
+      {
+        "id": "cmml3494m000201mw8849ckc6",
+        "action": "DELETE",
+        "entity": "PIKETT",
+        "entityId": "cmml28bcg000001o3dnmxnzcv",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml28bcg000001o3dnmxnzcv"
+        },
+        "createdAt": "2026-03-10T20:50:48.502Z"
+      },
+      {
+        "id": "cmmdc9jzo000301r3eptmzprw",
+        "action": "UPDATE",
+        "entity": "USER",
+        "entityId": "cmfy97qg9002vqvpcd24r34rc",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy97qg9002vqvpcd24r34rc",
+            "role": null,
+            "team": {
+              "id": "cmfy8p0h80002qvpch6xrbtns",
+              "name": "CDC Engineer",
+              "color": "#f59e0b",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:09:59.084Z",
+              "updatedAt": "2025-10-21T19:20:08.626Z",
+              "description": null
+            },
+            "email": "jeanmarc@bnc.ch",
+            "notes": null,
+            "phone": null,
+            "rules": [
+              {
+                "id": "cmmd8aqmf000g01np109xwoch",
+                "type": "MAX_LOAD",
+                "config": {
+                  "shiftId": "cmfy9gudm003uqvpcrp0at260",
+                  "maxPercentage": 50
+                },
+                "userId": "cmfy97qg9002vqvpcd24r34rc",
+                "enabled": true,
+                "createdAt": "2026-03-05T08:53:39.783Z",
+                "updatedAt": "2026-03-05T08:53:45.046Z"
+              },
+              {
+                "id": "cmmd8qqrk000q01npw5a4q98v",
+                "type": "DOUBLE_SHIFT",
+                "config": {
+                  "linkedShiftId": "cmmd8915h000d01npedm7gc80",
+                  "triggerShiftId": "cmg3sx68p0014qvb8df3xotl5"
+                },
+                "userId": "cmfy97qg9002vqvpcd24r34rc",
+                "enabled": true,
+                "createdAt": "2026-03-05T09:06:06.464Z",
+                "updatedAt": "2026-03-05T10:44:38.293Z"
+              },
+              {
+                "id": "cmmd8u2sv000s01npknc76x0w",
+                "type": "DOUBLE_SHIFT",
+                "config": {
+                  "linkedShiftId": "cmfy9haws003yqvpckgwg3zgz",
+                  "triggerShiftId": "cmfy9gudm003uqvpcrp0at260"
+                },
+                "userId": "cmfy97qg9002vqvpcd24r34rc",
+                "enabled": true,
+                "createdAt": "2026-03-05T09:08:42.031Z",
+                "updatedAt": "2026-03-05T09:08:42.031Z"
+              }
+            ],
+            "status": "ACTIVE",
+            "teamId": "cmfy8p0h80002qvpch6xrbtns",
+            "lastName": "B",
+            "location": null,
+            "createdAt": "2025-09-24T17:24:32.553Z",
+            "firstName": "Jean-Marc",
+            "updatedAt": "2026-03-05T10:44:42.985Z",
+            "leadingTeam": null,
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          },
+          "before": {
+            "email": "jeanmarc@bnc.ch",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p0h80002qvpch6xrbtns",
+            "lastName": "B",
+            "firstName": "Jean-Marc",
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          }
+        },
+        "createdAt": "2026-03-05T10:44:42.996Z"
+      },
+      {
+        "id": "cmml1av95000101pasbecqr9e",
+        "action": "UPDATE",
+        "entity": "USER",
+        "entityId": "cmfy95cb2002jqvpcflpt7zow",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy95cb2002jqvpcflpt7zow",
+            "role": null,
+            "team": {
+              "id": "cmfy8p0h80002qvpch6xrbtns",
+              "name": "CDC Engineer",
+              "color": "#f59e0b",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:09:59.084Z",
+              "updatedAt": "2025-10-21T19:20:08.626Z",
+              "description": null
+            },
+            "email": "matthias@bnc.ch",
+            "notes": null,
+            "phone": null,
+            "rules": [
+              {
+                "id": "cmm3mxto5000001oyjl52i15o",
+                "type": "WEEK_PARITY",
+                "config": {
+                  "parity": "odd"
+                },
+                "userId": "cmfy95cb2002jqvpcflpt7zow",
+                "enabled": true,
+                "createdAt": "2026-02-26T15:45:49.684Z",
+                "updatedAt": "2026-02-26T15:46:16.930Z"
+              }
+            ],
+            "status": "ACTIVE",
+            "teamId": "cmfy8p0h80002qvpch6xrbtns",
+            "lastName": "A",
+            "location": "ZH",
+            "createdAt": "2025-09-24T17:22:40.910Z",
+            "firstName": "Matthias",
+            "updatedAt": "2026-03-10T19:59:57.802Z",
+            "leadingTeam": null,
+            "workPercent": 70,
+            "availability": {
+              "friday": {
+                "morning": false,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": false,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": false
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          },
+          "before": {
+            "email": "matthias@bnc.ch",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p0h80002qvpch6xrbtns",
+            "lastName": "A",
+            "location": "ZH",
+            "firstName": "Matthias",
+            "workPercent": 70,
+            "availability": {
+              "friday": {
+                "morning": false,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": false,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": false
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          }
+        },
+        "createdAt": "2026-03-10T19:59:57.881Z"
+      },
+      {
+        "id": "cmmdcd7wh000401r3225i4vlc",
+        "action": "DELETE",
+        "entity": "USER_RULE",
+        "entityId": "cmmd8bpsh000l01nptp0qscvs",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "type": "DOUBLE_SHIFT",
+          "targetUserId": "cmfy8s7vc000lqvpcps046mz7"
+        },
+        "createdAt": "2026-03-05T10:47:33.953Z"
+      },
+      {
+        "id": "cmmdcdf24000501r3gddgwg9n",
+        "action": "UPDATE",
+        "entity": "USER",
+        "entityId": "cmfy8s7vc000lqvpcps046mz7",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy8s7vc000lqvpcps046mz7",
+            "role": null,
+            "team": {
+              "id": "cmfy8p9kn0004qvpc03ha36pv",
+              "name": "SEC Engineer",
+              "color": "#f43f5e",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:10:10.871Z",
+              "updatedAt": "2025-10-12T10:47:41.195Z",
+              "description": null
+            },
+            "email": "jeremy@bnc.ch",
+            "notes": null,
+            "phone": null,
+            "rules": [
+              {
+                "id": "cmmd8bd8l000j01nppra3hfy9",
+                "type": "DOUBLE_SHIFT",
+                "config": {
+                  "linkedShiftId": "cmmd8915h000d01npedm7gc80",
+                  "triggerShiftId": "cmg3swo6n0010qvb88icco8rb"
+                },
+                "userId": "cmfy8s7vc000lqvpcps046mz7",
+                "enabled": true,
+                "createdAt": "2026-03-05T08:54:09.093Z",
+                "updatedAt": "2026-03-05T08:54:09.093Z"
+              },
+              {
+                "id": "cmmdc0vdw000001r3axto0rpo",
+                "type": "WEEK_PARITY",
+                "config": {
+                  "parity": "odd"
+                },
+                "userId": "cmfy8s7vc000lqvpcps046mz7",
+                "enabled": true,
+                "createdAt": "2026-03-05T10:37:57.859Z",
+                "updatedAt": "2026-03-05T10:37:57.859Z"
+              }
+            ],
+            "status": "ACTIVE",
+            "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+            "lastName": "G",
+            "location": null,
+            "createdAt": "2025-09-24T17:12:28.632Z",
+            "firstName": "Jeremy",
+            "updatedAt": "2026-03-05T10:47:43.217Z",
+            "leadingTeam": null,
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          },
+          "before": {
+            "email": "jeremy@bnc.ch",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+            "lastName": "G",
+            "firstName": "Jeremy",
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          }
+        },
+        "createdAt": "2026-03-05T10:47:43.228Z"
+      },
+      {
+        "id": "cmml1hf6f000101sbgv0z13ws",
+        "action": "CREATE",
+        "entity": "SHIFT",
+        "entityId": "cmml1hf5r000001sbnzqto440",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml1hf5r000001sbnzqto440",
+          "name": "Skyguide Dispatcher (Copie)",
+          "team": {
+            "id": "cmfy8opm00000qvpct2faz46u",
+            "name": "Support & Operation ",
+            "color": "#8b5cf6",
+            "leadId": null,
+            "createdAt": "2025-09-24T17:09:45.000Z",
+            "updatedAt": "2025-10-21T19:20:23.056Z",
+            "description": null
+          },
+          "color": "#06b6d4",
+          "status": "ACTIVE",
+          "teamId": "cmfy8opm00000qvpct2faz46u",
+          "endTime": "17:30",
+          "priority": "MEDIUM",
+          "createdAt": "2026-03-10T20:05:03.597Z",
+          "startTime": "08:00",
+          "updatedAt": "2026-03-10T20:05:03.597Z",
+          "daysOfWeek": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lastUsedAt": null,
+          "usageCount": 0,
+          "description": null,
+          "senderMailbox": "",
+          "excludedUserIds": [
+            "cmfy8w1a20012qvpc57o4zk9s",
+            "cmfy8vl2i000zqvpcx9ypq3l1",
+            "cmfy8utx9000wqvpcrualp1er",
+            "cmfy8x9r9001bqvpc5299oys5",
+            "cmfy8tr6w000uqvpchbg4brn8",
+            "cmfy92ezq0021qvpco8y43ozn",
+            "cmfy8wu8o0018qvpcv8vncqs3",
+            "cmfy91mw2001yqvpcfiimq4pq"
+          ],
+          "includedUserIds": [],
+          "membersRequired": 1,
+          "minConsecutiveDays": 1
+        },
+        "createdAt": "2026-03-10T20:05:03.639Z"
+      },
+      {
+        "id": "cmm3bhu7s001e01mnbr7iwgp9",
+        "action": "CREATE",
+        "entity": "HOLIDAY",
+        "entityId": "cmm3bhu7p001d01mn6zbzycuf",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "date": "2027-05-16",
+          "name": "Whitsunday",
+          "type": "CANTONAL",
+          "cantons": [
+            "BE",
+            "VD"
+          ]
+        },
+        "createdAt": "2026-02-26T10:25:28.120Z"
+      },
+      {
+        "id": "cmmdd0sm0000601r3cfiql848",
+        "action": "DELETE",
+        "entity": "USER_RULE",
+        "entityId": "cmmdc0vdw000001r3axto0rpo",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "type": "WEEK_PARITY",
+          "targetUserId": "cmfy8s7vc000lqvpcps046mz7"
+        },
+        "createdAt": "2026-03-05T11:05:53.880Z"
+      },
+      {
+        "id": "cmmdd0tjz000701r3g3wngzfq",
+        "action": "UPDATE",
+        "entity": "USER",
+        "entityId": "cmfy8s7vc000lqvpcps046mz7",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy8s7vc000lqvpcps046mz7",
+            "role": null,
+            "team": {
+              "id": "cmfy8p9kn0004qvpc03ha36pv",
+              "name": "SEC Engineer",
+              "color": "#f43f5e",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:10:10.871Z",
+              "updatedAt": "2025-10-12T10:47:41.195Z",
+              "description": null
+            },
+            "email": "jeremy@bnc.ch",
+            "notes": null,
+            "phone": null,
+            "rules": [
+              {
+                "id": "cmmd8bd8l000j01nppra3hfy9",
+                "type": "DOUBLE_SHIFT",
+                "config": {
+                  "linkedShiftId": "cmmd8915h000d01npedm7gc80",
+                  "triggerShiftId": "cmg3swo6n0010qvb88icco8rb"
+                },
+                "userId": "cmfy8s7vc000lqvpcps046mz7",
+                "enabled": true,
+                "createdAt": "2026-03-05T08:54:09.093Z",
+                "updatedAt": "2026-03-05T08:54:09.093Z"
+              }
+            ],
+            "status": "ACTIVE",
+            "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+            "lastName": "G",
+            "location": null,
+            "createdAt": "2025-09-24T17:12:28.632Z",
+            "firstName": "Jeremy",
+            "updatedAt": "2026-03-05T11:05:55.092Z",
+            "leadingTeam": null,
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          },
+          "before": {
+            "email": "jeremy@bnc.ch",
+            "status": "ACTIVE",
+            "teamId": "cmfy8p9kn0004qvpc03ha36pv",
+            "lastName": "G",
+            "firstName": "Jeremy",
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": null
+          }
+        },
+        "createdAt": "2026-03-05T11:05:55.103Z"
+      },
+      {
+        "id": "cmml1hon5000201sb5vm3fu12",
+        "action": "DELETE",
+        "entity": "SHIFT",
+        "entityId": "cmml1hf5r000001sbnzqto440",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml1hf5r000001sbnzqto440",
+          "name": "Skyguide Dispatcher (Copie)",
+          "color": "#06b6d4",
+          "status": "ACTIVE",
+          "teamId": "cmfy8opm00000qvpct2faz46u",
+          "endTime": "17:30",
+          "priority": "MEDIUM",
+          "createdAt": "2026-03-10T20:05:03.597Z",
+          "startTime": "08:00",
+          "updatedAt": "2026-03-10T20:05:03.597Z",
+          "daysOfWeek": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lastUsedAt": null,
+          "usageCount": 0,
+          "description": null,
+          "senderMailbox": "",
+          "excludedUserIds": [
+            "cmfy8w1a20012qvpc57o4zk9s",
+            "cmfy8vl2i000zqvpcx9ypq3l1",
+            "cmfy8utx9000wqvpcrualp1er",
+            "cmfy8x9r9001bqvpc5299oys5",
+            "cmfy8tr6w000uqvpchbg4brn8",
+            "cmfy92ezq0021qvpco8y43ozn",
+            "cmfy8wu8o0018qvpcv8vncqs3",
+            "cmfy91mw2001yqvpcfiimq4pq"
+          ],
+          "includedUserIds": [],
+          "membersRequired": 1,
+          "minConsecutiveDays": 1
+        },
+        "createdAt": "2026-03-10T20:05:15.905Z"
+      },
+      {
+        "id": "cmm3bhu9g001g01mndaa1vbgq",
+        "action": "CREATE",
+        "entity": "HOLIDAY",
+        "entityId": "cmm3bhu9d001f01mna9zh48h6",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "date": "2027-05-17",
+          "name": "Whit Monday",
+          "type": "FEDERAL",
+          "cantons": [
+            "CH",
+            "BE",
+            "VD",
+            "ZH"
+          ]
+        },
+        "createdAt": "2026-02-26T10:25:28.180Z"
+      },
+      {
+        "id": "cmmdgdrnv000101pv4dnjdrnw",
+        "action": "CREATE",
+        "entity": "USER_RULE",
+        "entityId": "cmmdgdrng000001pvcqrpotv1",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "type": "WEEK_PARITY",
+          "config": {
+            "parity": "odd"
+          },
+          "targetUserId": "cmmd84zdu000601npg0518tra"
+        },
+        "createdAt": "2026-03-05T12:39:58.027Z"
+      },
+      {
+        "id": "cmml1o64l000401sb9jafymkl",
+        "action": "CREATE",
+        "entity": "SHIFT",
+        "entityId": "cmml1o647000301sbszxf5rfz",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml1o647000301sbszxf5rfz",
+          "name": "CDC Support (Copie)",
+          "team": {
+            "id": "cmfy8p0h80002qvpch6xrbtns",
+            "name": "CDC Engineer",
+            "color": "#f59e0b",
+            "leadId": null,
+            "createdAt": "2025-09-24T17:09:59.084Z",
+            "updatedAt": "2025-10-21T19:20:08.626Z",
+            "description": null
+          },
+          "color": "#10b981",
+          "status": "ACTIVE",
+          "teamId": "cmfy8p0h80002qvpch6xrbtns",
+          "endTime": "17:30",
+          "priority": "MEDIUM",
+          "createdAt": "2026-03-10T20:10:18.485Z",
+          "startTime": "08:00",
+          "updatedAt": "2026-03-10T20:10:18.485Z",
+          "daysOfWeek": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lastUsedAt": null,
+          "usageCount": 0,
+          "description": null,
+          "senderMailbox": "test@test.ch",
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc"
+          ],
+          "membersRequired": 1,
+          "minConsecutiveDays": 2
+        },
+        "createdAt": "2026-03-10T20:10:18.501Z"
+      },
+      {
+        "id": "cmml1o8za000501sbas3k1rkn",
+        "action": "DELETE",
+        "entity": "SHIFT",
+        "entityId": "cmml1o647000301sbszxf5rfz",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml1o647000301sbszxf5rfz",
+          "name": "CDC Support (Copie)",
+          "color": "#10b981",
+          "status": "ACTIVE",
+          "teamId": "cmfy8p0h80002qvpch6xrbtns",
+          "endTime": "17:30",
+          "priority": "MEDIUM",
+          "createdAt": "2026-03-10T20:10:18.485Z",
+          "startTime": "08:00",
+          "updatedAt": "2026-03-10T20:10:18.485Z",
+          "daysOfWeek": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lastUsedAt": null,
+          "usageCount": 0,
+          "description": null,
+          "senderMailbox": "test@test.ch",
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc"
+          ],
+          "membersRequired": 1,
+          "minConsecutiveDays": 2
+        },
+        "createdAt": "2026-03-10T20:10:22.198Z"
+      },
+      {
+        "id": "cmm0wwah2000jqo01nq5idijk",
+        "action": "PATCH",
+        "entity": "SHIFT_ASSIGNMENT",
+        "entityId": "cmm0wwab2000eqo018atq111g",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "changes": {
+            "outlookEventId": "AAMkAGIxYTYxMzViLWQxNjYtNGJjMy05YzNkLTMyMDgzMTY4ZjA1OQBGAAAAAABCQLbDVzF4S79jwBpC-uTbBwC4g80Ar-KMTp47bVs97gozAAAAAAENAAC4g80Ar-KMTp47bVs97gozAAAER6lUAAA="
+          }
+        },
+        "createdAt": "2026-02-24T18:01:15.782Z"
+      },
+      {
+        "id": "cmm3bhubd001i01mnsca0d4i8",
+        "action": "CREATE",
+        "entity": "HOLIDAY",
+        "entityId": "cmm3bhub6001h01mn0opx68b8",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "date": "2027-08-01",
+          "name": "Swiss National Day",
+          "type": "FEDERAL",
+          "cantons": [
+            "CH",
+            "BE",
+            "VD",
+            "ZH"
+          ]
+        },
+        "createdAt": "2026-02-26T10:25:28.249Z"
+      },
+      {
+        "id": "cmmdge3jj000201pvjowozhnc",
+        "action": "DELETE",
+        "entity": "USER_RULE",
+        "entityId": "cmmdgdrng000001pvcqrpotv1",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "type": "WEEK_PARITY",
+          "targetUserId": "cmmd84zdu000601npg0518tra"
+        },
+        "createdAt": "2026-03-05T12:40:13.423Z"
+      },
+      {
+        "id": "cmml28bd3000101o35jcihhiu",
+        "action": "CREATE",
+        "entity": "PIKETT",
+        "entityId": "cmml28bcg000001o3dnmxnzcv",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml28bcg000001o3dnmxnzcv",
+          "name": "DevOPS (Copie)",
+          "team": {
+            "id": "cmmd82fm0000001nppkejvglb",
+            "name": "DevOPS",
+            "color": "#92400e",
+            "leadId": null,
+            "createdAt": "2026-03-05T08:47:12.248Z",
+            "updatedAt": "2026-03-05T08:47:12.248Z",
+            "description": null
+          },
+          "color": "#dc2626",
+          "is24_7": true,
+          "status": "ACTIVE",
+          "teamId": "cmmd82fm0000001nppkejvglb",
+          "userId": null,
+          "endWeek": null,
+          "createdAt": "2026-03-10T20:25:58.381Z",
+          "startWeek": "",
+          "updatedAt": "2026-03-10T20:25:58.381Z",
+          "daysOfWeek": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "description": null,
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc",
+            "cmfy8s7vc000lqvpcps046mz7"
+          ]
+        },
+        "createdAt": "2026-03-10T20:25:58.407Z"
+      },
+      {
+        "id": "cmml28fhb000301o3ab1lzydy",
+        "action": "CREATE",
+        "entity": "PIKETT",
+        "entityId": "cmml28fh0000201o36yolufdf",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml28fh0000201o36yolufdf",
+          "name": "DevOPS (Copie)",
+          "team": {
+            "id": "cmmd82fm0000001nppkejvglb",
+            "name": "DevOPS",
+            "color": "#92400e",
+            "leadId": null,
+            "createdAt": "2026-03-05T08:47:12.248Z",
+            "updatedAt": "2026-03-05T08:47:12.248Z",
+            "description": null
+          },
+          "color": "#dc2626",
+          "is24_7": true,
+          "status": "ACTIVE",
+          "teamId": "cmmd82fm0000001nppkejvglb",
+          "userId": null,
+          "endWeek": null,
+          "createdAt": "2026-03-10T20:26:03.731Z",
+          "startWeek": "",
+          "updatedAt": "2026-03-10T20:26:03.731Z",
+          "daysOfWeek": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "description": null,
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc",
+            "cmfy8s7vc000lqvpcps046mz7"
+          ]
+        },
+        "createdAt": "2026-03-10T20:26:03.743Z"
+      },
+      {
+        "id": "cmmdkwl4y000101o4hncz5dy9",
+        "action": "CREATE",
+        "entity": "ROTATION_PATTERN",
+        "entityId": "cmmdkwl4e000001o4anuj4ejx",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmmdkwl4e000001o4anuj4ejx",
+          "name": "Pattern Siu O",
+          "weeks": [
+            {
+              "friday": [],
+              "monday": [],
+              "sunday": [],
+              "tuesday": [],
+              "saturday": [],
+              "thursday": [
+                "cmfy9ectb003hqvpc4b0xi6qj"
+              ],
+              "wednesday": []
+            }
+          ],
+          "createdAt": "2026-03-05T14:46:34.478Z",
+          "updatedAt": "2026-03-05T14:46:34.478Z",
+          "userShifts": [
+            "cmfy9ectb003hqvpc4b0xi6qj",
+            "cmfy9ebho003eqvpc1t32egoe"
+          ],
+          "cycleLength": 1,
+          "description": null
+        },
+        "createdAt": "2026-03-05T14:46:34.498Z"
+      },
+      {
+        "id": "cmml28stp000501o32exlslpm",
+        "action": "CREATE",
+        "entity": "SHIFT",
+        "entityId": "cmml28std000401o31sl2fvkc",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml28std000401o31sl2fvkc",
+          "name": "CDC Support (Copie)",
+          "team": {
+            "id": "cmfy8p0h80002qvpch6xrbtns",
+            "name": "CDC Engineer",
+            "color": "#f59e0b",
+            "leadId": null,
+            "createdAt": "2025-09-24T17:09:59.084Z",
+            "updatedAt": "2025-10-21T19:20:08.626Z",
+            "description": null
+          },
+          "color": "#10b981",
+          "status": "ACTIVE",
+          "teamId": "cmfy8p0h80002qvpch6xrbtns",
+          "endTime": "17:30",
+          "priority": "MEDIUM",
+          "createdAt": "2026-03-10T20:26:21.010Z",
+          "startTime": "08:00",
+          "updatedAt": "2026-03-10T20:26:21.010Z",
+          "daysOfWeek": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lastUsedAt": null,
+          "usageCount": 0,
+          "description": null,
+          "senderMailbox": "test@test.ch",
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc"
+          ],
+          "membersRequired": 1,
+          "minConsecutiveDays": 2
+        },
+        "createdAt": "2026-03-10T20:26:21.037Z"
+      },
+      {
+        "id": "cmmdkx90q000201o4m7w6qmug",
+        "action": "UPDATE",
+        "entity": "USER",
+        "entityId": "cmfy8wu8o0018qvpcv8vncqs3",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "after": {
+            "id": "cmfy8wu8o0018qvpcv8vncqs3",
+            "role": null,
+            "team": {
+              "id": "cmfy8opm00000qvpct2faz46u",
+              "name": "Support & Operation ",
+              "color": "#8b5cf6",
+              "leadId": null,
+              "createdAt": "2025-09-24T17:09:45.000Z",
+              "updatedAt": "2025-10-21T19:20:23.056Z",
+              "description": null
+            },
+            "email": "siu@bnc.ch",
+            "notes": null,
+            "phone": null,
+            "rules": [],
+            "status": "ACTIVE",
+            "teamId": "cmfy8opm00000qvpct2faz46u",
+            "lastName": "O",
+            "location": "BE",
+            "createdAt": "2025-09-24T17:16:04.248Z",
+            "firstName": "Siu",
+            "updatedAt": "2026-03-05T14:47:05.420Z",
+            "leadingTeam": null,
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": {
+              "priority": "high",
+              "patternId": "cmmdkwl4e000001o4anuj4ejx",
+              "allowedShiftTypes": []
+            }
+          },
+          "before": {
+            "email": "siu@bnc.ch",
+            "status": "ACTIVE",
+            "teamId": "cmfy8opm00000qvpct2faz46u",
+            "lastName": "O",
+            "location": "BE",
+            "firstName": "Siu",
+            "workPercent": 100,
+            "availability": {
+              "friday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "monday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "sunday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "tuesday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "saturday": {
+                "morning": false,
+                "afternoon": false
+              },
+              "thursday": {
+                "morning": true,
+                "afternoon": true
+              },
+              "wednesday": {
+                "morning": true,
+                "afternoon": true
+              }
+            },
+            "rotationConfig": {
+              "priority": "high",
+              "patternId": "cmmdkwl4e000001o4anuj4ejx",
+              "allowedShiftTypes": []
+            }
+          }
+        },
+        "createdAt": "2026-03-05T14:47:05.450Z"
+      },
+      {
+        "id": "cmml2c55j000701o3o5mjj1e1",
+        "action": "CREATE",
+        "entity": "PIKETT",
+        "entityId": "cmml2c552000601o37h0z8pxo",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml2c552000601o37h0z8pxo",
+          "name": "DevOPS (Copie)",
+          "team": {
+            "id": "cmmd82fm0000001nppkejvglb",
+            "name": "DevOPS",
+            "color": "#92400e",
+            "leadId": null,
+            "createdAt": "2026-03-05T08:47:12.248Z",
+            "updatedAt": "2026-03-05T08:47:12.248Z",
+            "description": null
+          },
+          "color": "#dc2626",
+          "is24_7": true,
+          "status": "ACTIVE",
+          "teamId": "cmmd82fm0000001nppkejvglb",
+          "userId": null,
+          "endWeek": null,
+          "createdAt": "2026-03-10T20:28:56.965Z",
+          "startWeek": "",
+          "updatedAt": "2026-03-10T20:28:56.965Z",
+          "daysOfWeek": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "description": null,
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc",
+            "cmfy8s7vc000lqvpcps046mz7"
+          ]
+        },
+        "createdAt": "2026-03-10T20:28:56.983Z"
+      },
+      {
+        "id": "cmml2im3s000801o3108ykrp1",
+        "action": "DELETE",
+        "entity": "SHIFT",
+        "entityId": "cmml28std000401o31sl2fvkc",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml28std000401o31sl2fvkc",
+          "name": "CDC Support (Copie)",
+          "color": "#10b981",
+          "status": "ACTIVE",
+          "teamId": "cmfy8p0h80002qvpch6xrbtns",
+          "endTime": "17:30",
+          "priority": "MEDIUM",
+          "createdAt": "2026-03-10T20:26:21.010Z",
+          "startTime": "08:00",
+          "updatedAt": "2026-03-10T20:26:21.010Z",
+          "daysOfWeek": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lastUsedAt": null,
+          "usageCount": 0,
+          "description": null,
+          "senderMailbox": "test@test.ch",
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc"
+          ],
+          "membersRequired": 1,
+          "minConsecutiveDays": 2
+        },
+        "createdAt": "2026-03-10T20:33:58.888Z"
+      },
+      {
+        "id": "cmml2iqez000a01o3a7tmkszm",
+        "action": "CREATE",
+        "entity": "SHIFT",
+        "entityId": "cmml2iqeq000901o34lf15vy6",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml2iqeq000901o34lf15vy6",
+          "name": "CDC Support (Copie)",
+          "team": {
+            "id": "cmfy8p0h80002qvpch6xrbtns",
+            "name": "CDC Engineer",
+            "color": "#f59e0b",
+            "leadId": null,
+            "createdAt": "2025-09-24T17:09:59.084Z",
+            "updatedAt": "2025-10-21T19:20:08.626Z",
+            "description": null
+          },
+          "color": "#10b981",
+          "status": "ACTIVE",
+          "teamId": "cmfy8p0h80002qvpch6xrbtns",
+          "endTime": "17:30",
+          "priority": "MEDIUM",
+          "createdAt": "2026-03-10T20:34:04.465Z",
+          "startTime": "08:00",
+          "updatedAt": "2026-03-10T20:34:04.465Z",
+          "daysOfWeek": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lastUsedAt": null,
+          "usageCount": 0,
+          "description": null,
+          "senderMailbox": "test@test.ch",
+          "excludedUserIds": [],
+          "includedUserIds": [
+            "cmfy97qg9002vqvpcd24r34rc"
+          ],
+          "membersRequired": 1,
+          "minConsecutiveDays": 2
+        },
+        "createdAt": "2026-03-10T20:34:04.475Z"
+      },
+      {
+        "id": "cmm0wwaiv000kqo01adwmfkr0",
+        "action": "PATCH",
+        "entity": "SHIFT_ASSIGNMENT",
+        "entityId": "cmm0wwab2000fqo0120uax190",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "changes": {
+            "outlookEventId": "AAMkAGIxYTYxMzViLWQxNjYtNGJjMy05YzNkLTMyMDgzMTY4ZjA1OQBGAAAAAABCQLbDVzF4S79jwBpC-uTbBwC4g80Ar-KMTp47bVs97gozAAAAAAENAAC4g80Ar-KMTp47bVs97gozAAAER6lVAAA="
+          }
+        },
+        "createdAt": "2026-02-24T18:01:15.847Z"
+      },
+      {
+        "id": "cmml2lpdz000101nn3tzl5662",
+        "action": "CREATE",
+        "entity": "USER",
+        "entityId": "cmml2lpde000001nnwztp80o7",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml2lpde000001nnwztp80o7",
+          "role": null,
+          "team": {
+            "id": "cmfy8opm00000qvpct2faz46u",
+            "name": "Support & Operation ",
+            "color": "#8b5cf6",
+            "leadId": null,
+            "createdAt": "2025-09-24T17:09:45.000Z",
+            "updatedAt": "2025-10-21T19:20:23.056Z",
+            "description": null
+          },
+          "email": "test2@bnc.ch",
+          "notes": null,
+          "phone": null,
+          "status": "ACTIVE",
+          "teamId": "cmfy8opm00000qvpct2faz46u",
+          "lastName": "A (Copy)",
+          "location": "ZH",
+          "createdAt": "2026-03-10T20:36:23.073Z",
+          "firstName": "Allison",
+          "updatedAt": "2026-03-10T20:36:23.073Z",
+          "leadingTeam": null,
+          "workPercent": 80,
+          "availability": {
+            "friday": {
+              "morning": true,
+              "afternoon": true
+            },
+            "monday": {
+              "morning": true,
+              "afternoon": true
+            },
+            "sunday": {
+              "morning": false,
+              "afternoon": false
+            },
+            "tuesday": {
+              "morning": false,
+              "afternoon": true
+            },
+            "saturday": {
+              "morning": false,
+              "afternoon": false
+            },
+            "thursday": {
+              "morning": true,
+              "afternoon": false
+            },
+            "wednesday": {
+              "morning": true,
+              "afternoon": true
+            }
+          },
+          "rotationConfig": null
+        },
+        "createdAt": "2026-03-10T20:36:23.110Z"
+      },
       {
         "id": "cmm0wwabd000gqo014cck06ig",
         "action": "CREATE_BULK",
@@ -2710,32 +4628,6 @@
           }
         },
         "createdAt": "2026-02-24T18:01:15.720Z"
-      },
-      {
-        "id": "cmm0wwah2000jqo01nq5idijk",
-        "action": "PATCH",
-        "entity": "SHIFT_ASSIGNMENT",
-        "entityId": "cmm0wwab2000eqo018atq111g",
-        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
-        "data": {
-          "changes": {
-            "outlookEventId": "AAMkAGIxYTYxMzViLWQxNjYtNGJjMy05YzNkLTMyMDgzMTY4ZjA1OQBGAAAAAABCQLbDVzF4S79jwBpC-uTbBwC4g80Ar-KMTp47bVs97gozAAAAAAENAAC4g80Ar-KMTp47bVs97gozAAAER6lUAAA="
-          }
-        },
-        "createdAt": "2026-02-24T18:01:15.782Z"
-      },
-      {
-        "id": "cmm0wwaiv000kqo01adwmfkr0",
-        "action": "PATCH",
-        "entity": "SHIFT_ASSIGNMENT",
-        "entityId": "cmm0wwab2000fqo0120uax190",
-        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
-        "data": {
-          "changes": {
-            "outlookEventId": "AAMkAGIxYTYxMzViLWQxNjYtNGJjMy05YzNkLTMyMDgzMTY4ZjA1OQBGAAAAAABCQLbDVzF4S79jwBpC-uTbBwC4g80Ar-KMTp47bVs97gozAAAAAAENAAC4g80Ar-KMTp47bVs97gozAAAER6lVAAA="
-          }
-        },
-        "createdAt": "2026-02-24T18:01:15.847Z"
       },
       {
         "id": "cmm0wyg6e000lqo010ceby1iy",
@@ -3215,61 +5107,6 @@
           ]
         },
         "createdAt": "2026-02-26T10:25:28.056Z"
-      },
-      {
-        "id": "cmm3bhu7s001e01mnbr7iwgp9",
-        "action": "CREATE",
-        "entity": "HOLIDAY",
-        "entityId": "cmm3bhu7p001d01mn6zbzycuf",
-        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
-        "data": {
-          "date": "2027-05-16",
-          "name": "Whitsunday",
-          "type": "CANTONAL",
-          "cantons": [
-            "BE",
-            "VD"
-          ]
-        },
-        "createdAt": "2026-02-26T10:25:28.120Z"
-      },
-      {
-        "id": "cmm3bhu9g001g01mndaa1vbgq",
-        "action": "CREATE",
-        "entity": "HOLIDAY",
-        "entityId": "cmm3bhu9d001f01mna9zh48h6",
-        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
-        "data": {
-          "date": "2027-05-17",
-          "name": "Whit Monday",
-          "type": "FEDERAL",
-          "cantons": [
-            "CH",
-            "BE",
-            "VD",
-            "ZH"
-          ]
-        },
-        "createdAt": "2026-02-26T10:25:28.180Z"
-      },
-      {
-        "id": "cmm3bhubd001i01mnsca0d4i8",
-        "action": "CREATE",
-        "entity": "HOLIDAY",
-        "entityId": "cmm3bhub6001h01mn0opx68b8",
-        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
-        "data": {
-          "date": "2027-08-01",
-          "name": "Swiss National Day",
-          "type": "FEDERAL",
-          "cantons": [
-            "CH",
-            "BE",
-            "VD",
-            "ZH"
-          ]
-        },
-        "createdAt": "2026-02-26T10:25:28.249Z"
       },
       {
         "id": "cmm3bhud4001k01mnlzh8cx7y",
@@ -4829,6 +6666,22 @@
           "outlookEventId": "AAMkAGY4Y2NjMzMzLWMwZDgtNDAxMC1iMmQxLTE0MTIxMGMzOTIzYwBGAAAAAACWA60PLyzuR7lWZ2x3vtYiBwCHRcSHsbXkTqv4hdjqrvZLAAAAAAENAACHRcSHsbXkTqv4hdjqrvZLAAAFgNA1AAA="
         },
         "createdAt": "2026-02-26T16:40:40.110Z"
+      },
+      {
+        "id": "cmmd8bd98000k01npfhu2gcms",
+        "action": "CREATE",
+        "entity": "USER_RULE",
+        "entityId": "cmmd8bd8l000j01nppra3hfy9",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "type": "DOUBLE_SHIFT",
+          "config": {
+            "linkedShiftId": "cmmd8915h000d01npedm7gc80",
+            "triggerShiftId": "cmg3swo6n0010qvb88icco8rb"
+          },
+          "targetUserId": "cmfy8s7vc000lqvpcps046mz7"
+        },
+        "createdAt": "2026-03-05T08:54:09.116Z"
       },
       {
         "id": "cmm3owlzl001601las5deitwg",
@@ -6578,22 +8431,6 @@
         "createdAt": "2026-03-05T08:53:47.909Z"
       },
       {
-        "id": "cmmd8bd98000k01npfhu2gcms",
-        "action": "CREATE",
-        "entity": "USER_RULE",
-        "entityId": "cmmd8bd8l000j01nppra3hfy9",
-        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
-        "data": {
-          "type": "DOUBLE_SHIFT",
-          "config": {
-            "linkedShiftId": "cmmd8915h000d01npedm7gc80",
-            "triggerShiftId": "cmg3swo6n0010qvb88icco8rb"
-          },
-          "targetUserId": "cmfy8s7vc000lqvpcps046mz7"
-        },
-        "createdAt": "2026-03-05T08:54:09.116Z"
-      },
-      {
         "id": "cmmd8bpti000m01np5ltaygdp",
         "action": "CREATE",
         "entity": "USER_RULE",
@@ -6938,6 +8775,72 @@
           }
         },
         "createdAt": "2026-03-05T09:08:46.488Z"
+      },
+      {
+        "id": "cmmdbnle6000401qns0kqewwc",
+        "action": "RESTORE_COMPLETE",
+        "entity": "BACKUP",
+        "entityId": "backup_ShiftAutoPlanner_2026-03-05_102144.json",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "source": "backup_ShiftAutoPlanner_2026-03-05_102144.json",
+          "success": true
+        },
+        "createdAt": "2026-03-05T10:27:38.382Z"
+      },
+      {
+        "id": "cmml2lsbw000201nnaezzuewj",
+        "action": "DELETE",
+        "entity": "USER",
+        "entityId": "cmml2lpde000001nnwztp80o7",
+        "userId": "fe58d846-d7d0-499c-9027-e8466492efad",
+        "data": {
+          "id": "cmml2lpde000001nnwztp80o7",
+          "role": null,
+          "email": "test2@bnc.ch",
+          "notes": null,
+          "phone": null,
+          "status": "ACTIVE",
+          "teamId": "cmfy8opm00000qvpct2faz46u",
+          "lastName": "A (Copy)",
+          "location": "ZH",
+          "createdAt": "2026-03-10T20:36:23.073Z",
+          "firstName": "Allison",
+          "updatedAt": "2026-03-10T20:36:23.073Z",
+          "workPercent": 80,
+          "availability": {
+            "friday": {
+              "morning": true,
+              "afternoon": true
+            },
+            "monday": {
+              "morning": true,
+              "afternoon": true
+            },
+            "sunday": {
+              "morning": false,
+              "afternoon": false
+            },
+            "tuesday": {
+              "morning": false,
+              "afternoon": true
+            },
+            "saturday": {
+              "morning": false,
+              "afternoon": false
+            },
+            "thursday": {
+              "morning": true,
+              "afternoon": false
+            },
+            "wednesday": {
+              "morning": true,
+              "afternoon": true
+            }
+          },
+          "rotationConfig": null
+        },
+        "createdAt": "2026-03-10T20:36:26.924Z"
       }
     ],
     "userRules": [
@@ -6951,18 +8854,6 @@
         "enabled": true,
         "createdAt": "2026-02-26T15:45:49.684Z",
         "updatedAt": "2026-02-26T15:46:16.930Z"
-      },
-      {
-        "id": "cmm3pj1n2000001qqmo7a6sb6",
-        "userId": "cmfy8xm24001eqvpc7wsmm7pf",
-        "type": "MAX_LOAD",
-        "config": {
-          "shiftId": "cmfy9epry003lqvpcuwem9649",
-          "maxPercentage": 70
-        },
-        "enabled": true,
-        "createdAt": "2026-02-26T16:58:19.022Z",
-        "updatedAt": "2026-02-26T16:58:19.022Z"
       },
       {
         "id": "cmm3pjgzi000201qqt5jz311b",
@@ -7001,30 +8892,6 @@
         "updatedAt": "2026-03-05T08:54:09.093Z"
       },
       {
-        "id": "cmmd8bpsh000l01nptp0qscvs",
-        "userId": "cmfy8s7vc000lqvpcps046mz7",
-        "type": "DOUBLE_SHIFT",
-        "config": {
-          "linkedShiftId": "cmg3swo6n0010qvb88icco8rb",
-          "triggerShiftId": "cmmd8915h000d01npedm7gc80"
-        },
-        "enabled": true,
-        "createdAt": "2026-03-05T08:54:25.361Z",
-        "updatedAt": "2026-03-05T08:54:25.361Z"
-      },
-      {
-        "id": "cmmd8qqrk000q01npw5a4q98v",
-        "userId": "cmfy97qg9002vqvpcd24r34rc",
-        "type": "DOUBLE_SHIFT",
-        "config": {
-          "linkedShiftId": "cmg3sx68p0014qvb8df3xotl5",
-          "triggerShiftId": "cmmd8915h000d01npedm7gc80"
-        },
-        "enabled": true,
-        "createdAt": "2026-03-05T09:06:06.464Z",
-        "updatedAt": "2026-03-05T09:06:06.464Z"
-      },
-      {
         "id": "cmmd8u2sv000s01npknc76x0w",
         "userId": "cmfy97qg9002vqvpcd24r34rc",
         "type": "DOUBLE_SHIFT",
@@ -7035,6 +8902,18 @@
         "enabled": true,
         "createdAt": "2026-03-05T09:08:42.031Z",
         "updatedAt": "2026-03-05T09:08:42.031Z"
+      },
+      {
+        "id": "cmmd8qqrk000q01npw5a4q98v",
+        "userId": "cmfy97qg9002vqvpcd24r34rc",
+        "type": "DOUBLE_SHIFT",
+        "config": {
+          "linkedShiftId": "cmmd8915h000d01npedm7gc80",
+          "triggerShiftId": "cmg3sx68p0014qvb8df3xotl5"
+        },
+        "enabled": true,
+        "createdAt": "2026-03-05T09:06:06.464Z",
+        "updatedAt": "2026-03-05T10:44:38.293Z"
       }
     ],
     "holidays": [
