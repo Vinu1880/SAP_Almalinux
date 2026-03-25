@@ -52,7 +52,7 @@ export default function HomePage() {
 
       {/* Left Side - Logo Hero */}
       <div className="hidden lg:flex lg:w-1/2 relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-600 to-blue-500"></div>
 
         {/* Pattern overlay */}
         <div className="absolute inset-0 opacity-10">
@@ -83,15 +83,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Subtitle */}
-          <div className="mt-12 text-center">
-            <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">
-              {t('appTitle')}
-            </h2>
-          </div>
-
           {/* Decorative line */}
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
         </div>
 
         {/* Animated circles */}
@@ -121,11 +114,11 @@ export default function HomePage() {
 
           <Card className="shadow-2xl border-0 bg-white/90 backdrop-blur-xl relative overflow-hidden">
             {/* Gradient accent */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600"></div>
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-slate-600 via-blue-500 to-sky-400"></div>
 
             <CardHeader className="text-center pb-6 pt-8">
               <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg">
+                <div className="w-16 h-16 bg-gradient-to-br from-slate-600 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg">
                   <LogIn className="w-8 h-8 text-white" />
                 </div>
               </div>
@@ -150,7 +143,7 @@ export default function HomePage() {
               <Button
                 onClick={handleAzureLogin}
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-semibold py-6 h-auto text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full bg-gradient-to-r from-slate-700 to-blue-500 hover:from-slate-800 hover:to-blue-600 text-white font-semibold py-6 h-auto text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-3">
