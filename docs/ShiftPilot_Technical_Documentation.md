@@ -518,8 +518,8 @@ All API inputs validated with Zod schemas (`lib/validation.ts`). Path traversal 
 Grant admin consent.
 
 **Values to note:**
-- Application (client) ID → `AZURE_AD_CLIENT_ID` / `NEXT_PUBLIC_AZURE_AD_CLIENT_ID`
-- Directory (tenant) ID → `AZURE_AD_TENANT_ID` / `NEXT_PUBLIC_AZURE_AD_TENANT_ID`
+- Application (client) ID → `NEXT_PUBLIC_AZURE_AD_CLIENT_ID`
+- Directory (tenant) ID → `NEXT_PUBLIC_AZURE_AD_TENANT_ID`
 - Client secret → `AZURE_AD_CLIENT_SECRET`
 
 **Redirect URIs:**
@@ -624,27 +624,15 @@ Open `https://<YOUR_DOMAIN>` in your browser (via your production reverse proxy)
 
 ## 7.4 Environment Variables
 
-| Variable | Required | Build-time | Description |
-|----------|----------|------------|-------------|
-| `DATABASE_URL` | Yes | No | PostgreSQL connection string |
-| `AZURE_AD_CLIENT_ID` | Yes | No | App client ID (server) |
-| `AZURE_AD_CLIENT_SECRET` | Yes | No | App secret (server) |
-| `AZURE_AD_TENANT_ID` | Yes | No | Tenant ID (server) |
-| `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` | Yes | **Yes** | Client ID (browser) |
-| `NEXT_PUBLIC_AZURE_AD_TENANT_ID` | Yes | **Yes** | Tenant ID (browser) |
-| `NEXT_PUBLIC_AZURE_AD_REDIRECT_URI` | Yes | **Yes** | OAuth redirect URI |
-| `NEXT_PUBLIC_URL` | Yes | No | Public app URL |
-| `CRON_SECRET` | Yes | No | Cron job auth secret |
-| `NEXT_PUBLIC_CRON_SECRET` | Yes | **Yes** | Cron secret (browser) |
-| `MICROSOFT_GRAPH_REFRESH_TOKEN` | No | No | Optional Graph refresh token |
+See [ENV_VARIABLES.md](ENV_VARIABLES.md) for the full list of environment variables, their purpose, and examples.
 
-**Build-time = Yes** → baked into JS bundle during build. Changing requires rebuild.
+**Build-time variables** (`NEXT_PUBLIC_*`) are baked into the JS bundle during build. Changing them requires a rebuild.
 
 ## 7.5 Container Startup Sequence
 
 `docker-entrypoint.sh`:
 1. Wait for database (30 retries, 2s each)
-2. Run Prisma migrations (fallback: `prisma db push`)
+2. Run `prisma db push` (sync schema)
 3. Fix backup directory permissions
 4. Start Next.js as unprivileged user (UID 1001)
 
