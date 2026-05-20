@@ -116,6 +116,7 @@ const ShiftsPage = () => {
     color: '#dc2626',
     status: 'ACTIVE',
     is24_7: true,
+    senderMailbox: '',
     daysOfWeek: [1, 2, 3, 4, 5]
   });
 
@@ -193,6 +194,7 @@ const ShiftsPage = () => {
         color: newPikett.color,
         status: newPikett.status,
         is24_7: newPikett.is24_7,
+        senderMailbox: newPikett.senderMailbox,
         startWeek: '',
         daysOfWeek: newPikett.daysOfWeek
       });
@@ -207,6 +209,7 @@ const ShiftsPage = () => {
         color: '#dc2626',
         status: 'ACTIVE',
         is24_7: true,
+        senderMailbox: '',
         daysOfWeek: [0, 1, 2, 3, 4, 5, 6]
       });
     } catch (error) {
@@ -241,6 +244,7 @@ const ShiftsPage = () => {
         color: selectedPikett.color,
         status: selectedPikett.status,
         is24_7: selectedPikett.is24_7,
+        senderMailbox: selectedPikett.senderMailbox || '',
         daysOfWeek: selectedPikett.daysOfWeek
       });
       
@@ -347,6 +351,7 @@ const ShiftsPage = () => {
       color: pikett.color,
       status: pikett.status || 'ACTIVE',
       is24_7: pikett.is24_7,
+      senderMailbox: pikett.senderMailbox || '',
       daysOfWeek: pikett.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
     });
     setIsCreatePikettDialogOpen(true);
@@ -764,6 +769,15 @@ const ShiftsPage = () => {
             </div>
           )}
 
+          {pikett.senderMailbox && (
+            <div className="flex items-center gap-2 text-xs">
+              <div className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Mail className="w-3 h-3 text-blue-600" />
+              </div>
+              <span className="text-slate-600 truncate">{pikett.senderMailbox}</span>
+            </div>
+          )}
+
           <div className="flex items-center space-x-2">
             {getStatusBadge(pikett.status)}
           </div>
@@ -915,7 +929,18 @@ const ShiftsPage = () => {
                       selectedDays={newPikett.daysOfWeek}
                       onChange={(days) => setNewPikett({...newPikett, daysOfWeek: days})}
                     />
-                    
+
+                    <div className="space-y-2">
+                      <Label>{t("senderMailbox")}</Label>
+                      <Input
+                        type="email"
+                        placeholder="oncall@bnc.ch"
+                        value={newPikett.senderMailbox}
+                        onChange={(e) => setNewPikett({...newPikett, senderMailbox: e.target.value})}
+                      />
+                      <p className="text-xs text-muted-foreground">{t("senderMailboxDesc")}</p>
+                    </div>
+
                     {newPikett.teamId && (
                       <>
                         <MembersSelector
@@ -1134,17 +1159,25 @@ const ShiftsPage = () => {
                   selectedDays={selectedPikett?.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]}
                   onChange={(days) => setSelectedPikett({...selectedPikett, daysOfWeek: days})}
                 />
-                
-                <div>
-                  <Label>{t("eligiblePersonnel")}</Label>
-                  <MembersSelector
-                    selectedUserIds={selectedPikett?.includedUserIds || []}
-                    excludedUserIds={selectedPikett?.excludedUserIds || []}
-                    onIncludeChange={(ids) => setSelectedPikett({...selectedPikett, includedUserIds: ids})}
-                    onExcludeChange={(ids) => setSelectedPikett({...selectedPikett, excludedUserIds: ids})}
-                    teamId={selectedPikett?.teamId || ''}
+
+                <div className="space-y-2">
+                  <Label>{t("senderMailbox")}</Label>
+                  <Input
+                    type="email"
+                    placeholder="oncall@bnc.ch"
+                    value={selectedPikett.senderMailbox || ''}
+                    onChange={(e) => setSelectedPikett({...selectedPikett, senderMailbox: e.target.value})}
                   />
+                  <p className="text-xs text-muted-foreground">{t("senderMailboxDesc")}</p>
                 </div>
+
+                <MembersSelector
+                  selectedUserIds={selectedPikett?.includedUserIds || []}
+                  excludedUserIds={selectedPikett?.excludedUserIds || []}
+                  onIncludeChange={(ids) => setSelectedPikett({...selectedPikett, includedUserIds: ids})}
+                  onExcludeChange={(ids) => setSelectedPikett({...selectedPikett, excludedUserIds: ids})}
+                  teamId={selectedPikett?.teamId || ''}
+                />
                 
                 <div className="flex justify-end space-x-3">
                   <Button variant="outline" onClick={() => setIsEditPikettDialogOpen(false)} className="hover:bg-secondary/20">

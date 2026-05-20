@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
         color: body.color || '#dc2626',
         status: body.status || 'ACTIVE',
         is24_7: body.is24_7 !== undefined ? body.is24_7 : true,
+        senderMailbox: body.senderMailbox || '',
         includedUserIds: body.includedUserIds || [],
         excludedUserIds: body.excludedUserIds || [],
         daysOfWeek: body.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]

@@ -15,6 +15,7 @@ interface Pikett {
   color: string;
   status: string;
   is24_7: boolean;
+  senderMailbox?: string;
   daysOfWeek?: number[];
 }
 

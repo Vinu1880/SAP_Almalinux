@@ -221,6 +221,7 @@ export async function POST(request: NextRequest) {
               color: pikett.color,
               status: pikett.status,
               is24_7: pikett.is24_7,
+              senderMailbox: pikett.senderMailbox || '',
               teamId: pikett.teamId,
               userId: pikett.userId,
               includedUserIds: pikett.includedUserIds,

@@ -84,6 +84,7 @@ export const createPikettSchema = z.object({
   color: hexColorSchema.optional().default('#dc2626'),
   status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional().default('ACTIVE'),
   is24_7: z.boolean().optional().default(true),
+  senderMailbox: z.string().max(255).optional().default(''),
   includedUserIds: z.array(cuidSchema).optional().default([]),
   excludedUserIds: z.array(cuidSchema).optional().default([]),
   daysOfWeek: z.array(dayOfWeekSchema).optional().default([0, 1, 2, 3, 4, 5, 6]),

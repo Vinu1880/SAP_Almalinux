@@ -37,6 +37,7 @@ export async function PUT(
     if (body.color !== undefined) updateData.color = body.color;
     if (body.status !== undefined) updateData.status = body.status;
     if (body.is24_7 !== undefined) updateData.is24_7 = body.is24_7;
+    if (body.senderMailbox !== undefined) updateData.senderMailbox = body.senderMailbox;
     if (body.includedUserIds !== undefined) updateData.includedUserIds = body.includedUserIds;
     if (body.excludedUserIds !== undefined) updateData.excludedUserIds = body.excludedUserIds;
     if (body.daysOfWeek !== undefined) updateData.daysOfWeek = body.daysOfWeek;

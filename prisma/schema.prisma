@@ -83,7 +83,8 @@ model Pikett {
   color           String   @default("#dc2626")
   status          Status   @default(ACTIVE)
   is24_7          Boolean  @default(true)
-  
+  senderMailbox   String   @default("") // Shared mailbox for sending invitations
+
   // Relations
   teamId          String
   team            Team     @relation(fields: [teamId], references: [id])
