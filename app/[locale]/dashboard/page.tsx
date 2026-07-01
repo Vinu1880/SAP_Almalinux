@@ -1571,16 +1571,18 @@ const DashboardPage = () => {
                         }
                         const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                         const rawDayAssignments = calendarByDate[dateStr] || [];
-                        // If a shift/pikett has been accepted, hide refused/cancelled for that same shift/pikett
+                        // Once a shift/pikett has an ACCEPTED assignment, only show the ACCEPTED one
+                        // and hide every other status (PENDING/TENTATIVE/REFUSED/CANCELLED) for that
+                        // same shift/pikett that day.
                         const acceptedItemIds = new Set(
                           rawDayAssignments
                             .filter((a: any) => a.status === 'ACCEPTED')
                             .map((a: any) => mode === 'shifts' ? a.shiftId : a.pikettId)
                         );
                         const dayAssignments = rawDayAssignments.filter((a: any) => {
-                          if (a.status === 'REFUSED' || a.status === 'CANCELLED') {
-                            const itemId = mode === 'shifts' ? a.shiftId : a.pikettId;
-                            return !acceptedItemIds.has(itemId);
+                          const itemId = mode === 'shifts' ? a.shiftId : a.pikettId;
+                          if (acceptedItemIds.has(itemId)) {
+                            return a.status === 'ACCEPTED';
                           }
                           return true;
                         });

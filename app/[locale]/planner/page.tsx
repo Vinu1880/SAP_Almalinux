@@ -503,6 +503,11 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
+        // BYPASS/dev mode: read mock OOF from DB
+        try {
+          const resp = await authFetch(`/api/oof-mock?start=${startDate}&end=${endDate}`);
+          if (resp.ok) return await resp.json();
+        } catch {}
         return [];
       }
 
@@ -538,7 +543,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
               dateTime: endDate + 'T23:59:59',
               timeZone: 'Europe/Zurich'
             },
-            availabilityViewInterval: 1440 // 24h blocks (full day)
+            availabilityViewInterval: 60 // 1h blocks — detects half-day OOF
           })
         });
 
@@ -556,13 +561,18 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
 
           for (const item of userSchedule.scheduleItems) {
             if (item.status === 'oof' || item.status === 'busy') {
-              // getSchedule with availabilityViewInterval=1440 returns day-level items
-              // End dates are exclusive (OOF until March 1 → end = March 2T00:00)
-              // Subtract 1 day from end to get the real last day
-              const endDt = new Date(item.end.dateTime);
-              endDt.setDate(endDt.getDate() - 1);
-              // Set end to 23:59:59 of the last real day
-              const adjustedEnd = `${endDt.getFullYear()}-${String(endDt.getMonth() + 1).padStart(2, '0')}-${String(endDt.getDate()).padStart(2, '0')}T23:59:59`;
+              // For all-day OOF Graph returns end at midnight of the next day
+              // (exclusive). For partial OOF (half-day) end is a real hh:mm on
+              // the same day. Only shift back when it's the midnight-exclusive
+              // form; otherwise keep the actual end time.
+              let adjustedEnd = item.end.dateTime;
+              const endStr = item.end.dateTime as string;
+              const isMidnight = /T00:00(:00)?(\.\d+)?$/.test(endStr);
+              if (isMidnight) {
+                const endDt = new Date(endStr);
+                endDt.setDate(endDt.getDate() - 1);
+                adjustedEnd = `${endDt.getFullYear()}-${String(endDt.getMonth() + 1).padStart(2, '0')}-${String(endDt.getDate()).padStart(2, '0')}T23:59:59`;
+              }
 
               allOutOfOfficeEvents.push({
                 id: `schedule-${userEmail}-${item.start.dateTime}`,
@@ -766,6 +776,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
       const shift = shifts.find(s => s.id === shiftId);
       if (!shift) continue;
       availableUsers.forEach(u => {
+        if (u.status !== 'ACTIVE' && u.status !== 'active') return;
         const inTeam = u.teamId === shift.teamId && !(shift.excludedUserIds || []).includes(u.id);
         const included = (shift.includedUserIds || []).includes(u.id);
         if (inTeam || included) memberIds.add(u.id);
@@ -775,6 +786,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
       const pikett = piketts.find(p => p.id === pikettId);
       if (!pikett) continue;
       availableUsers.forEach(u => {
+        if (u.status !== 'ACTIVE' && u.status !== 'active') return;
         const inTeam = u.teamId === pikett.teamId && !(pikett.excludedUserIds || []).includes(u.id);
         const included = (pikett.includedUserIds || []).includes(u.id);
         if (inTeam || included) memberIds.add(u.id);
@@ -1232,10 +1244,9 @@ const processShiftAssignments = async () => {
         const date = dates[dateIdx];
         const dailyAssignments: { [userId: string]: string[] } = {};
 
-        // PART 2.2: Process shifts not assigned by rotation
-        // Alternate processing order to avoid persistent user pairing
-        const orderedShifts = dateIdx % 2 === 0 ? shiftsToProcess : [...shiftsToProcess].reverse();
-        for (const shiftId of orderedShifts) {
+        // PART 2.2: Process shifts not assigned by rotation, always in priority order
+        // (shifts with the fewest eligible users go first — cf. `shiftsToProcess` sort above).
+        for (const shiftId of shiftsToProcess) {
           const shift = shiftMap.get(shiftId);
           if (!shift) continue;
 
@@ -1474,49 +1485,55 @@ const processShiftAssignments = async () => {
               }
             }
 
-            // Pass 1: find someone NOT on pikett and not yet assigned this week
-            if (!selectedUser && nonPikettAvailable.length > 0) {
-              for (let i = 0; i < queue.length; i++) {
-                const idx = (shiftWeekPointers[weekShiftKey] + i) % queue.length;
-                const user = queue[idx];
-                if (preferredIds.has(user.id) && !weekSet.has(user.id)) {
-                  selectedUser = nonPikettAvailable.find(u => u.id === user.id);
-                  shiftWeekPointers[weekShiftKey] = (idx + 1) % queue.length;
-                  break;
-                }
-              }
-            }
+            // Helper: is this user assigned on the previous or next working day (any shift)?
+            const isAdjacentAssigned = (userId: string): boolean => {
+              const adj = dateAdjacentMap.get(date);
+              const prevAssigned = adj?.prev ? assignedNormalShiftSet.has(`${adj.prev}|${userId}`) : false;
+              const nextAssigned = adj?.next ? assignedNormalShiftSet.has(`${adj.next}|${userId}`) : false;
+              return prevAssigned || nextAssigned;
+            };
+            const totalAssignmentsFor = (userId: string): number =>
+              Object.values(userShiftsTracking[userId] || {}).reduce((s: number, v: any) => s + (v as number), 0);
+            const shiftRatioFor = (userId: string): number =>
+              (userShiftsTracking[userId]?.[shiftId] || 0) / (userAvailableDays[userId]?.[shiftId] || 1);
 
-            // Pass 1b: if no non-pikett user found without week repeat, try non-pikett with week repeat
-            // Sort by total assignments across ALL shifts (not just this shift) for true fair distribution
-            if (!selectedUser && nonPikettAvailable.length > 0) {
-              let candidateUsers = [...nonPikettAvailable];
+            // Unified sort: prefer users who are (1) not adjacent, (2) not yet assigned this week,
+            // (3) have fewer total shifts (global fairness), (4) have lower ratio for this shift.
+            const sortCandidates = (arr: any[]): any[] => arr.slice().sort((a, b) => {
+              const aAdj = isAdjacentAssigned(a.id) ? 1 : 0;
+              const bAdj = isAdjacentAssigned(b.id) ? 1 : 0;
+              if (aAdj !== bAdj) return aAdj - bAdj;
+              const aWeek = weekSet.has(a.id) ? 1 : 0;
+              const bWeek = weekSet.has(b.id) ? 1 : 0;
+              if (aWeek !== bWeek) return aWeek - bWeek;
               if (settings.balanceShifts) {
-                candidateUsers.sort((a, b) => {
-                  // Primary: total assignments across all shifts (global fairness)
-                  const aTotalAll = Object.values(userShiftsTracking[a.id] || {}).reduce((s: number, v: any) => s + (v as number), 0);
-                  const bTotalAll = Object.values(userShiftsTracking[b.id] || {}).reduce((s: number, v: any) => s + (v as number), 0);
-                  if (aTotalAll !== bTotalAll) return aTotalAll - bTotalAll;
-                  // Secondary: ratio for this specific shift
-                  const aRatio = (userShiftsTracking[a.id]?.[shiftId] || 0) / (userAvailableDays[a.id]?.[shiftId] || 1);
-                  const bRatio = (userShiftsTracking[b.id]?.[shiftId] || 0) / (userAvailableDays[b.id]?.[shiftId] || 1);
-                  return aRatio - bRatio;
-                });
+                const aTotal = totalAssignmentsFor(a.id);
+                const bTotal = totalAssignmentsFor(b.id);
+                if (aTotal !== bTotal) return aTotal - bTotal;
+                const aRatio = shiftRatioFor(a.id);
+                const bRatio = shiftRatioFor(b.id);
+                if (aRatio !== bRatio) return aRatio - bRatio;
               }
-              selectedUser = candidateUsers[0];
+              // Stable tiebreak using shuffle queue order
+              const aQueueIdx = queue.findIndex(u => u.id === a.id);
+              const bQueueIdx = queue.findIndex(u => u.id === b.id);
+              return aQueueIdx - bQueueIdx;
+            });
+
+            // Pass 1: prefer non-pikett users, best candidate per unified sort
+            if (!selectedUser && nonPikettAvailable.length > 0) {
+              const sorted = sortCandidates(nonPikettAvailable);
+              selectedUser = sorted[0];
+              // Advance the queue pointer so shuffle stays useful for tiebreak diversity
+              const idxInQueue = queue.findIndex(u => u.id === selectedUser.id);
+              if (idxInQueue >= 0) {
+                shiftWeekPointers[weekShiftKey] = (idxInQueue + 1) % queue.length;
+              }
             }
 
-            // Pass 2: fallback — all non-pikett users exhausted, use pikett users
+            // Pass 2: fallback — non-pikett exhausted, use pikett users
             if (!selectedUser && pikettOnlyAvailable.length > 0) {
-              let candidateUsers = [...pikettOnlyAvailable];
-              if (settings.balanceShifts) {
-                candidateUsers.sort((a, b) => {
-                  const aRatio = (userShiftsTracking[a.id]?.[shiftId] || 0) / (userAvailableDays[a.id]?.[shiftId] || 1);
-                  const bRatio = (userShiftsTracking[b.id]?.[shiftId] || 0) / (userAvailableDays[b.id]?.[shiftId] || 1);
-                  return aRatio - bRatio;
-                });
-              }
-              selectedUser = candidateUsers[0];
+              selectedUser = sortCandidates(pikettOnlyAvailable)[0];
             }
 
             // Pass 3: absolute fallback (should not happen)
@@ -2353,7 +2370,7 @@ useEffect(() => {
                     </div>
                   </div>
                   
-                  <ScrollArea className="h-auto border rounded-lg p-2 bg-violet-50/30">
+                  <ScrollArea className="h-auto border rounded-lg p-2 bg-rose-50/30">
                     <div className="space-y-2">
                       {piketts.filter((p: any) => p.status === 'ACTIVE').map((pikett: any) => {
                         const isSelected = selectedPiketts.includes(pikett.id);
@@ -2362,7 +2379,7 @@ useEffect(() => {
                           <label
                             key={pikett.id}
                             className={`flex items-center space-x-2 p-1.5 rounded cursor-pointer text-xs
-                              ${isSelected ? 'bg-violet-100' : 'hover:bg-violet-50'}`}
+                              ${isSelected ? 'bg-rose-100' : 'hover:bg-rose-50'}`}
                           >
                             <Checkbox
                               checked={isSelected}
@@ -2376,10 +2393,10 @@ useEffect(() => {
                             />
                             <div className="flex-1">
                               <div className="flex items-center gap-1">
-                                <Shield className="w-3 h-3 text-violet-600" />
-                                <span className="font-medium text-violet-900">{pikett.name}</span>
+                                <Shield className="w-3 h-3 text-rose-600" />
+                                <span className="font-medium text-rose-900">{pikett.name}</span>
                               </div>
-                              <span className="text-xs text-violet-700">
+                              <span className="text-xs text-rose-700">
                                 {pikett.team?.name} • 24/7
                               </span>
                             </div>
@@ -2464,18 +2481,18 @@ useEffect(() => {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {selectedShifts.map((shiftId, index) => {
+                    {selectedShifts.map((shiftId) => {
                       const shift = shifts.find((s: any) => s.id === shiftId);
-                      const count = shiftAssignments.filter(a => 
-                        a.shiftId === shiftId && a.assignedUsers.length > 0
+                      const count = shiftAssignments.filter(a =>
+                        a.shiftId === shiftId && !a.isPikett && a.assignedUsers.length > 0
                       ).length;
-                      const rotationCount = shiftAssignments.filter(a => 
-                        a.shiftId === shiftId && a.isRotationAssignment
+                      const rotationCount = shiftAssignments.filter(a =>
+                        a.shiftId === shiftId && !a.isPikett && a.isRotationAssignment
                       ).length;
-                      const emptyCount = shiftAssignments.filter(a => 
-                        a.shiftId === shiftId && a.assignedUsers.length === 0
+                      const emptyCount = shiftAssignments.filter(a =>
+                        a.shiftId === shiftId && !a.isPikett && a.assignedUsers.length === 0
                       ).length;
-                      
+
                       return (
                         <div
                           key={shiftId}
@@ -2492,6 +2509,48 @@ useEffect(() => {
                             {count}
                           </div>
                           <p className="text-xs text-green-700">{t('assigned')}</p>
+                          <div className="flex items-center justify-center gap-2 mt-1">
+                            {rotationCount > 0 && (
+                              <Badge className="bg-orange-100 text-orange-700 text-xs border-0">
+                                <RotateCw className="w-3 h-3 mr-0.5" />
+                                {rotationCount}
+                              </Badge>
+                            )}
+                            {emptyCount > 0 && (
+                              <Badge className="bg-orange-100 text-orange-700 text-xs border-0">
+                                ⚠ {emptyCount}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {selectedPiketts.map((pikettId) => {
+                      const pikett = piketts.find((p: any) => p.id === pikettId);
+                      const count = shiftAssignments.filter(a =>
+                        a.shiftId === pikettId && a.isPikett && a.assignedUsers.length > 0
+                      ).length;
+                      const rotationCount = shiftAssignments.filter(a =>
+                        a.shiftId === pikettId && a.isPikett && a.isRotationAssignment
+                      ).length;
+                      const emptyCount = shiftAssignments.filter(a =>
+                        a.shiftId === pikettId && a.isPikett && a.assignedUsers.length === 0
+                      ).length;
+
+                      return (
+                        <div
+                          key={pikettId}
+                          className="text-center p-3 rounded-lg relative border border-rose-200"
+                          style={{ backgroundColor: '#fecdd315' }}
+                        >
+                          <div className="text-sm font-medium mb-1 truncate flex items-center justify-center gap-1 text-rose-700">
+                            <Shield className="w-3.5 h-3.5" />
+                            {pikett?.name}
+                          </div>
+                          <div className="text-lg font-bold text-rose-600">
+                            {count}
+                          </div>
+                          <p className="text-xs text-rose-700">{t('assigned')}</p>
                           <div className="flex items-center justify-center gap-2 mt-1">
                             {rotationCount > 0 && (
                               <Badge className="bg-orange-100 text-orange-700 text-xs border-0">
@@ -2747,7 +2806,7 @@ useEffect(() => {
               {/* Users with rotation (only members of selected shifts) */}
               {(() => {
                 const memberIds = getSelectedShiftsMemberIds();
-                const rotationUsers = availableUsers.filter(u => u.rotationConfig?.patternId && memberIds.has(u.id));
+                const rotationUsers = availableUsers.filter(u => u.rotationConfig?.patternId && memberIds.has(u.id) && (u.status === 'ACTIVE' || u.status === 'active'));
                 return rotationUsers.length > 0 ? (
                 <Card className="bg-white border-0 shadow-sm">
                   <CardHeader className="pb-3">
@@ -2757,30 +2816,33 @@ useEffect(() => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="max-h-[280px] overflow-y-auto pr-2 space-y-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+                    <div className="max-h-[280px] overflow-y-auto pr-2 space-y-1 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
                       {rotationUsers
                         .map(user => {
                           const pattern = rotationPatterns.find(p => p.id === user.rotationConfig.patternId);
+                          const allowedTypes = (user.rotationConfig?.allowedShiftTypes || []) as string[];
+                          const allowedNames = allowedTypes
+                            .map(id => shifts.find(s => s.id === id)?.name)
+                            .filter(Boolean) as string[];
                           return (
-                            <div key={user.id} className="flex items-center justify-between p-2.5 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg">
-                              <div className="flex items-center space-x-2.5">
-                                <Avatar className="w-8 h-8">
-                                  <AvatarFallback className="text-xs bg-gradient-to-br from-orange-500 to-amber-600 text-white">
-                                    {user.firstName?.[0]}{user.lastName?.[0]}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="text-sm font-semibold text-slate-800">{user.firstName} {user.lastName}</p>
-                                  <p className="text-xs text-slate-600">
-                                    {pattern?.name || t('unknownPattern')}
-                                  </p>
-                                </div>
+                            <div key={user.id} className="flex items-center gap-2 px-2 py-1.5 bg-gradient-to-r from-orange-50 to-amber-50 rounded-md">
+                              <Avatar className="w-6 h-6 flex-shrink-0">
+                                <AvatarFallback className="text-[10px] bg-gradient-to-br from-orange-500 to-amber-600 text-white">
+                                  {user.firstName?.[0]}{user.lastName?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 truncate">
+                                  {user.firstName} {user.lastName}
+                                  <span className="ml-1.5 text-[11px] font-normal text-slate-500">· {pattern?.name || t('unknownPattern')}</span>
+                                </p>
+                                {allowedNames.length > 0 && (
+                                  <p className="text-[10px] text-slate-500 truncate">{allowedNames.join(', ')}</p>
+                                )}
                               </div>
-                              <div className="flex flex-col items-end gap-0.5">
-                                <span className="text-xs text-slate-500">
-                                  {pattern?.cycleLength || 0} sem.
-                                </span>
-                              </div>
+                              <span className="text-[10px] font-medium text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                {pattern?.cycleLength || 0} sem.
+                              </span>
                             </div>
                           );
                         })}
@@ -2799,6 +2861,34 @@ useEffect(() => {
                       <AlertCircle className="w-4 h-4 mr-2 text-violet-600" />
                       {t('outOfOffice')} ({(() => {
                         const usersOOF = new Set<string>();
+                        const eligibleDaysCache = new Map<string, Set<number>>();
+                        const getEligibleDays = (user: any): Set<number> => {
+                          const cached = eligibleDaysCache.get(user.id);
+                          if (cached) return cached;
+                          const days = new Set<number>();
+                          for (const shiftId of selectedShifts) {
+                            const shift = shifts.find(s => s.id === shiftId);
+                            if (!shift) continue;
+                            const inTeam = user.teamId === shift.teamId;
+                            const included = (shift as any).includedUserIds?.includes(user.id);
+                            const excluded = (shift as any).excludedUserIds?.includes(user.id);
+                            if ((inTeam && !excluded) || included) {
+                              (shift.daysOfWeek || [1, 2, 3, 4, 5]).forEach((d: number) => days.add(d));
+                            }
+                          }
+                          for (const pikettId of selectedPiketts) {
+                            const pikett = piketts.find(p => p.id === pikettId);
+                            if (!pikett) continue;
+                            const inTeam = user.teamId === pikett.teamId;
+                            const included = (pikett as any).includedUserIds?.includes(user.id);
+                            const excluded = (pikett as any).excludedUserIds?.includes(user.id);
+                            if ((inTeam && !excluded) || included) {
+                              (pikett.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]).forEach((d: number) => days.add(d));
+                            }
+                          }
+                          eligibleDaysCache.set(user.id, days);
+                          return days;
+                        };
                         outOfOfficeEvents
                           .filter((e: OutlookEvent) => e.showAs === 'oof')
                           .forEach((event: OutlookEvent) => {
@@ -2811,6 +2901,18 @@ useEffect(() => {
                               const userEmail = event.organizer?.emailAddress?.address?.toLowerCase();
                               const user = availableUsers.find(u => u.email?.toLowerCase() === userEmail);
                               if (user && memberIds.has(user.id)) {
+                                const eligibleDays = getEligibleDays(user);
+                                if (eligibleDays.size === 0) return;
+                                const rangeStart = new Date(Math.max(eventStart.getTime(), periodStart.getTime()));
+                                const rangeEnd = new Date(Math.min(eventEnd.getTime(), periodEnd.getTime()));
+                                const d = new Date(rangeStart); d.setHours(0, 0, 0, 0);
+                                const endDay = new Date(rangeEnd); endDay.setHours(0, 0, 0, 0);
+                                let overlaps = false;
+                                while (d.getTime() <= endDay.getTime()) {
+                                  if (eligibleDays.has(d.getDay())) { overlaps = true; break; }
+                                  d.setDate(d.getDate() + 1);
+                                }
+                                if (!overlaps) return;
                                 usersOOF.add(userEmail || '');
                               }
                             }
@@ -2826,6 +2928,54 @@ useEffect(() => {
                         const userEventsMap = new Map<string, { user: any; events: OutlookEvent[] }>();
 
                         // Only show real OOF events (not busy from shifts)
+                        // For each user, compute the union of daysOfWeek across shifts/piketts they are eligible for
+                        const userEligibleDaysCache = new Map<string, Set<number>>();
+                        const getUserEligibleDays = (user: any): Set<number> => {
+                          const cached = userEligibleDaysCache.get(user.id);
+                          if (cached) return cached;
+                          const days = new Set<number>();
+                          for (const shiftId of selectedShifts) {
+                            const shift = shifts.find(s => s.id === shiftId);
+                            if (!shift) continue;
+                            const inTeam = user.teamId === shift.teamId;
+                            const included = (shift as any).includedUserIds?.includes(user.id);
+                            const excluded = (shift as any).excludedUserIds?.includes(user.id);
+                            if ((inTeam && !excluded) || included) {
+                              (shift.daysOfWeek || [1, 2, 3, 4, 5]).forEach((d: number) => days.add(d));
+                            }
+                          }
+                          for (const pikettId of selectedPiketts) {
+                            const pikett = piketts.find(p => p.id === pikettId);
+                            if (!pikett) continue;
+                            const inTeam = user.teamId === pikett.teamId;
+                            const included = (pikett as any).includedUserIds?.includes(user.id);
+                            const excluded = (pikett as any).excludedUserIds?.includes(user.id);
+                            if ((inTeam && !excluded) || included) {
+                              (pikett.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]).forEach((d: number) => days.add(d));
+                            }
+                          }
+                          userEligibleDaysCache.set(user.id, days);
+                          return days;
+                        };
+
+                        // Check if any day of the OOF period falls on a user-eligible weekday
+                        const oofOverlapsEligibleDay = (eventStart: Date, eventEnd: Date, eligibleDays: Set<number>): boolean => {
+                          if (eligibleDays.size === 0) return false;
+                          const periodStart = new Date(startDate);
+                          const periodEnd = new Date(endDate);
+                          const rangeStart = new Date(Math.max(eventStart.getTime(), periodStart.getTime()));
+                          const rangeEnd = new Date(Math.min(eventEnd.getTime(), periodEnd.getTime()));
+                          const d = new Date(rangeStart);
+                          d.setHours(0, 0, 0, 0);
+                          const endDay = new Date(rangeEnd);
+                          endDay.setHours(0, 0, 0, 0);
+                          while (d.getTime() <= endDay.getTime()) {
+                            if (eligibleDays.has(d.getDay())) return true;
+                            d.setDate(d.getDate() + 1);
+                          }
+                          return false;
+                        };
+
                         outOfOfficeEvents
                           .filter((e: OutlookEvent) => e.showAs === 'oof')
                           .forEach((event: OutlookEvent) => {
@@ -2839,6 +2989,8 @@ useEffect(() => {
                               if (userEmail) {
                                 const user = availableUsers.find(u => u.email?.toLowerCase() === userEmail);
                                 if (user && memberIds.has(user.id)) {
+                                  const eligibleDays = getUserEligibleDays(user);
+                                  if (!oofOverlapsEligibleDay(eventStart, eventEnd, eligibleDays)) return;
                                   const existing = userEventsMap.get(user.id);
                                   if (existing) {
                                     existing.events.push(event);
@@ -2871,68 +3023,104 @@ useEffect(() => {
                         const dateFormat = { day: 'numeric', month: 'short', year: 'numeric' } as const;
 
                         return groupedUsers.map(({ user, events }) => {
-                          // Sort events by start date and merge overlapping/adjacent ranges
+                          // Sort events by start date
                           const sorted = [...events].sort((a, b) =>
                             new Date(a.start.dateTime).getTime() - new Date(b.start.dateTime).getTime()
                           );
 
-                          // Merge overlapping/contiguous periods
-                          const mergedRanges: Array<{ start: Date; end: Date; reasons: Set<string> }> = [];
-                          for (const evt of sorted) {
+                          // Helper: format HH:MM
+                          const fmtTime = (d: Date): string =>
+                            `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                          const fmtDate = (d: Date): string => d.toLocaleDateString(locale, dateFormat);
+                          const fmtDateShort = (d: Date): string =>
+                            d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+
+                          // Classify each event: full-day range, or partial-day with hours
+                          type Entry = {
+                            isAllDay: boolean;
+                            start: Date;
+                            end: Date;
+                            timeKey?: string; // "HH:MM-HH:MM" for grouping recurring partial OOF
+                            reason: string;
+                          };
+                          const entries: Entry[] = sorted.map(evt => {
                             const evtStart = new Date(evt.start.dateTime);
                             const evtEnd = evt.isAllDay
                               ? new Date(new Date(evt.end.dateTime).getTime() - 1000)
                               : new Date(evt.end.dateTime);
                             const reason = evt.showAs === 'oof' ? t('reasonOutOfOffice') : (evt.subject || t('absence'));
-                            const last = mergedRanges[mergedRanges.length - 1];
+                            const timeKey = !evt.isAllDay
+                              ? `${fmtTime(evtStart)}-${fmtTime(evtEnd)}`
+                              : undefined;
+                            return { isAllDay: evt.isAllDay, start: evtStart, end: evtEnd, timeKey, reason };
+                          });
 
-                            // Merge if ranges overlap or are adjacent (within 1 day)
-                            if (last && evtStart.getTime() <= last.end.getTime() + 86400000) {
-                              if (evtEnd > last.end) last.end = evtEnd;
-                              last.reasons.add(reason);
+                          // Merge full-day contiguous ranges (adjacent within 1 day)
+                          const fullDayEntries = entries.filter(e => e.isAllDay);
+                          const fullDayRanges: Array<{ start: Date; end: Date }> = [];
+                          for (const e of fullDayEntries) {
+                            const last = fullDayRanges[fullDayRanges.length - 1];
+                            if (last && e.start.getTime() <= last.end.getTime() + 86400000) {
+                              if (e.end > last.end) last.end = e.end;
                             } else {
-                              mergedRanges.push({ start: evtStart, end: evtEnd, reasons: new Set([reason]) });
+                              fullDayRanges.push({ start: e.start, end: e.end });
                             }
                           }
 
-                          // Build display string for date ranges
-                          const rangeStrings = mergedRanges.map(range => {
-                            const isSingleDay = range.start.toDateString() === range.end.toDateString();
-                            if (isSingleDay) {
-                              return range.start.toLocaleDateString(locale, dateFormat);
+                          // Group partial-day entries by timeKey → each group = list of dates
+                          const partialGroups = new Map<string, { start: string; end: string; dates: Date[] }>();
+                          entries.filter(e => !e.isAllDay).forEach(e => {
+                            const key = e.timeKey!;
+                            const existing = partialGroups.get(key);
+                            if (existing) {
+                              existing.dates.push(e.start);
+                            } else {
+                              partialGroups.set(key, {
+                                start: fmtTime(e.start),
+                                end: fmtTime(e.end),
+                                dates: [e.start],
+                              });
                             }
-                            return `${range.start.toLocaleDateString(locale, dateFormat)} → ${range.end.toLocaleDateString(locale, dateFormat)}`;
                           });
 
                           // Collect unique reasons
-                          const allReasons = new Set<string>();
-                          mergedRanges.forEach(r => r.reasons.forEach(reason => allReasons.add(reason)));
+                          const allReasons = new Set(entries.map(e => e.reason));
                           const reasonText = Array.from(allReasons).join(', ');
 
+                          const chipCls = "inline-flex items-center gap-1 px-2 py-0.5 bg-violet-100 rounded text-[11px] font-medium text-violet-700 whitespace-nowrap";
+
                           return (
-                            <div key={user.id} className="flex items-center justify-between p-2.5 bg-gradient-to-r from-violet-50 to-purple-50 rounded-lg">
-                              <div className="flex items-center space-x-2.5 flex-1 min-w-0">
-                                <Avatar className="w-8 h-8 flex-shrink-0">
-                                  <AvatarFallback className="text-xs bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-                                    {user.firstName?.[0]}{user.lastName?.[0]}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-slate-800 truncate">{user.firstName} {user.lastName}</p>
-                                  <p className="text-xs text-slate-600 truncate">
-                                    {reasonText}
-                                  </p>
+                            <div key={user.id} className="flex items-start gap-2 p-2 bg-gradient-to-r from-violet-50 to-purple-50 rounded-md">
+                              <Avatar className="w-7 h-7 flex-shrink-0 mt-0.5">
+                                <AvatarFallback className="text-[10px] bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                                  {user.firstName?.[0]}{user.lastName?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                <div className="flex items-baseline gap-1.5 flex-wrap">
+                                  <p className="text-xs font-semibold text-slate-800">{user.firstName} {user.lastName}</p>
+                                  <span className="text-[10px] text-slate-500 truncate">{reasonText}</span>
                                 </div>
-                              </div>
-                              <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-2">
-                                {rangeStrings.map((rangeStr, idx) => (
-                                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-100 rounded-md">
-                                    <Calendar className="w-3.5 h-3.5 text-violet-600" />
-                                    <span className="text-xs font-medium text-violet-700 whitespace-nowrap">
-                                      {rangeStr}
+                                <div className="flex flex-wrap gap-1">
+                                  {fullDayRanges.map((r, idx) => {
+                                    const isSingle = r.start.toDateString() === r.end.toDateString();
+                                    return (
+                                      <span key={`fd-${idx}`} className={chipCls}>
+                                        <Calendar className="w-3 h-3" />
+                                        {isSingle ? fmtDate(r.start) : `${fmtDate(r.start)} → ${fmtDate(r.end)}`}
+                                      </span>
+                                    );
+                                  })}
+                                  {Array.from(partialGroups.values()).map((g, idx) => (
+                                    <span key={`p-${idx}`} className={chipCls}>
+                                      <Clock className="w-3 h-3" />
+                                      {g.start}-{g.end}
+                                      <span className="text-violet-500 font-normal">
+                                        · {g.dates.map(d => fmtDateShort(d)).join(', ')}
+                                      </span>
                                     </span>
-                                  </div>
-                                ))}
+                                  ))}
+                                </div>
                               </div>
                             </div>
                           );
@@ -3360,11 +3548,98 @@ useEffect(() => {
                               </div>
                             </div>
                           </div>
+                        ) : editingAssignment === `${assignment.date}-${index}` ? (
+                          <div className="bg-orange-50 rounded-lg p-3">
+                            <div className="flex items-center gap-4">
+                              <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+                              <Select
+                                value={tempAssignedUser || undefined}
+                                onValueChange={setTempAssignedUser}
+                              >
+                                <SelectTrigger className="w-auto min-w-64 hover:bg-secondary/20 transition-colors">
+                                  <SelectValue placeholder={t('selectUserToViewShifts')} />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[400px]">
+                                  <SelectItem value="none">
+                                    <span className="text-slate-400">{t('unassigned')}</span>
+                                  </SelectItem>
+                                  {(() => {
+                                    // Eligible members of this shift/pikett (ignoring constraints)
+                                    const item = assignment.isPikett
+                                      ? piketts.find(p => p.id === assignment.shiftId)
+                                      : shifts.find(s => s.id === assignment.shiftId);
+                                    if (!item) return null;
+                                    const eligibleMembers = availableUsers.filter(u => {
+                                      if (u.status !== 'ACTIVE' && u.status !== 'active') return false;
+                                      const inTeam = u.teamId === (item as any).teamId;
+                                      const included = (item as any).includedUserIds?.includes(u.id);
+                                      const excluded = (item as any).excludedUserIds?.includes(u.id);
+                                      return (inTeam && !excluded) || included;
+                                    });
+                                    return (
+                                      <div className="py-2">
+                                        <p className="px-2 text-xs font-semibold text-orange-700 mb-1">
+                                          ⚠️ {t('constraintsBroken')}
+                                        </p>
+                                        {eligibleMembers.map(user => {
+                                          const constraint = assignment.unavailableUsers.find(u => u.user.id === user.id);
+                                          return (
+                                            <SelectItem key={user.id} value={user.id} className="min-w-max">
+                                              <div className="flex items-center justify-between gap-3 w-full min-w-[400px]">
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                  <Avatar className="w-6 h-6 flex-shrink-0">
+                                                    <AvatarFallback className="text-xs">
+                                                      {user.firstName?.[0]}{user.lastName?.[0]}
+                                                    </AvatarFallback>
+                                                  </Avatar>
+                                                  <span className="whitespace-nowrap">{user.firstName} {user.lastName}</span>
+                                                </div>
+                                                {constraint && (
+                                                  <Badge variant="outline" className="text-xs bg-red-50 border-red-200 flex-shrink-0 whitespace-nowrap">
+                                                    {constraint.reason}
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            </SelectItem>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  })()}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                onClick={() => handleSaveAssignmentChange(assignment.date, assignment.shiftId)}
+                                variant="outline"
+                                size="sm"
+                                className="hover:bg-green-50"
+                              >
+                                <Save className="w-3 h-3 mr-1" />
+                                {tCommon('save')}
+                              </Button>
+                              <Button
+                                onClick={() => { setEditingAssignment(null); setTempAssignedUser(null); }}
+                                variant="ghost"
+                                size="sm"
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
                         ) : (
                         <Alert className="border-orange-200 bg-orange-50">
                           <AlertCircle className="h-4 w-4 text-orange-600" />
-                          <AlertDescription className="text-orange-800">
-                            {assignment.noAssignmentReason || t('noPersonAvailableForShift')}
+                          <AlertDescription className="text-orange-800 flex items-center justify-between gap-3">
+                            <span>{assignment.noAssignmentReason || t('noPersonAvailableForShift')}</span>
+                            <Button
+                              onClick={() => { setEditingAssignment(`${assignment.date}-${index}`); setTempAssignedUser(null); }}
+                              variant="outline"
+                              size="sm"
+                              className="hover:bg-white flex-shrink-0"
+                            >
+                              <Edit className="w-3 h-3 mr-1" />
+                              {tCommon("edit")}
+                            </Button>
                           </AlertDescription>
                         </Alert>
                       )}
