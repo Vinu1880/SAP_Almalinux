@@ -191,7 +191,26 @@
     "sun": "Sun",
     "shiftBreakdown": "Shift breakdown",
     "shiftDetails": "Shift details",
-    "pikettActive": "Pikett ({count})"
+    "pikettActive": "Pikett ({count})",
+    "splitShift": "Split shift",
+    "splitTitle": "Split shift",
+    "splitOriginal": "Original",
+    "splitSegment": "Segment",
+    "splitAddSegment": "Add segment",
+    "splitRemoveSegment": "Remove",
+    "splitAssignedTo": "Assigned to",
+    "splitSave": "Save split",
+    "splitRemove": "Remove split",
+    "splitCoverageError": "Segments must cover the whole shift without gaps",
+    "splitMinDuration": "Each segment must last at least 30 minutes",
+    "splitSuccess": "Shift split into {count} segments",
+    "splitError": "Could not split the shift",
+    "splitRemoved": "Split removed",
+    "splitBadge": "Split",
+    "splitWarnOutlook": "Existing invitations for this slot are cancelled and new ones are sent per segment.",
+    "splitCancelError": "Could not cancel the existing Outlook invitations — the shift was not split.",
+    "splitInviteNote": "This shift was split — you only cover the hours shown above.",
+    "splitPartialSend": "Shift split, but only {sent}/{total} invitations were sent. Resend the rest from the planner."
   },
   "shifts": {
     "title": "Shift Management",
@@ -778,6 +797,17 @@
     "statusCancelled": "Cancelled",
     "reasonWeekParity": "Week parity ({parity})",
     "reasonMaxLoad": "Max load reached ({pct}%)",
-    "reasonDoubleShift": "Double-shift from {shift}"
+    "reasonDoubleShift": "Double-shift from {shift}",
+    "splitTitle": "Split shift",
+    "splitShift": "Split shift",
+    "splitRemove": "Remove split",
+    "splitAssignedTo": "Assigned to",
+    "splitAddSegment": "Add segment",
+    "splitRemoveSegment": "Remove",
+    "splitCoverageError": "Segments must cover the whole shift without gaps",
+    "splitMinDuration": "Each segment must last at least 30 minutes",
+    "splitSave": "Save split",
+    "splitOriginal": "Original",
+    "splitBadge": "Split"
   }
 }

@@ -103,7 +103,11 @@ export async function POST(request: NextRequest) {
         userId: a.userId,
         status: a.status || 'PENDING',
         reason: a.reason || null,
-        sentById: auth.user.id
+        sentById: auth.user.id,
+        segmentStart: a.segmentStart ?? null,
+        segmentEnd: a.segmentEnd ?? null,
+        segmentGroupId: a.segmentGroupId ?? null,
+        segmentIndex: a.segmentIndex ?? null
       })),
       skipDuplicates: true
     });

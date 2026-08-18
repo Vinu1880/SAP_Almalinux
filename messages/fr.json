@@ -191,7 +191,26 @@
     "sun": "Dim",
     "shiftBreakdown": "Détail par shift",
     "shiftDetails": "Détails des shifts",
-    "pikettActive": "Pikett ({count})"
+    "pikettActive": "Pikett ({count})",
+    "splitShift": "Diviser le shift",
+    "splitTitle": "Diviser le shift",
+    "splitOriginal": "Original",
+    "splitSegment": "Segment",
+    "splitAddSegment": "Ajouter un segment",
+    "splitRemoveSegment": "Retirer",
+    "splitAssignedTo": "Assigné à",
+    "splitSave": "Enregistrer la division",
+    "splitRemove": "Supprimer la division",
+    "splitCoverageError": "Les segments doivent couvrir tout le shift sans trou",
+    "splitMinDuration": "Chaque segment doit durer au moins 30 minutes",
+    "splitSuccess": "Shift divisé en {count} segments",
+    "splitError": "Impossible de diviser le shift",
+    "splitRemoved": "Division supprimée",
+    "splitBadge": "Divisé",
+    "splitWarnOutlook": "Les invitations existantes de ce créneau sont annulées et de nouvelles sont envoyées par segment.",
+    "splitCancelError": "Impossible d'annuler les invitations Outlook existantes — le shift n'a pas été divisé.",
+    "splitInviteNote": "Ce shift a été divisé — vous ne couvrez que les heures indiquées ci-dessus.",
+    "splitPartialSend": "Shift divisé, mais seulement {sent}/{total} invitations envoyées. Renvoyez les autres depuis le planner."
   },
   "shifts": {
     "title": "Gestion des Shifts",
@@ -778,6 +797,17 @@
     "statusCancelled": "Annulé",
     "reasonWeekParity": "Parité de semaine ({parity})",
     "reasonMaxLoad": "Charge max atteinte ({pct}%)",
-    "reasonDoubleShift": "Double-shift depuis {shift}"
+    "reasonDoubleShift": "Double-shift depuis {shift}",
+    "splitTitle": "Diviser le shift",
+    "splitShift": "Diviser le shift",
+    "splitRemove": "Supprimer la division",
+    "splitAssignedTo": "Assigné à",
+    "splitAddSegment": "Ajouter un segment",
+    "splitRemoveSegment": "Retirer",
+    "splitCoverageError": "Les segments doivent couvrir tout le shift sans trou",
+    "splitMinDuration": "Chaque segment doit durer au moins 30 minutes",
+    "splitSave": "Enregistrer la division",
+    "splitOriginal": "Original",
+    "splitBadge": "Divisé"
   }
 }

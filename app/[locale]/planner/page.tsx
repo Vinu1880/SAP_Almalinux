@@ -30,6 +30,7 @@ import {
   Shield,
   Link2,
   Edit,
+  Scissors,
   X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -90,6 +91,11 @@ interface ShiftAssignment {
   noAssignmentReason?: string;
   isDoubleShift?: boolean;
   isDoubleShiftTrigger?: boolean;
+  // Split slot: set once the admin cuts a preview row into time segments.
+  segmentStart?: string;
+  segmentEnd?: string;
+  segmentGroupId?: string;
+  segmentIndex?: number;
 }
 
 const PlannerPage = () => {
@@ -111,6 +117,8 @@ const PlannerPage = () => {
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [selectedDayAssignments, setSelectedDayAssignments] = useState<ShiftAssignment[] | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [splittingPreview, setSplittingPreview] = useState<ShiftAssignment | null>(null);
+  const [previewSegments, setPreviewSegments] = useState<Array<{ start: string; end: string; userId: string }>>([]);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -329,6 +337,113 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     const allUsers = users.map(mapDbUser);
     setAvailableUsers(allUsers);
     return allUsers;
+  };
+
+  // Split a preview row before anything is sent. Purely local: the segments
+  // become separate rows in shiftAssignments and are persisted on send.
+  const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const toHHMM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  const openPreviewSplit = (assignment: ShiftAssignment) => {
+    const start = (assignment.shift?.startTime || '08:00').slice(0, 5);
+    const end = (assignment.shift?.endTime || '17:00').slice(0, 5);
+    const mid = toHHMM(Math.round((toMin(start) + toMin(end)) / 2 / 30) * 30);
+    setPreviewSegments([
+      { start, end: mid, userId: assignment.assignedUsers[0]?.id || '' },
+      { start: mid, end, userId: '' },
+    ]);
+    setSplittingPreview(assignment);
+  };
+
+  const updatePreviewSegment = (index: number, patch: Partial<{ start: string; end: string; userId: string }>) => {
+    setPreviewSegments(prev => {
+      const next = prev.map((s, i) => (i === index ? { ...s, ...patch } : s));
+      if (patch.end !== undefined && index < next.length - 1) {
+        next[index + 1] = { ...next[index + 1], start: patch.end };
+      }
+      if (patch.start !== undefined && index > 0) {
+        next[index - 1] = { ...next[index - 1], end: patch.start };
+      }
+      return next;
+    });
+  };
+
+  const addPreviewSegment = () => {
+    setPreviewSegments(prev => {
+      const last = prev[prev.length - 1];
+      const mid = toHHMM(Math.round((toMin(last.start) + toMin(last.end)) / 2 / 30) * 30);
+      if (mid === last.start || mid === last.end) return prev;
+      return [...prev.slice(0, -1), { ...last, end: mid }, { start: mid, end: last.end, userId: '' }];
+    });
+  };
+
+  const removePreviewSegment = (index: number) => {
+    setPreviewSegments(prev => {
+      if (prev.length <= 2) return prev;
+      const next = prev.filter((_, i) => i !== index);
+      if (index === 0) next[0] = { ...next[0], start: prev[0].start };
+      else next[index - 1] = { ...next[index - 1], end: prev[index].end };
+      return next;
+    });
+  };
+
+  const applyPreviewSplit = () => {
+    if (!splittingPreview) return;
+    const groupId = `preview-${Date.now()}`;
+    const rows: ShiftAssignment[] = previewSegments.map((seg, i) => ({
+      ...splittingPreview,
+      assignedUsers: [availableUsers.find(u => u.id === seg.userId)].filter(Boolean),
+      segmentStart: seg.start,
+      segmentEnd: seg.end,
+      segmentGroupId: groupId,
+      segmentIndex: i + 1,
+    }));
+
+    const replaceRow = (list: ShiftAssignment[]) => {
+      const out: ShiftAssignment[] = [];
+      for (const a of list) {
+        if (a.date === splittingPreview.date && a.shiftId === splittingPreview.shiftId && !a.segmentGroupId) {
+          out.push(...rows);
+        } else {
+          out.push(a);
+        }
+      }
+      return out;
+    };
+
+    setShiftAssignments(prev => replaceRow(prev));
+    setTempShiftAssignments(prev => replaceRow(prev));
+    setSelectedDayAssignments(prev => (prev ? replaceRow(prev) : prev));
+    setSplittingPreview(null);
+  };
+
+  const undoPreviewSplit = (groupId: string) => {
+    const restore = (list: ShiftAssignment[]) => {
+      const segs = list.filter(a => a.segmentGroupId === groupId);
+      if (segs.length === 0) return list;
+      const base = segs[0];
+      const merged: ShiftAssignment = {
+        ...base,
+        assignedUsers: base.assignedUsers,
+        segmentStart: undefined,
+        segmentEnd: undefined,
+        segmentGroupId: undefined,
+        segmentIndex: undefined,
+      };
+      const out: ShiftAssignment[] = [];
+      let inserted = false;
+      for (const a of list) {
+        if (a.segmentGroupId === groupId) {
+          if (!inserted) { out.push(merged); inserted = true; }
+        } else {
+          out.push(a);
+        }
+      }
+      return out;
+    };
+    setShiftAssignments(prev => restore(prev));
+    setTempShiftAssignments(prev => restore(prev));
+    setSelectedDayAssignments(prev => (prev ? restore(prev) : prev));
   };
 
   const handleSaveAssignmentChange = (assignmentDate: string, assignmentShiftId: string) => {
@@ -2108,6 +2223,10 @@ const processShiftAssignments = async () => {
         userEmail: string;
         shiftName: string;
         isPikett?: boolean;
+        segmentStart?: string;
+        segmentEnd?: string;
+        segmentGroupId?: string;
+        segmentIndex?: number;
       }> = [];
 
       // Piketts send one event per (week, user) covering the whole ISO week
@@ -2203,8 +2322,9 @@ const processShiftAssignments = async () => {
         const batch = sendTasks.slice(batchStart, batchStart + BATCH_SIZE);
 
         const batchResults = await Promise.allSettled(batch.map(async ({ assignment, user, weekEnd }: any) => {
-          const shiftStartTime = assignment.shift.startTime || '00:00';
-          const shiftEndTime = assignment.shift.endTime || '23:59';
+          // A split row carries its own window; fall back to the whole shift.
+          const shiftStartTime = assignment.segmentStart || assignment.shift.startTime || '00:00';
+          const shiftEndTime = assignment.segmentEnd || assignment.shift.endTime || '23:59';
 
           const [startHour, startMinute] = shiftStartTime.split(':');
           const [endHour, endMinute] = shiftEndTime.split(':');
@@ -2301,7 +2421,11 @@ const processShiftAssignments = async () => {
               outlookEventId: eventId,
               userEmail: user.email,
               shiftName: assignment.shift.name,
-              isPikett: !!assignment.isPikett
+              isPikett: !!assignment.isPikett,
+              segmentStart: assignment.segmentStart,
+              segmentEnd: assignment.segmentEnd,
+              segmentGroupId: assignment.segmentGroupId,
+              segmentIndex: assignment.segmentIndex
             });
           } else {
             outlookErrors++;
@@ -2331,9 +2455,32 @@ const processShiftAssignments = async () => {
       }
 
       // Shifts and piketts land in separate tables to preserve foreign-key integrity.
+      // Preview split groups carry a local id; swap it for a stable one so the
+      // segments of a slot stay grouped once persisted.
+      const groupIdMap = new Map<string, string>();
       const dbShiftAssignments = successfulAssignments
         .filter(a => !a.isPikett)
-        .map(a => ({ date: a.date, shiftId: a.shiftId, userId: a.userId, status: a.status }));
+        .map(a => {
+          let groupId: string | undefined;
+          if (a.segmentGroupId) {
+            if (!groupIdMap.has(a.segmentGroupId)) {
+              groupIdMap.set(a.segmentGroupId, `${a.date}-${a.shiftId}-${Date.now()}`);
+            }
+            groupId = groupIdMap.get(a.segmentGroupId);
+          }
+          return {
+            date: a.date,
+            shiftId: a.shiftId,
+            userId: a.userId,
+            status: a.status,
+            ...(groupId ? {
+              segmentStart: a.segmentStart,
+              segmentEnd: a.segmentEnd,
+              segmentGroupId: groupId,
+              segmentIndex: a.segmentIndex,
+            } : {}),
+          };
+        });
 
       // One Outlook event covers a whole pikett week, but the DB stores one
       // row per day (so stats show 7 pikett-days). Expand accordingly.
@@ -2485,7 +2632,10 @@ const CalendarDay = ({ day }: { day: number | null }) => {
   const sortedAssignments = [...assignments].sort((a, b) => {
     if (a.isPikett && !b.isPikett) return -1;
     if (!a.isPikett && b.isPikett) return 1;
-    return (a.shift?.name || a.shiftId).localeCompare(b.shift?.name || b.shiftId);
+    const byName = (a.shift?.name || a.shiftId).localeCompare(b.shift?.name || b.shiftId);
+    if (byName !== 0) return byName;
+    // Same shift: keep split segments in chronological order.
+    return (a.segmentIndex ?? 0) - (b.segmentIndex ?? 0);
   });
   const maxVisible = expandedCalendar ? sortedAssignments.length : 3;
   const visibleAssignments = sortedAssignments.slice(0, maxVisible);
@@ -2537,12 +2687,20 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                 {assignment.isRotationAssignment && !assignment.isPikett && !assignment.isDoubleShift && (
                   <RotateCw className="w-3 h-3 flex-shrink-0" style={{ color }} />
                 )}
-                <span 
-                  style={{ color }} 
+                {assignment.segmentGroupId && (
+                  <Scissors className="w-3 h-3 flex-shrink-0 text-amber-600" />
+                )}
+                <span
+                  style={{ color }}
                   className="font-medium text-xs truncate"
                 >
                   {assignment.shift?.name || 'Shift'}
                 </span>
+                {assignment.segmentStart && (
+                  <span className="text-[10px] text-amber-700 flex-shrink-0 whitespace-nowrap">
+                    {assignment.segmentStart}-{assignment.segmentEnd}
+                  </span>
+                )}
                 {assignment.assignedUsers.length > 0 ? (
                   <>
                     <span className="text-slate-700 truncate text-xs">
@@ -3660,9 +3818,138 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* Split a preview row into time segments (nothing sent yet) */}
+        <Dialog open={!!splittingPreview} onOpenChange={(open) => { if (!open) setSplittingPreview(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Scissors className="w-5 h-5 text-amber-600" />
+                {t('splitTitle')}
+              </DialogTitle>
+            </DialogHeader>
+
+            {splittingPreview && (() => {
+              const shiftStart = (splittingPreview.shift?.startTime || '').slice(0, 5);
+              const shiftEnd = (splittingPreview.shift?.endTime || '').slice(0, 5);
+              const eligible = getEligibleUsersForShift(splittingPreview.shift);
+              const covers =
+                previewSegments.length > 0 &&
+                previewSegments[0].start === shiftStart &&
+                previewSegments[previewSegments.length - 1].end === shiftEnd;
+              const longEnough = previewSegments.every(s => toMin(s.end) - toMin(s.start) >= 30);
+              const allAssigned = previewSegments.every(s => !!s.userId);
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: splittingPreview.shift?.color || '#6b7280' }}
+                    />
+                    <span className="font-medium text-slate-800">{splittingPreview.shift?.name}</span>
+                    <span className="text-slate-400">·</span>
+                    <span>{shiftStart} → {shiftEnd}</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {previewSegments.map((seg, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-amber-200 hover:bg-amber-50/40 transition-colors"
+                      >
+                        <span className="text-xs font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 w-8 text-center flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        <Input
+                          type="time"
+                          value={seg.start}
+                          disabled={i === 0}
+                          onChange={(e) => updatePreviewSegment(i, { start: e.target.value })}
+                          className="h-8 w-28 disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                        <span className="text-slate-400 flex-shrink-0">→</span>
+                        <Input
+                          type="time"
+                          value={seg.end}
+                          disabled={i === previewSegments.length - 1}
+                          onChange={(e) => updatePreviewSegment(i, { end: e.target.value })}
+                          className="h-8 w-28 disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                        <Select value={seg.userId} onValueChange={(v) => updatePreviewSegment(i, { userId: v })}>
+                          <SelectTrigger className="h-8 flex-1 hover:bg-white transition-colors">
+                            <SelectValue placeholder={t('splitAssignedTo')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {eligible.map((u: any) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.firstName} {u.lastName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {previewSegments.length > 2 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 flex-shrink-0 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                            onClick={() => removePreviewSegment(i)}
+                            title={t('splitRemoveSegment')}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {previewSegments.length < 6 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={addPreviewSegment}
+                      className="hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-colors"
+                    >
+                      + {t('splitAddSegment')}
+                    </Button>
+                  )}
+
+                  {!covers && (
+                    <p className="text-xs text-red-600 bg-red-50 border-l-2 border-red-300 px-2 py-1.5 rounded">
+                      {t('splitCoverageError')}
+                    </p>
+                  )}
+                  {covers && !longEnough && (
+                    <p className="text-xs text-red-600 bg-red-50 border-l-2 border-red-300 px-2 py-1.5 rounded">
+                      {t('splitMinDuration')}
+                    </p>
+                  )}
+
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setSplittingPreview(null)}
+                      className="hover:bg-secondary/20 transition-colors"
+                    >
+                      {tCommon('cancel')}
+                    </Button>
+                    <Button
+                      onClick={applyPreviewSplit}
+                      disabled={!covers || !longEnough || !allAssigned}
+                      className="bg-primary hover:bg-primary/90 transition-colors"
+                    >
+                      <Scissors className="w-4 h-4 mr-2" />
+                      {t('splitSave')}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
         {/* Improved day details dialog */}
-        <Dialog 
-            open={isDetailDialogOpen} 
+        <Dialog
+            open={isDetailDialogOpen}
             onOpenChange={(open) => {
               if (!open) {
                 setEditingAssignment(null);
@@ -4337,18 +4624,43 @@ useEffect(() => {
                                     </Button>
                                   </div>
                                 ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditingAssignment(`${assignment.date}-${index}`);
-                                      setTempAssignedUser(assignment.assignedUsers[0]?.id || null);
-                                    }}
-                                    className="hover:bg-secondary/20 transition-colors"
-                                  >
-                                    <Edit className="w-3 h-3 mr-1" />
-                                    {tCommon("edit")}
-                                  </Button>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setEditingAssignment(`${assignment.date}-${index}`);
+                                        setTempAssignedUser(assignment.assignedUsers[0]?.id || null);
+                                      }}
+                                      className="hover:bg-secondary/20 transition-colors"
+                                    >
+                                      <Edit className="w-3 h-3 mr-1" />
+                                      {tCommon("edit")}
+                                    </Button>
+                                    {!assignment.isPikett && (
+                                      assignment.segmentGroupId ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => undoPreviewSplit(assignment.segmentGroupId!)}
+                                          title={t('splitRemove')}
+                                          className="hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300"
+                                        >
+                                          <Scissors className="w-3 h-3" />
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => openPreviewSplit(assignment)}
+                                          title={t('splitShift')}
+                                          className="hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                                        >
+                                          <Scissors className="w-3 h-3" />
+                                        </Button>
+                                      )
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>

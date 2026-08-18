@@ -158,16 +158,28 @@ model ShiftAssignment {
   sentById        String?
   sentBy          User?            @relation("SentShiftAssignments", fields: [sentById], references: [id], onDelete: SetNull)
 
+  // Split shift: a slot cut into time segments held by different people.
+  // Null on regular assignments.
+  segmentStart    String?          // "08:00"
+  segmentEnd      String?          // "12:30"
+  segmentGroupId  String?          // shared by every segment of one split
+  segmentIndex    Int?             // 1-based position within the split
+
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  @@unique([date, shiftId, userId])
+  // Uniqueness is enforced by a SQL expression index Prisma cannot express:
+  //   UNIQUE (date, shiftId, userId, COALESCE(segmentIndex, 0))
+  // A plain @@unique on segmentIndex would let unsplit rows duplicate freely,
+  // because Postgres treats NULLs as distinct in unique indexes.
+  // Create it once per environment (see docs-internal), it is not in db push.
   @@index([userId])
   @@index([shiftId])
   @@index([date])
   @@index([status])
   @@index([outlookEventId])
   @@index([resentFromId])
+  @@index([segmentGroupId])
   @@index([sentById])
 }
 

@@ -191,7 +191,26 @@
     "sun": "So",
     "shiftBreakdown": "Schichtaufschlüsselung",
     "shiftDetails": "Schicht Details",
-    "pikettActive": "Pikett ({count})"
+    "pikettActive": "Pikett ({count})",
+    "splitShift": "Schicht teilen",
+    "splitTitle": "Schicht teilen",
+    "splitOriginal": "Original",
+    "splitSegment": "Abschnitt",
+    "splitAddSegment": "Abschnitt hinzufügen",
+    "splitRemoveSegment": "Entfernen",
+    "splitAssignedTo": "Zugewiesen an",
+    "splitSave": "Teilung speichern",
+    "splitRemove": "Teilung entfernen",
+    "splitCoverageError": "Die Abschnitte müssen die ganze Schicht lückenlos abdecken",
+    "splitMinDuration": "Jeder Abschnitt muss mindestens 30 Minuten dauern",
+    "splitSuccess": "Schicht in {count} Abschnitte geteilt",
+    "splitError": "Schicht konnte nicht geteilt werden",
+    "splitRemoved": "Teilung entfernt",
+    "splitBadge": "Geteilt",
+    "splitWarnOutlook": "Bestehende Einladungen für diesen Slot werden storniert und neue pro Abschnitt gesendet.",
+    "splitCancelError": "Die bestehenden Outlook-Einladungen konnten nicht storniert werden — die Schicht wurde nicht geteilt.",
+    "splitInviteNote": "Diese Schicht wurde geteilt — Sie decken nur die oben genannten Stunden ab.",
+    "splitPartialSend": "Schicht geteilt, aber nur {sent}/{total} Einladungen gesendet. Senden Sie die übrigen über den Planer."
   },
   "shifts": {
     "title": "Schichtverwaltung",
@@ -778,6 +797,17 @@
     "statusCancelled": "Storniert",
     "reasonWeekParity": "Wochenparität ({parity})",
     "reasonMaxLoad": "Maximale Auslastung erreicht ({pct}%)",
-    "reasonDoubleShift": "Doppelschicht von {shift}"
+    "reasonDoubleShift": "Doppelschicht von {shift}",
+    "splitTitle": "Schicht teilen",
+    "splitShift": "Schicht teilen",
+    "splitRemove": "Teilung entfernen",
+    "splitAssignedTo": "Zugewiesen an",
+    "splitAddSegment": "Abschnitt hinzufügen",
+    "splitRemoveSegment": "Entfernen",
+    "splitCoverageError": "Die Abschnitte müssen die ganze Schicht lückenlos abdecken",
+    "splitMinDuration": "Jeder Abschnitt muss mindestens 30 Minuten dauern",
+    "splitSave": "Teilung speichern",
+    "splitOriginal": "Original",
+    "splitBadge": "Geteilt"
   }
 }

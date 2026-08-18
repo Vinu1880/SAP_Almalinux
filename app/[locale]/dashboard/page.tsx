@@ -9,7 +9,7 @@ import {
   CheckCircle, XCircle, Clock3, TrendingUp, Users, Calendar, Filter,
   Download, RefreshCw, Loader2, Send, AlertCircle, X, Network,
   FilterX, ArrowUpDown, ArrowUp, ArrowDown, Trash2, AlertTriangle,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Scissors
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,10 @@ const DashboardPage = () => {
   const [resending, setResending] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [splittingAssignment, setSplittingAssignment] = useState<any | null>(null);
+  const [splitSegments, setSplitSegments] = useState<Array<{ start: string; end: string; userId: string }>>([]);
+  const [splitting, setSplitting] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedShift, setSelectedShift] = useState<string>('all');
@@ -433,6 +437,227 @@ const DashboardPage = () => {
     calculateAvailability();
   }, [resendingAssignment, assignments, users]);
 
+  // Seed the dialog with two halves of the shift window, rounded to the hour
+  // boundary in the middle, so the admin only adjusts what differs.
+  const openSplitDialog = (assignment: any) => {
+    const start = (assignment.shift?.startTime || '08:00').slice(0, 5);
+    const end = (assignment.shift?.endTime || '17:00').slice(0, 5);
+    const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const toStr = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    const mid = toStr(Math.round((toMin(start) + toMin(end)) / 2 / 30) * 30);
+    setSplitSegments([
+      { start, end: mid, userId: assignment.userId },
+      { start: mid, end, userId: '' },
+    ]);
+    setSplittingAssignment(assignment);
+  };
+
+  const updateSegment = (index: number, patch: Partial<{ start: string; end: string; userId: string }>) => {
+    setSplitSegments(prev => {
+      const next = prev.map((s, i) => (i === index ? { ...s, ...patch } : s));
+      // Keep the chain contiguous: moving a boundary shifts the next segment.
+      if (patch.end !== undefined && index < next.length - 1) {
+        next[index + 1] = { ...next[index + 1], start: patch.end };
+      }
+      if (patch.start !== undefined && index > 0) {
+        next[index - 1] = { ...next[index - 1], end: patch.start };
+      }
+      return next;
+    });
+  };
+
+  const addSegment = () => {
+    setSplitSegments(prev => {
+      const last = prev[prev.length - 1];
+      const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+      const toStr = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      const mid = toStr(Math.round((toMin(last.start) + toMin(last.end)) / 2 / 30) * 30);
+      if (mid === last.start || mid === last.end) return prev;
+      return [
+        ...prev.slice(0, -1),
+        { ...last, end: mid },
+        { start: mid, end: last.end, userId: '' },
+      ];
+    });
+  };
+
+  const removeSegment = (index: number) => {
+    setSplitSegments(prev => {
+      if (prev.length <= 2) return prev;
+      const next = prev.filter((_, i) => i !== index);
+      // Close the gap left behind so coverage stays continuous.
+      if (index === 0) next[0] = { ...next[0], start: prev[0].start };
+      else next[index - 1] = { ...next[index - 1], end: prev[index].end };
+      return next;
+    });
+  };
+
+  const handleSplit = async () => {
+    if (!splittingAssignment) return;
+    if (splitSegments.some(s => !s.userId)) return;
+
+    setSplitting(true);
+    try {
+      const d = new Date(splittingAssignment.date);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      // Cancel the Outlook invitations of this slot first — the split drops the
+      // rows, and without this the events would stay orphaned in the calendars.
+      const shiftId = splittingAssignment.shiftId;
+      const sameSlot = (assignments || []).filter((a: any) =>
+        a.shiftId === shiftId &&
+        new Date(a.date).toDateString() === d.toDateString() &&
+        a.outlookEventId
+      );
+
+      if (sameSlot.length > 0) {
+        const graphToken = await getAccessToken();
+        if (!graphToken) {
+          setActionMessage({ type: 'error', text: t('tokenError') });
+          setSplitting(false);
+          return;
+        }
+        const mailbox = splittingAssignment.shift?.senderMailbox || 'me';
+        const failed: string[] = [];
+        for (const a of sameSlot) {
+          try {
+            const del = await authFetch('/api/outlook/send-event', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
+              body: JSON.stringify({ mailbox, eventId: (a as any).outlookEventId }),
+            });
+            if (!del.ok) failed.push((a as any).id);
+          } catch {
+            failed.push((a as any).id);
+          }
+        }
+        // Stop rather than split: leaving live invitations for a slot that no
+        // longer exists is worse than not splitting at all.
+        if (failed.length > 0) {
+          setActionMessage({ type: 'error', text: t('splitCancelError') });
+          setSplitting(false);
+          setTimeout(() => setActionMessage(null), 8000);
+          return;
+        }
+      }
+
+      const res = await authFetch('/api/shift-assignments/split', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: dateStr,
+          shiftId: splittingAssignment.shiftId,
+          segments: splitSegments,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setActionMessage({ type: 'error', text: err?.error || t('splitError') });
+      } else {
+        // Send one invitation per segment, with that segment's own hours.
+        const { assignments: createdSegments } = await res.json();
+        const graphToken = await getAccessToken();
+        const mailbox = splittingAssignment.shift?.senderMailbox || 'me';
+        let sent = 0;
+        const sendFailures: string[] = [];
+
+        if (graphToken) {
+          for (const segRow of createdSegments || []) {
+            try {
+              const [sh, sm] = segRow.segmentStart.split(':').map(Number);
+              const [eh, em] = segRow.segmentEnd.split(':').map(Number);
+              const segStart = new Date(d); segStart.setHours(sh, sm, 0, 0);
+              const segEnd = new Date(d); segEnd.setHours(eh, em, 0, 0);
+              if (segEnd <= segStart) segEnd.setDate(segEnd.getDate() + 1);
+
+              const event = {
+                subject: `${splittingAssignment.shift?.name} - ${segRow.user.firstName} ${segRow.user.lastName}`,
+                body: {
+                  contentType: 'HTML',
+                  content: `
+                    <h2>${splittingAssignment.shift?.name}</h2>
+                    <p><strong>${t('invitationEmailSchedule')}</strong> ${segRow.segmentStart} - ${segRow.segmentEnd}</p>
+                    <p>${t('splitInviteNote')}</p>
+                    <p style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:8px 12px;margin-top:8px;">
+                      ⚠️ Always choose <strong>"Send the response now"</strong> so we can track the status.
+                    </p>
+                  `,
+                },
+                start: { dateTime: segStart.toISOString(), timeZone: 'Europe/Zurich' },
+                end: { dateTime: segEnd.toISOString(), timeZone: 'Europe/Zurich' },
+                attendees: [{
+                  emailAddress: { address: segRow.user.email, name: `${segRow.user.firstName} ${segRow.user.lastName}` },
+                  type: 'required',
+                }],
+                location: { displayName: 'Office' },
+                isReminderOn: true,
+                reminderMinutesBeforeStart: 1440,
+                responseRequested: true,
+                allowNewTimeProposals: false,
+                showAs: 'busy',
+                categories: ['Shift', splittingAssignment.shift?.name],
+              };
+
+              const sendRes = await authFetch('/api/outlook/send-event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
+                body: JSON.stringify({ mailbox, event }),
+              });
+
+              if (!sendRes.ok) { sendFailures.push(segRow.id); continue; }
+
+              const { eventId } = await sendRes.json();
+              await authFetch(`/api/shift-assignments/${segRow.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ outlookEventId: eventId }),
+              });
+              sent++;
+            } catch {
+              sendFailures.push(segRow.id);
+            }
+          }
+        }
+
+        // The split itself succeeded; report separately if some invites failed
+        // so the rows are not mistaken for unsent ones.
+        setActionMessage(
+          sendFailures.length > 0 || !graphToken
+            ? { type: 'error', text: t('splitPartialSend', { sent, total: (createdSegments || []).length }) }
+            : { type: 'success', text: t('splitSuccess', { count: splitSegments.length }) }
+        );
+        setSplittingAssignment(null);
+        refresh();
+      }
+    } catch {
+      setActionMessage({ type: 'error', text: t('splitError') });
+    } finally {
+      setSplitting(false);
+      setTimeout(() => setActionMessage(null), 5000);
+    }
+  };
+
+  const handleRemoveSplit = async (segmentGroupId: string) => {
+    setSplitting(true);
+    try {
+      const res = await authFetch(`/api/shift-assignments/split?segmentGroupId=${segmentGroupId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setActionMessage({ type: 'success', text: t('splitRemoved') });
+        refresh();
+      } else {
+        setActionMessage({ type: 'error', text: t('splitError') });
+      }
+    } catch {
+      setActionMessage({ type: 'error', text: t('splitError') });
+    } finally {
+      setSplitting(false);
+      setTimeout(() => setActionMessage(null), 5000);
+    }
+  };
+
   const handleResend = async () => {
     if (!resendingAssignment || !selectedNewUser) return;
 
@@ -446,8 +671,15 @@ const DashboardPage = () => {
       const date = new Date(resendingAssignment.date);
       const itemName = shiftOrPikett.name;
 
-      const startTime = mode === 'shifts' ? (shiftOrPikett.startTime || '00:00') : '00:00';
-      const endTime = mode === 'shifts' ? (shiftOrPikett.endTime || '23:59') : '23:59';
+      // A split segment keeps its own window: resending it must not hand the
+      // replacement the whole shift.
+      const seg = resendingAssignment as any;
+      const startTime = mode === 'shifts'
+        ? (seg.segmentStart || shiftOrPikett.startTime || '00:00')
+        : '00:00';
+      const endTime = mode === 'shifts'
+        ? (seg.segmentEnd || shiftOrPikett.endTime || '23:59')
+        : '23:59';
 
       const [startHour, startMinute] = startTime.split(':');
       const [endHour, endMinute] = endTime.split(':');
@@ -536,8 +768,21 @@ const DashboardPage = () => {
         throw new Error(t('updateError'));
       }
 
+      // Carry the segment identity over, otherwise the replacement row would
+      // land with segmentIndex NULL and cover the slot a second time.
       const assignmentPayload = mode === 'shifts'
-        ? { date: resendingAssignment.date, shiftId: shiftOrPikett.id, userId: newUser.id, status: 'PENDING' }
+        ? {
+            date: resendingAssignment.date,
+            shiftId: shiftOrPikett.id,
+            userId: newUser.id,
+            status: 'PENDING',
+            ...(seg.segmentGroupId ? {
+              segmentStart: seg.segmentStart,
+              segmentEnd: seg.segmentEnd,
+              segmentGroupId: seg.segmentGroupId,
+              segmentIndex: seg.segmentIndex,
+            } : {}),
+          }
         : { date: resendingAssignment.date, pikettId: shiftOrPikett.id, userId: newUser.id, status: 'PENDING' };
 
       const createResponse = await authFetch(apiBase, {
@@ -1192,11 +1437,19 @@ const DashboardPage = () => {
                                   <p className="font-medium text-slate-800">
                                     {mode === 'shifts' ? (assignment as any).shift?.name : (assignment as any).pikett?.name}
                                   </p>
-                                  <p className="text-xs text-slate-500">
+                                  <p className="text-xs text-slate-500 flex items-center gap-1.5">
                                     {mode === 'shifts'
-                                      ? `${(assignment as any).shift?.startTime} - ${(assignment as any).shift?.endTime}`
+                                      ? ((assignment as any).segmentStart
+                                          // A segment shows its own window, not the whole shift.
+                                          ? `${(assignment as any).segmentStart} - ${(assignment as any).segmentEnd}`
+                                          : `${(assignment as any).shift?.startTime} - ${(assignment as any).shift?.endTime}`)
                                       : (assignment as any).pikett?.is24_7 ? '24/7' : ''
                                     }
+                                    {(assignment as any).segmentGroupId && (
+                                      <Badge variant="outline" className="text-[10px] bg-amber-50 border-amber-200 text-amber-700 px-1 py-0">
+                                        {t('splitBadge')} {(assignment as any).segmentIndex}
+                                      </Badge>
+                                    )}
                                   </p>
                                 </div>
                               </td>
@@ -1226,6 +1479,30 @@ const DashboardPage = () => {
                                       <Send className="w-4 h-4 mr-2" />
                                       {t('resend')}
                                     </Button>
+                                  )}
+                                  {mode === 'shifts' && (
+                                    (assignment as any).segmentGroupId ? (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRemoveSplit((assignment as any).segmentGroupId)}
+                                        disabled={splitting}
+                                        title={t('splitRemove')}
+                                        className="hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300"
+                                      >
+                                        <Scissors className="w-4 h-4" />
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => openSplitDialog(assignment)}
+                                        title={t('splitShift')}
+                                        className="hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                                      >
+                                        <Scissors className="w-4 h-4" />
+                                      </Button>
+                                    )
                                   )}
                                   <Button
                                     variant="outline"
@@ -1573,14 +1850,19 @@ const DashboardPage = () => {
                         const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                         const rawDayAssignments = calendarByDate[dateStr] || [];
                         // Hide non-ACCEPTED entries once the same shift/pikett has an ACCEPTED one that day
+                        // Group per segment when the slot is split, otherwise one
+                        // accepted segment would hide the others.
+                        const slotKey = (a: any) => {
+                          const itemId = mode === 'shifts' ? a.shiftId : a.pikettId;
+                          return a.segmentIndex != null ? `${itemId}#${a.segmentIndex}` : itemId;
+                        };
                         const acceptedItemIds = new Set(
                           rawDayAssignments
                             .filter((a: any) => a.status === 'ACCEPTED')
-                            .map((a: any) => mode === 'shifts' ? a.shiftId : a.pikettId)
+                            .map(slotKey)
                         );
                         const dayAssignments = rawDayAssignments.filter((a: any) => {
-                          const itemId = mode === 'shifts' ? a.shiftId : a.pikettId;
-                          if (acceptedItemIds.has(itemId)) {
+                          if (acceptedItemIds.has(slotKey(a))) {
                             return a.status === 'ACCEPTED';
                           }
                           return true;
@@ -1602,8 +1884,12 @@ const DashboardPage = () => {
                               {dayAssignments.slice(0, maxVisible).map((a: any) => (
                                 <div key={a.id} className="flex items-center gap-1 text-xs leading-tight truncate">
                                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(a.status)}`} />
+                                  {a.segmentGroupId && (
+                                    <Scissors className="w-3 h-3 flex-shrink-0 text-amber-600" />
+                                  )}
                                   <span className="truncate text-slate-700">
-                                    {(mode === 'shifts' ? a.shift?.name : a.pikett?.name) || ''} — {a.user?.firstName} {a.user?.lastName}
+                                    {(mode === 'shifts' ? a.shift?.name : a.pikett?.name) || ''}
+                                    {a.segmentStart ? ` ${a.segmentStart}-${a.segmentEnd}` : ''} — {a.user?.firstName} {a.user?.lastName}
                                   </span>
                                 </div>
                               ))}
@@ -1940,6 +2226,128 @@ const DashboardPage = () => {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Split shift modal */}
+      <Dialog open={!!splittingAssignment} onOpenChange={(open) => {
+        if (!open && !splitting) setSplittingAssignment(null);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scissors className="w-5 h-5 text-green-600" />
+              {t('splitTitle')}
+            </DialogTitle>
+          </DialogHeader>
+
+          {splittingAssignment && (() => {
+            const shiftStart = (splittingAssignment.shift?.startTime || '').slice(0, 5);
+            const shiftEnd = (splittingAssignment.shift?.endTime || '').slice(0, 5);
+            const eligible = getEligibleUsersForShift(splittingAssignment.shift);
+            const covers =
+              splitSegments.length > 0 &&
+              splitSegments[0].start === shiftStart &&
+              splitSegments[splitSegments.length - 1].end === shiftEnd;
+            const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+            const longEnough = splitSegments.every(s => toMin(s.end) - toMin(s.start) >= 30);
+            const allAssigned = splitSegments.every(s => !!s.userId);
+
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  {splittingAssignment.shift?.name} — {t('splitOriginal')}: {shiftStart} → {shiftEnd}
+                </p>
+
+                <div className="space-y-2">
+                  {splitSegments.map((seg, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-slate-50">
+                      <span className="text-xs font-medium text-slate-500 w-20 flex-shrink-0">
+                        {t('splitSegment')} {i + 1}
+                      </span>
+                      <Input
+                        type="time"
+                        value={seg.start}
+                        disabled={i === 0}
+                        onChange={(e) => updateSegment(i, { start: e.target.value })}
+                        className="h-8 w-28"
+                      />
+                      <span className="text-slate-400">→</span>
+                      <Input
+                        type="time"
+                        value={seg.end}
+                        disabled={i === splitSegments.length - 1}
+                        onChange={(e) => updateSegment(i, { end: e.target.value })}
+                        className="h-8 w-28"
+                      />
+                      <Select
+                        value={seg.userId}
+                        onValueChange={(v) => updateSegment(i, { userId: v })}
+                      >
+                        <SelectTrigger className="h-8 flex-1">
+                          <SelectValue placeholder={t('splitAssignedTo')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligible.map((u: any) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.firstName} {u.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {splitSegments.length > 2 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 hover:bg-red-50 hover:text-red-600"
+                          onClick={() => removeSegment(i)}
+                          title={t('splitRemoveSegment')}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {splitSegments.length < 6 && (
+                  <Button variant="outline" size="sm" onClick={addSegment}>
+                    + {t('splitAddSegment')}
+                  </Button>
+                )}
+
+                {!covers && (
+                  <p className="text-xs text-red-600">{t('splitCoverageError')}</p>
+                )}
+                {covers && !longEnough && (
+                  <p className="text-xs text-red-600">{t('splitMinDuration')}</p>
+                )}
+
+                <p className="text-xs text-amber-700 bg-amber-50 border-l-2 border-amber-300 px-2 py-1.5 rounded">
+                  {t('splitWarnOutlook')}
+                </p>
+
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSplittingAssignment(null)}
+                    disabled={splitting}
+                  >
+                    {tCommon('cancel')}
+                  </Button>
+                  <Button
+                    onClick={handleSplit}
+                    disabled={splitting || !covers || !longEnough || !allAssigned}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    {splitting
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{tCommon('saving')}</>
+                      : t('splitSave')}
+                  </Button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

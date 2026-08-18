@@ -111,7 +111,48 @@ export const createBulkShiftAssignmentsSchema = z.object({
     status: z.enum(['PENDING', 'TENTATIVE', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional().default('PENDING'),
     reason: z.string().max(500).nullable().optional(),
     outlookEventId: z.string().max(255).nullable().optional(),
+    // Present when the row belongs to a split slot (e.g. resending one segment).
+    segmentStart: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+    segmentEnd: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+    segmentGroupId: z.string().max(64).nullable().optional(),
+    segmentIndex: z.number().int().min(1).max(6).nullable().optional(),
   })).min(1).max(1000),
+});
+
+const timeSchema = z.string().regex(/^\d{2}:\d{2}$/, 'Expected HH:MM');
+const toMinutes = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
+// Split a slot into contiguous segments. Segments must be ordered, gap-free,
+// at least 30 minutes each, and together cover exactly the original window.
+export const splitShiftAssignmentSchema = z.object({
+  date: z.string(),
+  shiftId: cuidSchema,
+  segments: z.array(z.object({
+    start: timeSchema,
+    end: timeSchema,
+    userId: cuidSchema,
+  })).min(2).max(6),
+}).superRefine((val, ctx) => {
+  const segs = val.segments;
+  for (let i = 0; i < segs.length; i++) {
+    const s = toMinutes(segs[i].start);
+    const e = toMinutes(segs[i].end);
+    if (e <= s) {
+      ctx.addIssue({ code: 'custom', path: ['segments', i], message: 'Segment ends before it starts' });
+      return;
+    }
+    if (e - s < 30) {
+      ctx.addIssue({ code: 'custom', path: ['segments', i], message: 'Segment shorter than 30 minutes' });
+      return;
+    }
+    if (i > 0 && segs[i].start !== segs[i - 1].end) {
+      ctx.addIssue({ code: 'custom', path: ['segments', i], message: 'Segments must be contiguous and ordered' });
+      return;
+    }
+  }
 });
 
 export const createBulkPikettAssignmentsSchema = z.object({
