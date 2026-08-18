@@ -163,18 +163,10 @@ export async function POST(request: NextRequest) {
         if (newStatus !== 'PENDING' && newStatus !== assignment.status) {
           await updateStatus({ status: newStatus, respondedAt: new Date() });
 
-          if (newStatus === 'REFUSED' && outlookEventId) {
-            try {
-              const cancelRes = await fetch(`${eventUrl}/cancel`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${graphToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ comment: 'Shift declined' }),
-              });
-              if (!cancelRes.ok && cancelRes.status !== 202) {
-                await fetch(eventUrl, { method: 'DELETE', headers: { 'Authorization': `Bearer ${graphToken}` } });
-              }
-            } catch { /* continue */ }
-          }
+          // A decline is deliberately left on the calendar. Cancelling it made
+          // the slot vanish, so a refused shift read as "not planned" instead of
+          // "declined" — the planner could no longer see it needed reassigning.
+          // Outlook already shows the attendee's declined state on the event.
 
           await prisma.auditLog.create({
             data: {
@@ -187,7 +179,7 @@ export async function POST(request: NextRequest) {
                 oldStatus: assignment.status,
                 newStatus,
                 outlookResponse: responseStatus,
-                outlookEventDeleted: newStatus === 'REFUSED'
+                outlookEventDeleted: false
               }
             }
           });

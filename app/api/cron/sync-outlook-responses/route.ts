@@ -225,27 +225,8 @@ export async function POST(request: NextRequest) {
             }
           });
 
-          // Delete the calendar event when declined
-          if (newStatus === 'REFUSED' && outlookEventId) {
-            try {
-              const deleteUrl = mailbox === 'me'
-                ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
-                : `https://graph.microsoft.com/v1.0/users/${mailbox}/calendar/events/${outlookEventId}`;
-              const deleteResponse = await fetch(deleteUrl, {
-                method: 'DELETE',
-                headers: {
-                  'Authorization': `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json'
-                }
-              });
-
-              if (!deleteResponse.ok && deleteResponse.status !== 204) {
-                // Event deletion failed but we continue
-              }
-            } catch (deleteError) {
-              // Continue even if deletion fails
-            }
-          }
+          // Declined events stay on the calendar: removing them made the slot
+          // look unplanned instead of refused. Kept in sync with outlook/sync.
 
           await prisma.auditLog.create({
             data: {

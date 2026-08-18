@@ -1150,7 +1150,71 @@ const processShiftAssignments = async () => {
       const weekNo = Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
       return `${tmp.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
     };
-    
+
+    // Seed availability for the days already elapsed this year, so the fairness
+    // ratio has a denominator covering the same span as the assignment counts
+    // seeded from the DB. Without this the ratio would be "a year of shifts over
+    // one tranche of days", and anyone returning from leave would still be
+    // picked first. Days spent out of office do not count as available.
+    {
+      const [ey] = String(endDate).split('-').map(Number);
+      const yearStart = new Date(ey, 0, 1);
+      const historyEnd = new Date(Math.min(new Date(startDate).getTime(), Date.now()));
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      // Past absences, so leave taken earlier this year lowers the denominator
+      // too. Scoped to this block on purpose: it must never reach
+      // outOfOfficeEvents, which drives the preview table — showing a year of
+      // absences there would bury the ones that matter for the selected range.
+      let pastOof: OutlookEvent[] = [];
+      try {
+        const resp = await authFetch(`/api/oof-mock?start=${fmt(yearStart)}&end=${fmt(historyEnd)}`);
+        if (resp.ok) pastOof = await resp.json();
+      } catch {
+        // Non-blocking: the ratio stays slightly optimistic for absentees.
+      }
+
+      // Index absences per user once: isUserAvailable would otherwise rescan the
+      // whole list for every user on every past day of the year.
+      const oofByEmail = new Map<string, OutlookEvent[]>();
+      for (const e of pastOof) {
+        const addr = e.organizer?.emailAddress?.address?.toLowerCase();
+        if (!addr) continue;
+        const list = oofByEmail.get(addr) || [];
+        list.push(e);
+        oofByEmail.set(addr, list);
+      }
+
+      for (const shiftId of selectedShifts) {
+        const shift = shiftMap.get(shiftId);
+        if (!shift) continue;
+        const eligible = getEligibleUsersForShift(shift);
+        if (eligible.length === 0) continue;
+
+        for (let d = new Date(yearStart); d.getTime() < historyEnd.getTime(); d.setDate(d.getDate() + 1)) {
+          if (shift.daysOfWeek && !shift.daysOfWeek.includes(d.getDay())) continue;
+          const dayStr = fmt(d);
+          for (const u of eligible) {
+            if (isUserOnHoliday(u.location || '', dayStr)) continue;
+            // Part-timers have fewer working days, so their denominator must
+            // shrink accordingly or they would look under-used.
+            if (settings.respectWorkPercentage &&
+                !isUserWorkingOnDay(u, dayStr, shift.startTime, shift.endTime)) continue;
+            if (settings.checkCalendars) {
+              const userOof = oofByEmail.get((u.email || '').toLowerCase());
+              if (userOof && userOof.length > 0) {
+                const av = isUserAvailable(u, dayStr, userOof, shift);
+                if (!av.available && av.coversFullShift) continue;
+              }
+            }
+            if (!userAvailableDays[u.id]) userAvailableDays[u.id] = {};
+            userAvailableDays[u.id][shiftId] = (userAvailableDays[u.id][shiftId] || 0) + 1;
+          }
+        }
+      }
+    }
+
     // PART 1: Process selected PIKETTS
     if (selectedPiketts.length > 0) {
       
@@ -1806,6 +1870,18 @@ const processShiftAssignments = async () => {
             };
             const totalAssignmentsFor = (userId: string): number =>
               Object.values(userShiftsTracking[userId] || {}).reduce((s: number, v: any) => s + (v as number), 0);
+            // Load relative to the days the user was actually assignable. Comparing
+            // raw totals punishes anyone back from leave: their count is low simply
+            // because they were away, so they would absorb every shift until they
+            // caught up. Holidays must not create a backlog.
+            const totalAvailableDaysFor = (userId: string): number =>
+              Object.values(userAvailableDays[userId] || {}).reduce((s: number, v: any) => s + (v as number), 0);
+            const globalLoadFor = (userId: string): number => {
+              const days = totalAvailableDaysFor(userId);
+              // No observed availability yet: stay neutral instead of looking idle.
+              if (days === 0) return Number.POSITIVE_INFINITY;
+              return totalAssignmentsFor(userId) / days;
+            };
             const shiftRatioFor = (userId: string): number =>
               (userShiftsTracking[userId]?.[shiftId] || 0) / (userAvailableDays[userId]?.[shiftId] || 1);
             // "How many of the last 4 weeks did this user already do this shift
@@ -1819,7 +1895,7 @@ const processShiftAssignments = async () => {
 
             // Sort order: (1) not adjacent, (2) not used this week,
             // (3) FEWER same-shift-same-dow in last 4 weeks (spreads Fridays etc.),
-            // (4) fewer total shifts, (5) lower per-shift ratio, (6) shuffle queue.
+            // (4) lower overall load ratio, (5) lower per-shift ratio, (6) shuffle queue.
             const sortCandidates = (arr: any[]): any[] => arr.slice().sort((a, b) => {
               const aAdj = isAdjacentAssigned(a.id) ? 1 : 0;
               const bAdj = isAdjacentAssigned(b.id) ? 1 : 0;
@@ -1831,9 +1907,11 @@ const processShiftAssignments = async () => {
               const bDow = sameDowRecentCount(b.id);
               if (aDow !== bDow) return aDow - bDow;
               if (settings.balanceShifts) {
-                const aTotal = totalAssignmentsFor(a.id);
-                const bTotal = totalAssignmentsFor(b.id);
-                if (aTotal !== bTotal) return aTotal - bTotal;
+                const aLoad = globalLoadFor(a.id);
+                const bLoad = globalLoadFor(b.id);
+                // Small tolerance so near-equal ratios fall through to the
+                // per-shift ratio instead of being split by rounding noise.
+                if (Math.abs(aLoad - bLoad) > 0.001) return aLoad - bLoad;
                 const aRatio = shiftRatioFor(a.id);
                 const bRatio = shiftRatioFor(b.id);
                 if (aRatio !== bRatio) return aRatio - bRatio;
