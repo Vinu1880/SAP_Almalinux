@@ -920,10 +920,10 @@ const DashboardPage = () => {
             color="text-red-600"
           />
           <StatCard
-            icon={Clock3}
-            title={t('pending')}
-            value={stats.pending}
-            color="text-orange-600"
+            icon={AlertCircle}
+            title={mode === 'shifts' ? t('shiftsRefusedNotResent') : t('pikettsRefusedNotResent')}
+            value={(stats as any).refusedNotResent ?? 0}
+            color="text-amber-600"
           />
           <StatCard
             icon={Send}
@@ -932,10 +932,10 @@ const DashboardPage = () => {
             color="text-purple-600"
           />
           <StatCard
-            icon={AlertCircle}
-            title={mode === 'shifts' ? t('shiftsRefusedNotResent') : t('pikettsRefusedNotResent')}
-            value={(stats as any).refusedNotResent ?? 0}
-            color="text-amber-600"
+            icon={Clock3}
+            title={t('pending')}
+            value={stats.pending}
+            color="text-orange-600"
           />
           <StatCard
             icon={TrendingUp}

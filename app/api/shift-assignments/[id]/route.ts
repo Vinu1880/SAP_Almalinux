@@ -67,21 +67,22 @@ export async function PUT(
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    const input = validation.data;
     const updateData: any = {};
 
-    if (body.status !== undefined) {
-      updateData.status = body.status;
-      if (body.status === 'ACCEPTED' || body.status === 'REFUSED' || body.status === 'TENTATIVE') {
+    if (input.status !== undefined) {
+      updateData.status = input.status;
+      if (input.status === 'ACCEPTED' || input.status === 'REFUSED' || input.status === 'TENTATIVE') {
         updateData.respondedAt = new Date();
       }
     }
 
-    if (body.reason !== undefined) {
-      updateData.reason = body.reason;
+    if (input.reason !== undefined) {
+      updateData.reason = input.reason;
     }
 
-    if (body.outlookEventId !== undefined) {
-      updateData.outlookEventId = body.outlookEventId;
+    if (input.outlookEventId !== undefined) {
+      updateData.outlookEventId = input.outlookEventId;
     }
 
     const assignment = await prisma.shiftAssignment.update({

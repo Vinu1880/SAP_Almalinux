@@ -23,23 +23,24 @@ export async function PUT(
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    const input = validation.data;
     const updateData: any = {};
 
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.description !== undefined) updateData.description = body.description || null;
-    if (body.startWeek !== undefined) updateData.startWeek = body.startWeek;
-    if (body.endWeek !== undefined) updateData.endWeek = body.endWeek || null;
-    if (body.teamId !== undefined) updateData.teamId = body.teamId;
-    if (body.userId !== undefined) updateData.userId = body.userId || null;
-    if (body.color !== undefined) updateData.color = body.color;
-    if (body.status !== undefined) updateData.status = body.status;
-    if (body.is24_7 !== undefined) updateData.is24_7 = body.is24_7;
-    if (body.senderMailbox !== undefined) updateData.senderMailbox = body.senderMailbox;
-    if (body.startHour !== undefined) updateData.startHour = body.startHour;
-    if (body.minRestWeeks !== undefined) updateData.minRestWeeks = body.minRestWeeks;
-    if (body.avoidSupportSameWeek !== undefined) updateData.avoidSupportSameWeek = body.avoidSupportSameWeek;
-    if (body.includedUserIds !== undefined) updateData.includedUserIds = body.includedUserIds;
-    if (body.excludedUserIds !== undefined) updateData.excludedUserIds = body.excludedUserIds;
+    if (input.name !== undefined) updateData.name = input.name;
+    if (input.description !== undefined) updateData.description = input.description ?? null;
+    if (input.startWeek !== undefined) updateData.startWeek = input.startWeek;
+    if (input.endWeek !== undefined) updateData.endWeek = input.endWeek ?? null;
+    if (input.teamId !== undefined) updateData.teamId = input.teamId;
+    if (input.userId !== undefined) updateData.userId = input.userId ?? null;
+    if (input.color !== undefined) updateData.color = input.color;
+    if (input.status !== undefined) updateData.status = input.status;
+    if (input.is24_7 !== undefined) updateData.is24_7 = input.is24_7;
+    if (input.senderMailbox !== undefined) updateData.senderMailbox = input.senderMailbox;
+    if (input.startHour !== undefined) updateData.startHour = input.startHour;
+    if (input.minRestWeeks !== undefined) updateData.minRestWeeks = input.minRestWeeks;
+    if (input.avoidSupportSameWeek !== undefined) updateData.avoidSupportSameWeek = input.avoidSupportSameWeek;
+    if (input.includedUserIds !== undefined) updateData.includedUserIds = input.includedUserIds;
+    if (input.excludedUserIds !== undefined) updateData.excludedUserIds = input.excludedUserIds;
 
     const pikett = await prisma.pikett.update({
       where: { id },

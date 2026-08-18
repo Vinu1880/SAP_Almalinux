@@ -825,7 +825,7 @@ const ShiftsPage = () => {
     );
   };
 
-  if (shiftsLoading || teamsLoading || usersLoading) {
+  if (shiftsLoading || pikettsLoading || teamsLoading || usersLoading) {
     return (
       <div className="min-h-screen bg-slate-50">
         <Navigation />
@@ -842,7 +842,7 @@ const ShiftsPage = () => {
 
       <main className="p-6 space-y-6">
         {/* Connection/data error banner */}
-        {(shiftsError || teamsError || usersError) && !shiftsLoading && !teamsLoading && !usersLoading && (
+        {(shiftsError || pikettsError || teamsError || usersError) && !shiftsLoading && !pikettsLoading && !teamsLoading && !usersLoading && (
           <Alert className="bg-amber-50 border-amber-200">
             <AlertCircle className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-800">

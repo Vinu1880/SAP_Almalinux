@@ -89,8 +89,9 @@ export async function GET(request: NextRequest) {
       userStats[userId][assignment.status.toLowerCase()]++;
     });
 
+    // Same filtered set as userStats, so ?teamId= is honoured here too.
     const teamStats: any = {};
-    allAssignments.forEach(assignment => {
+    assignments.forEach(assignment => {
       const tId = assignment.pikett.teamId;
       if (!teamStats[tId]) {
         teamStats[tId] = {

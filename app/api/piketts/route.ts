@@ -46,22 +46,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    const input = validation.data;
+
     const pikett = await prisma.pikett.create({
       data: {
-        name: body.name,
-        description: body.description || null,
-        startWeek: body.startWeek || '',
-        endWeek: body.endWeek || null,
-        teamId: body.teamId,
-        color: body.color || '#dc2626',
-        status: body.status || 'ACTIVE',
-        is24_7: body.is24_7 !== undefined ? body.is24_7 : true,
-        senderMailbox: body.senderMailbox || '',
-        startHour: body.startHour || '08:00',
-        minRestWeeks: body.minRestWeeks !== undefined ? body.minRestWeeks : 3,
-        avoidSupportSameWeek: body.avoidSupportSameWeek !== undefined ? body.avoidSupportSameWeek : true,
-        includedUserIds: body.includedUserIds || [],
-        excludedUserIds: body.excludedUserIds || [],
+        name: input.name,
+        description: input.description ?? null,
+        startWeek: input.startWeek,
+        endWeek: input.endWeek ?? null,
+        teamId: input.teamId,
+        color: input.color,
+        status: input.status,
+        is24_7: input.is24_7,
+        senderMailbox: input.senderMailbox,
+        startHour: input.startHour,
+        minRestWeeks: input.minRestWeeks,
+        avoidSupportSameWeek: input.avoidSupportSameWeek,
+        includedUserIds: input.includedUserIds,
+        excludedUserIds: input.excludedUserIds,
       },
       include: {
         team: true

@@ -90,12 +90,13 @@ export async function GET(request: NextRequest) {
       userStats[userId][assignment.status.toLowerCase()]++;
     });
 
+    // Same filtered set as userStats, so ?teamId= is honoured here too.
     const teamStats: any = {};
-    allAssignments.forEach(assignment => {
-      const teamId = assignment.shift.teamId;
-      if (!teamStats[teamId]) {
-        teamStats[teamId] = {
-          teamId,
+    assignments.forEach(assignment => {
+      const tId = assignment.shift.teamId;
+      if (!teamStats[tId]) {
+        teamStats[tId] = {
+          teamId: tId,
           total: 0,
           accepted: 0,
           refused: 0,
@@ -104,8 +105,8 @@ export async function GET(request: NextRequest) {
           cancelled: 0
         };
       }
-      teamStats[teamId].total++;
-      teamStats[teamId][assignment.status.toLowerCase()]++;
+      teamStats[tId].total++;
+      teamStats[tId][assignment.status.toLowerCase()]++;
     });
 
     return NextResponse.json({

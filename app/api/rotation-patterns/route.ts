@@ -40,13 +40,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    const input = validation.data;
+
     const pattern = await prisma.rotationPattern.create({
       data: {
-        name: body.name,
-        description: body.description || null,
-        cycleLength: body.cycleLength,
-        weeks: body.weeks,
-        userShifts: body.userShifts || []
+        name: input.name,
+        description: input.description ?? null,
+        cycleLength: input.cycleLength,
+        weeks: input.weeks,
+        userShifts: input.userShifts ?? []
       }
     });
 

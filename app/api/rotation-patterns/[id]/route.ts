@@ -59,15 +59,19 @@ export async function PUT(
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    // Partial update: only touch the fields actually sent, so a client posting
+    // just { name } cannot wipe weeks/userShifts.
+    const input = validation.data;
+    const data: any = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.description !== undefined) data.description = input.description ?? null;
+    if (input.cycleLength !== undefined) data.cycleLength = input.cycleLength;
+    if (input.weeks !== undefined) data.weeks = input.weeks;
+    if (input.userShifts !== undefined) data.userShifts = input.userShifts;
+
     const pattern = await prisma.rotationPattern.update({
       where: { id },
-      data: {
-        name: body.name,
-        description: body.description || null,
-        cycleLength: body.cycleLength,
-        weeks: body.weeks,
-        userShifts: body.userShifts || []
-      }
+      data
     });
 
     await prisma.auditLog.create({
