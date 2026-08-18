@@ -58,6 +58,26 @@ export const AutoSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const result = await res.json();
         setSyncMessage({ type: 'success', text: `Sync: ${result.updated || 0} updated` });
         setTimeout(() => setSyncMessage(null), 5000);
+
+        // Mirror this year's absences once a day. The planner needs them to
+        // compute availability over past months, and holidays do not change
+        // often enough to justify scanning a full year every 15 minutes.
+        if (graphToken) {
+          const LAST_OOF_SYNC_KEY = 'lastOofSyncTime';
+          const last = Number(localStorage.getItem(LAST_OOF_SYNC_KEY) || 0);
+          if (Date.now() - last > 24 * 60 * 60 * 1000) {
+            try {
+              const oofRes = await authFetch('/api/out-of-office/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
+              });
+              // Only mark it done on success, so a failure retries next cycle.
+              if (oofRes.ok) localStorage.setItem(LAST_OOF_SYNC_KEY, String(Date.now()));
+            } catch {
+              // Non-blocking: the shift sync above already succeeded.
+            }
+          }
+        }
       } catch (err) {
         setSyncMessage({ type: 'error', text: err instanceof Error ? err.message : 'Sync error' });
         setTimeout(() => setSyncMessage(null), 10000);
