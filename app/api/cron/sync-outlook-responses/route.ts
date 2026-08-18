@@ -1,4 +1,3 @@
-// app/api/cron/sync-outlook-responses/route.ts
 // Automated cron job to sync Outlook attendee responses
 // Authenticates via CRON_SECRET, uses refresh token or client credentials for Graph API
 
@@ -73,7 +72,6 @@ function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'TENTATIVE' 
   }
 }
 
-// POST - Sync pending assignments with Outlook event responses
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -309,7 +307,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Check sync status
 export async function GET(request: NextRequest) {
   try {
     const pendingCount = await prisma.shiftAssignment.count({

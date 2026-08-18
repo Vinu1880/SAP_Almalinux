@@ -1,12 +1,9 @@
-// app/api/holidays/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, createHolidaySchema } from '@/lib/validation';
 
-// GET - Fetch holidays with optional year and canton filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -51,7 +48,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new holiday
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -105,7 +101,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Delete all holidays (with optional year filter)
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

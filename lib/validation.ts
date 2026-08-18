@@ -147,12 +147,6 @@ export const importHolidaysSchema = z.object({
   cantons: z.array(z.string().max(5)).min(1),
 });
 
-export const restoreBackupSchema = z.object({
-  fileName: z.string().max(200).optional(),
-  confirmed: z.boolean().optional(),
-  data: z.any().optional(),
-});
-
 export function validateBody<T>(schema: z.ZodType<T>, data: unknown): { success: boolean; data: T; error: string } {
   const result = schema.safeParse(data);
   if (!result.success) {

@@ -1,12 +1,9 @@
-// app/api/users/[id]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, updateUserSchema } from '@/lib/validation';
 
-// GET - Fetch a specific user by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -67,7 +64,6 @@ export async function GET(
   }
 }
 
-// PUT - Update a user
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -157,7 +153,6 @@ export async function PUT(
   }
 }
 
-// DELETE - Delete a user
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -452,7 +452,9 @@
     "shift": "Schicht",
     "ruleDuplicateWeekParity": "Eine Wochenparitätsregel existiert bereits für diesen Benutzer",
     "ruleDuplicateMaxLoad": "Eine Max-Last-Regel existiert bereits für diese Schicht",
-    "ruleDuplicateDoubleShift": "Eine Doppelschicht-Regel existiert bereits für diese Auslöserschicht"
+    "ruleDuplicateDoubleShift": "Eine Doppelschicht-Regel existiert bereits für diese Auslöserschicht",
+    "saving": "Speichern...",
+    "name": "Name"
   },
   "settings": {
     "title": "Einstellungen",
@@ -702,8 +704,6 @@
     "noAssignmentsToSend": "Keine Zuweisungen zu senden",
     "allAssignmentsAlreadySent": "Alle Zuweisungen wurden bereits gesendet. Keine neuen Einladungen zu senden.",
     "someAssignmentsAlreadySent": "{newCount} neue Zuweisung(en) zu senden. {skippedCount} bereits gesendete Zuweisung(en) werden übersprungen.\n\nMöchten Sie fortfahren?",
-    "shift": "Schicht",
-    "shifts": "Schichten",
     "rotation": "Rotation",
     "other": "andere",
     "others": "andere",

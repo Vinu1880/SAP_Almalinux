@@ -622,7 +622,6 @@ const SettingsPage = () => {
       <Navigation />
       
       <main className="p-6 max-w-6xl mx-auto space-y-6">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800">{t("title")}</h1>
         </div>
@@ -997,7 +996,6 @@ const SettingsPage = () => {
                     {t("backupRotation")}
                   </h3>
                   <div className="space-y-4">
-                    {/* Toggle */}
                     <div className="flex items-center justify-between">
                       <div>
                         <Label className="text-sm font-medium text-slate-700">{t("scheduledBackup")}</Label>
@@ -1075,7 +1073,6 @@ const SettingsPage = () => {
                           </div>
                         )}
 
-                        {/* Time */}
                         <div className="flex items-center gap-3">
                           <Label className="text-sm text-slate-600 whitespace-nowrap">{t("backupTime")}</Label>
                           <input

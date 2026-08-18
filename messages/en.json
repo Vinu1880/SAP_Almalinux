@@ -245,7 +245,6 @@
     "senderMailbox": "Shared Mailbox",
     "senderMailboxDesc": "Shared mailbox email address for sending invitations",
     "pikettStartHour": "Pikett start hour",
-    "pikettWeekCoversAllDays": "Weekly pikett: covers Monday {startHour} → Monday {startHour} (7 days). No day selection needed.",
     "pikettStartHourDesc": "Weekly pikett starts Monday at this hour and ends the next Monday at the same hour",
     "pikettMinRestWeeks": "Rest weeks between piketts",
     "pikettMinRestWeeksDesc": "Law: 3 weeks minimum between two pikett weeks per user",
@@ -453,7 +452,9 @@
     "shift": "Shift",
     "ruleDuplicateWeekParity": "A week parity rule already exists for this user",
     "ruleDuplicateMaxLoad": "A max load rule already exists for this shift",
-    "ruleDuplicateDoubleShift": "A double-shift rule already exists for this trigger shift"
+    "ruleDuplicateDoubleShift": "A double-shift rule already exists for this trigger shift",
+    "saving": "Saving...",
+    "name": "Name"
   },
   "settings": {
     "title": "Settings",
@@ -647,7 +648,7 @@
     "clickForDetails": "click a card for details",
     "user": "user",
     "users": "users",
-    "shift": "shift",
+    "shift": "Shift",
     "shifts": "shifts",
     "historyTotal": "{count} in history",
     "assigned": "assigned",
@@ -703,8 +704,6 @@
     "noAssignmentsToSend": "No assignments to send",
     "allAssignmentsAlreadySent": "All assignments have already been sent. No new invitations to send.",
     "someAssignmentsAlreadySent": "{newCount} new assignment(s) to send. {skippedCount} assignment(s) already sent will be skipped.\n\nDo you want to continue?",
-    "shift": "Shift",
-    "shifts": "shifts",
     "rotation": "Rotation",
     "other": "other",
     "others": "others",

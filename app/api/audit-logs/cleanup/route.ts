@@ -1,4 +1,3 @@
-// app/api/audit-logs/cleanup/route.ts
 // Delete audit logs older than 90 days
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';

@@ -1,11 +1,8 @@
-// app/api/pikett-assignments/stats/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 
-// GET - Aggregate pikett assignment statistics by status, user, and team
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

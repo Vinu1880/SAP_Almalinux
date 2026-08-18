@@ -1,4 +1,3 @@
-// app/api/outlook/sync/route.ts
 // Syncs Outlook attendee responses back to DB assignments
 // Reads attendee accept/decline status from shared mailbox calendar events
 
@@ -20,7 +19,6 @@ function mapOutlookResponseToStatus(response: string): 'ACCEPTED' | 'TENTATIVE' 
   }
 }
 
-// POST - Sync all pending assignments with their Outlook event responses
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

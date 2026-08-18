@@ -1,12 +1,9 @@
-// app/api/rotation-patterns/[id]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, updateRotationPatternSchema } from '@/lib/validation';
 
-// GET - Retrieve a specific pattern
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -39,7 +36,6 @@ export async function GET(
   }
 }
 
-// PUT - Update a pattern
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -93,7 +89,6 @@ export async function PUT(
   }
 }
 
-// DELETE - Delete a pattern
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

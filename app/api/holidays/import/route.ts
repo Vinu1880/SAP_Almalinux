@@ -1,12 +1,9 @@
-// app/api/holidays/import/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, importHolidaysSchema } from '@/lib/validation';
 
-// POST - Import standard holidays
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

@@ -1,4 +1,3 @@
-// app/api/backup/download/[fileName]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -7,7 +6,6 @@ import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimi
 import fs from 'fs';
 import path from 'path';
 
-// GET - Download a specific backup file
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileName: string }> }

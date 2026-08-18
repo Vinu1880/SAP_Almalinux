@@ -7,7 +7,7 @@ import Navigation from '@/components/Navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import {
   CheckCircle, XCircle, Clock3, TrendingUp, Users, Calendar, Filter,
-  Download, RefreshCw, Loader2, Send, AlertCircle, Building2, X, Network,
+  Download, RefreshCw, Loader2, Send, AlertCircle, X, Network,
   FilterX, ArrowUpDown, ArrowUp, ArrowDown, Trash2, AlertTriangle,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
@@ -15,12 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -55,7 +49,7 @@ const DashboardPage = () => {
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedView, setSelectedView] = useState<'shifts' | 'users' | 'calendar'>('shifts');
   const [mode, setMode] = useState<'shifts' | 'pikett'>('shifts');
-  const { nextSyncIn, syncing, syncMessage, triggerSync, clearSyncMessage } = useAutoSync();
+  const { nextSyncIn, syncing, syncMessage, triggerSync } = useAutoSync();
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [resendingAssignment, setResendingAssignment] = useState<any | null>(null);
   const [selectedNewUser, setSelectedNewUser] = useState<string | null>(null);
@@ -106,11 +100,11 @@ const DashboardPage = () => {
     teamId: selectedTeam === 'all' ? undefined : selectedTeam
   });
 
-  const { assignments, stats, userStats, teamStats, loading, error, refresh } =
+  const { assignments, stats, userStats, loading, error, refresh } =
     mode === 'shifts' ? shiftData : pikettData;
 
   const { users, loading: usersLoading } = useUsers();
-  const { teams, loading: teamsLoading } = useTeams();
+  const { teams } = useTeams();
 
   const generateCalendarDays = (): (Date | null)[] => {
     const firstDay = new Date(calendarYear, calendarMonth, 1);
@@ -172,7 +166,7 @@ const DashboardPage = () => {
   }, [isReady, selectedView, fetchCalendarAssignments]);
 
   const { holidays, isUserOnHoliday } = useHolidays();
-  const { shifts, loading: shiftsLoading } = useShifts();
+  const { shifts } = useShifts();
   const { piketts } = usePiketts();
 
   const [usersAvailability, setUsersAvailability] = useState<{
@@ -861,7 +855,6 @@ const DashboardPage = () => {
           </Card>
         )}
 
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
           <div>
             <h1 className="text-3xl font-bold text-slate-800">{t('title')}</h1>

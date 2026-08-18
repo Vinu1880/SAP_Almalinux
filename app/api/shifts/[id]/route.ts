@@ -1,12 +1,9 @@
-// app/api/shifts/[id]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, updateShiftSchema } from '@/lib/validation';
 
-// GET - Retrieve a shift by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -44,7 +41,6 @@ export async function GET(
   }
 }
 
-// PUT - Update a shift
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -113,7 +109,6 @@ export async function PUT(
   }
 }
 
-// DELETE - Delete a shift
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

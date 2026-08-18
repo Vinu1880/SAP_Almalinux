@@ -1,4 +1,3 @@
-// app/api/outlook/send-event/route.ts
 // Proxy for Outlook calendar events via delegated Graph token
 // Requires: Calendars.ReadWrite.Shared + Exchange "Send As" / "Full Access"
 
@@ -10,7 +9,6 @@ function getGraphToken(request: NextRequest): string | null {
   return request.headers.get('X-Graph-Token') || null;
 }
 
-// POST - Create an Outlook calendar event on the specified mailbox
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -67,7 +65,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Cancel event (notifies attendees), falls back to delete
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

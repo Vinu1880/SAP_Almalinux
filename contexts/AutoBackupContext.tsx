@@ -1,13 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useRef } from 'react';
+// Browser-side maintenance: audit-log cleanup (no server equivalent) and a
+// localStorage-driven backup kept as a fallback. The authoritative backup now
+// runs server-side in lib/backupScheduler.ts; both guard against duplicates.
+import React, { useEffect, useRef } from 'react';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
-
-interface AutoBackupContextType {
-  // placeholder for future use
-}
-
-const AutoBackupContext = createContext<AutoBackupContextType | undefined>(undefined);
 
 const LAST_BACKUP_KEY = 'lastAutoBackupTime';
 const BACKUP_SCHEDULE_KEY = 'backupSchedule';
@@ -97,15 +94,5 @@ export const AutoBackupProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return () => clearInterval(timer);
   }, [isReady, authFetch]);
 
-  return (
-    <AutoBackupContext.Provider value={{}}>
-      {children}
-    </AutoBackupContext.Provider>
-  );
-};
-
-export const useAutoBackup = () => {
-  const ctx = useContext(AutoBackupContext);
-  if (!ctx) throw new Error('useAutoBackup must be used within AutoBackupProvider');
-  return ctx;
+  return <>{children}</>;
 };

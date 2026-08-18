@@ -452,7 +452,9 @@
     "shift": "Shift",
     "ruleDuplicateWeekParity": "Une règle de parité existe déjà pour cet utilisateur",
     "ruleDuplicateMaxLoad": "Une règle de charge max existe déjà pour ce shift",
-    "ruleDuplicateDoubleShift": "Une règle double-shift existe déjà pour ce shift déclencheur"
+    "ruleDuplicateDoubleShift": "Une règle double-shift existe déjà pour ce shift déclencheur",
+    "saving": "Enregistrement...",
+    "name": "Nom"
   },
   "settings": {
     "title": "Paramètres",
@@ -646,7 +648,7 @@
     "clickForDetails": "cliquer sur une carte pour les détails",
     "user": "utilisateur",
     "users": "utilisateurs",
-    "shift": "shift",
+    "shift": "Shift",
     "shifts": "shifts",
     "historyTotal": "{count} dans l'historique",
     "assigned": "assignés",
@@ -702,8 +704,6 @@
     "noAssignmentsToSend": "Aucune assignation à envoyer",
     "allAssignmentsAlreadySent": "Toutes les assignations ont déjà été envoyées. Aucune nouvelle invitation à envoyer.",
     "someAssignmentsAlreadySent": "{newCount} nouvelle(s) assignation(s) à envoyer. {skippedCount} assignation(s) déjà envoyée(s) seront ignorées.\n\nVoulez-vous continuer ?",
-    "shift": "Shift",
-    "shifts": "shifts",
     "rotation": "Rotation",
     "other": "autre",
     "others": "autres",

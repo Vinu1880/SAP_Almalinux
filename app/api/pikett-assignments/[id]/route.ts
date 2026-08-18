@@ -1,5 +1,3 @@
-// app/api/pikett-assignments/[id]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
@@ -49,7 +47,6 @@ export async function GET(
   }
 }
 
-// PUT - Full update
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -121,7 +118,6 @@ export async function PUT(
   }
 }
 
-// PATCH - Partial update
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

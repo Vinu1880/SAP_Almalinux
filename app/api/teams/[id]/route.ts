@@ -1,12 +1,9 @@
-// app/api/teams/[id]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, updateTeamSchema } from '@/lib/validation';
 
-// GET - Retrieve a team by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -51,7 +48,6 @@ export async function GET(
   }
 }
 
-// PUT - Update a team
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -172,7 +168,6 @@ export async function PUT(
   }
 }
 
-// DELETE - Delete a team
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

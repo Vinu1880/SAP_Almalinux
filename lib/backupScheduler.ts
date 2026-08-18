@@ -134,6 +134,8 @@ export function startBackupScheduler() {
   setTimeout(tick, 5_000);
 }
 
+// Counterpart to startBackupScheduler — keeps a clean way to release the
+// interval (tests, hot reload) rather than leaking the handle.
 export function stopBackupScheduler() {
   if (intervalHandle) clearInterval(intervalHandle);
   started = false;
