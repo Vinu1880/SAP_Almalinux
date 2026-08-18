@@ -533,7 +533,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
       if (!accessToken) {
         // No Graph token: fall back to OOF events stored in the local DB.
         try {
-          const resp = await authFetch(`/api/oof-mock?start=${startDate}&end=${endDate}`);
+          const resp = await authFetch(`/api/out-of-office?start=${startDate}&end=${endDate}`);
           if (resp.ok) return await resp.json();
         } catch {}
         return [];
@@ -1169,7 +1169,7 @@ const processShiftAssignments = async () => {
       // absences there would bury the ones that matter for the selected range.
       let pastOof: OutlookEvent[] = [];
       try {
-        const resp = await authFetch(`/api/oof-mock?start=${fmt(yearStart)}&end=${fmt(historyEnd)}`);
+        const resp = await authFetch(`/api/out-of-office?start=${fmt(yearStart)}&end=${fmt(historyEnd)}`);
         if (resp.ok) pastOof = await resp.json();
       } catch {
         // Non-blocking: the ratio stays slightly optimistic for absentees.

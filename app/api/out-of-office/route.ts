@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 
-// Mock OOF events from DB in Graph-schedule shape (planner uses this instead of MS Graph)
+// Stored out-of-office events, shaped like a Graph schedule response.
+// The planner reads this for past absences when computing the fairness ratio
+// (Graph is only queried for the previewed range), and as a fallback when no
+// Graph token is available.
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
