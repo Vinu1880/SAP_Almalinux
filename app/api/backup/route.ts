@@ -1,4 +1,3 @@
-// app/api/backup/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
@@ -7,7 +6,7 @@ import { logSecurityEvent } from '@/lib/securityLogger';
 import fs from 'fs';
 import path from 'path';
 
-// GET - List all available backup files
+// List all available backup files
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -24,7 +23,6 @@ export async function GET(request: NextRequest) {
     const files = fs.readdirSync(backupsDir)
       .filter(f => f.startsWith('backup_') && f.endsWith('.json') && !f.startsWith('backup_latest'))
       .sort((a, b) => {
-        // Sort by file modification time (newest first)
         const aStat = fs.statSync(path.join(backupsDir, a));
         const bStat = fs.statSync(path.join(backupsDir, b));
         return bStat.mtimeMs - aStat.mtimeMs;
@@ -39,7 +37,7 @@ export async function GET(request: NextRequest) {
         const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
         if (content.counts) {
           const c = content.counts;
-          counts = `${c.users || 0} users, ${c.shifts || 0} shifts, ${c.teams || 0} teams`;
+          counts = `${c.users || 0} users, ${c.shifts || 0} shifts, ${c.piketts || 0} piketts, ${c.teams || 0} teams`;
         }
       } catch {}
 
@@ -61,7 +59,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new database backup (encrypted)
+// Create a new database backup
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -80,6 +78,7 @@ export async function POST(request: NextRequest) {
       piketts: await prisma.pikett.findMany(),
       rotationPatterns: await prisma.rotationPattern.findMany(),
       shiftAssignments: await prisma.shiftAssignment.findMany(),
+      pikettAssignments: await prisma.pikettAssignment.findMany(),
       outOfOfficeEvents: await prisma.outOfOfficeEvent.findMany(),
       auditLogs: await prisma.auditLog.findMany(),
       userRules: await prisma.userRule.findMany(),
@@ -103,6 +102,7 @@ export async function POST(request: NextRequest) {
         piketts: data.piketts.length,
         rotationPatterns: data.rotationPatterns.length,
         shiftAssignments: data.shiftAssignments.length,
+        pikettAssignments: data.pikettAssignments.length,
         outOfOfficeEvents: data.outOfOfficeEvents.length,
         auditLogs: data.auditLogs.length,
         usersWithRotation: usersWithRotation.length,
@@ -124,7 +124,6 @@ export async function POST(request: NextRequest) {
     const latestPath = path.join(backupsDir, 'backup_latest.json');
     fs.writeFileSync(latestPath, jsonString, 'utf-8');
 
-    // Rotate old backups: keep only maxBackups most recent
     if (maxBackups > 0) {
       const allBackups = fs.readdirSync(backupsDir)
         .filter(f => f.startsWith('backup_ShiftPilot_') && f.endsWith('.json'))

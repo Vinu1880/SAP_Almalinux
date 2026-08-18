@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useMemo } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navigation from '@/components/Navigation';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import {
   CheckCircle, XCircle, Clock3, TrendingUp, Users, Calendar, Filter,
   Download, RefreshCw, Loader2, Send, AlertCircle, Building2, X, Network,
@@ -47,10 +47,11 @@ import { useAutoSync } from '@/contexts/AutoSyncContext';
 const DashboardPage = () => {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const authFetch = useAuthFetch();
   const isReady = useAuthReady();
   const { getAccessToken } = useAuth();
-  const [dateFilter, setDateFilter] = useState<'7d' | '30d' | '90d' | '180d' | 'all'>('7d');
+  const [dateFilter, setDateFilter] = useState<'7d' | '30d' | '90d' | '180d' | 'all'>('all');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedView, setSelectedView] = useState<'shifts' | 'users' | 'calendar'>('shifts');
   const [mode, setMode] = useState<'shifts' | 'pikett'>('shifts');
@@ -62,18 +63,15 @@ const DashboardPage = () => {
   const [deletingAssignment, setDeletingAssignment] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Additional filters
   const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedShift, setSelectedShift] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [sortByDate, setSortByDate] = useState<'asc' | 'desc' | null>('asc');
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Calendar state
   const now = new Date();
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
   const [calendarYear, setCalendarYear] = useState(now.getFullYear());
@@ -81,27 +79,23 @@ const DashboardPage = () => {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
 
-  // Function to reset all filters
   const resetFilters = () => {
     setSelectedUser('all');
     setSelectedShift('all');
     setSelectedStatus('all');
     setSelectedDate('');
-    setCurrentPage(1); // Reset to first page
+    setCurrentPage(1);
   };
 
-  // Reset page to 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
   }, [selectedUser, selectedShift, selectedStatus, selectedDate, dateFilter, selectedTeam]);
 
-  // Reset filters when mode changes
   React.useEffect(() => {
     resetFilters();
     setSelectedCalendarDay(null);
   }, [mode]);
 
-  // Fetch data with hooks
   const shiftData = useShiftAssignments({
     dateFilter: dateFilter === 'all' ? undefined : dateFilter,
     teamId: selectedTeam === 'all' ? undefined : selectedTeam
@@ -112,14 +106,12 @@ const DashboardPage = () => {
     teamId: selectedTeam === 'all' ? undefined : selectedTeam
   });
 
-  // Active data based on mode
   const { assignments, stats, userStats, teamStats, loading, error, refresh } =
     mode === 'shifts' ? shiftData : pikettData;
 
   const { users, loading: usersLoading } = useUsers();
   const { teams, loading: teamsLoading } = useTeams();
 
-  // Calendar helpers & fetch
   const generateCalendarDays = (): (Date | null)[] => {
     const firstDay = new Date(calendarYear, calendarMonth, 1);
     const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
@@ -168,7 +160,6 @@ const DashboardPage = () => {
         setCalendarAssignments(data);
       }
     } catch {
-      // Calendar fetch error
     } finally {
       setCalendarLoading(false);
     }
@@ -192,20 +183,17 @@ const DashboardPage = () => {
   }>({ available: [], alreadyAssigned: [], refused: [], unavailable: [] });
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
-  // Function to check which users are OOF/busy on a specific date using getSchedule API
-  // Same logic as planner's fetchOutOfOfficeForPeriod - uses delegated permissions
+  // Check which users are OOF/busy on a date via getSchedule (delegated perms)
   const fetchUnavailableUsersForDate = async (date: string, userEmails: string[]): Promise<Map<string, { status: string; subject?: string }>> => {
     const unavailableMap = new Map<string, { status: string; subject?: string }>();
 
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        // No access token
         return unavailableMap;
       }
       if (userEmails.length === 0) return unavailableMap;
 
-      // Use getSchedule API with delegated permissions (same as planner)
       const batchSize = 20;
       for (let i = 0; i < userEmails.length; i += batchSize) {
         const batch = userEmails.slice(i, i + batchSize);
@@ -244,7 +232,6 @@ const DashboardPage = () => {
         for (const userSchedule of scheduleData.value) {
           const userEmail = (userSchedule.scheduleId || '').toLowerCase();
 
-          // Check scheduleItems for status and subject info
           const items = userSchedule.scheduleItems || [];
           const oofItem = items.find((item: any) => item.status === 'oof');
           const busyItem = items.find((item: any) => item.status === 'busy');
@@ -254,7 +241,7 @@ const DashboardPage = () => {
           } else if (busyItem) {
             unavailableMap.set(userEmail, { status: 'busy', subject: busyItem.subject });
           } else if (userSchedule.availabilityView) {
-            // Fallback to availabilityView codes if no scheduleItems
+            // Fallback when scheduleItems absent
             const viewCodes = userSchedule.availabilityView.split('');
             if (viewCodes.some((c: string) => c === '3')) {
               unavailableMap.set(userEmail, { status: 'oof' });
@@ -265,13 +252,11 @@ const DashboardPage = () => {
         }
       }
     } catch (error) {
-      // OOF check error
     }
 
     return unavailableMap;
   };
 
-  // Function to check if a user works on a given day
   const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string): boolean => {
     if (!user.availability) return true;
 
@@ -295,34 +280,28 @@ const DashboardPage = () => {
     return dayAvailability.morning === true || dayAvailability.afternoon === true;
   };
 
-  // Function to get eligible users for a shift
   const getEligibleUsersForShift = (shift: any, excludeUserId?: string): any[] => {
     if (!users) return [];
 
     const activeUsers = users.filter(u => u.status === 'ACTIVE' || u.status === 'active');
 
-    // Team users (except those excluded from the shift and the current user)
     const teamUsers = activeUsers.filter(u =>
       u.teamId === shift.team?.id &&
       !(shift.excludedUserIds || []).includes(u.id) &&
       u.id !== excludeUserId
     );
 
-    // Specifically included users (except the current user)
     const includedUsers = activeUsers.filter(u =>
       (shift.includedUserIds || []).includes(u.id) &&
       u.id !== excludeUserId
     );
 
-    // Combine and deduplicate
     const allEligible = [...teamUsers, ...includedUsers];
     const uniqueEligible = Array.from(new Map(allEligible.map(u => [u.id, u])).values());
 
     return uniqueEligible;
   };
 
-  // Effect to calculate user availability when the modal opens
-  // Follows the same logic as the planner dropdown (which works correctly)
   React.useEffect(() => {
     if (!resendingAssignment) {
       setUsersAvailability({ available: [], alreadyAssigned: [], refused: [], unavailable: [] });
@@ -333,7 +312,6 @@ const DashboardPage = () => {
       setCheckingAvailability(true);
 
       try {
-        // Normalize date to YYYY-MM-DD
         const normalizeDate = (dateVal: string | Date) => {
           const dt = new Date(dateVal);
           return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
@@ -341,10 +319,9 @@ const DashboardPage = () => {
         const dateStr = normalizeDate(resendingAssignment.date);
         const shift = resendingAssignment.shift;
 
-        // Get eligible users for the shift (don't exclude anyone - let them be categorized)
         const eligibleUsers = getEligibleUsersForShift(shift);
 
-        // Fetch all assignments around this date (prev, current, next day) for accurate checks
+        // Fetch assignments across prev/current/next day for accurate checks
         const assignmentDate = new Date(dateStr);
         const prevDate = new Date(assignmentDate);
         prevDate.setDate(prevDate.getDate() - 1);
@@ -363,18 +340,15 @@ const DashboardPage = () => {
         } catch (e) {
         }
 
-        // Fetch OOF status using getSchedule API
         const eligibleEmails = eligibleUsers.filter(u => u.email).map(u => u.email);
         const unavailableUsersMap = await fetchUnavailableUsersForDate(dateStr, eligibleEmails);
 
-        // Categorize each eligible user (same as planner)
         const available: any[] = [];
         const alreadyAssigned: any[] = [];
         const refused: any[] = [];
         const unavailable: Array<{ user: any; reason: string }> = [];
 
         for (const user of eligibleUsers) {
-          // 1. Check if user has REFUSED this specific shift on this date
           const refusedAssignment = dateAssignments.find(a =>
             normalizeDate(a.date) === dateStr &&
             a.userId === user.id &&
@@ -387,7 +361,6 @@ const DashboardPage = () => {
             continue;
           }
 
-          // 2. Check if user has an ACTIVE (PENDING/ACCEPTED) assignment on this date
           const activeAssignmentToday = dateAssignments.find(a =>
             normalizeDate(a.date) === dateStr &&
             a.userId === user.id &&
@@ -401,7 +374,6 @@ const DashboardPage = () => {
             continue;
           }
 
-          // 3. Check public holidays
           const canton = user.location || 'BE';
           if (isUserOnHoliday(canton, dateStr)) {
             const holidayForDate = holidays.find(h => {
@@ -415,13 +387,11 @@ const DashboardPage = () => {
             continue;
           }
 
-          // 4. Check if user works this day
           if (!isUserWorkingOnDay(user, dateStr, shift?.startTime)) {
             unavailable.push({ user, reason: t('reasonNotWorkingToday') });
             continue;
           }
 
-          // 5. Check Out of Office / Busy using the Map from getSchedule
           const userCalendarStatus = unavailableUsersMap.get(user.email?.toLowerCase());
           if (userCalendarStatus) {
             if (userCalendarStatus.status === 'oof') {
@@ -429,15 +399,12 @@ const DashboardPage = () => {
               continue;
             }
             if (userCalendarStatus.status === 'busy') {
-              // Check if busy is from one of our own shift assignments (already handled by step 2)
-              // If not already caught by step 2, it's a real external busy event
               const busySubject = userCalendarStatus.subject || '';
               unavailable.push({ user, reason: busySubject ? `${t('reasonBusy')} (${busySubject})` : t('reasonBusy') });
               continue;
             }
           }
 
-          // 6. Check consecutive shifts (same logic as planner: check prev/next day)
           const hasConsecutiveShift = dateAssignments.some(a => {
             const aDateNorm = normalizeDate(a.date);
             return (aDateNorm === prevDateStr || aDateNorm === nextDateStr) &&
@@ -459,13 +426,11 @@ const DashboardPage = () => {
             continue;
           }
 
-          // 7. All checks passed - user is available
           available.push(user);
         }
 
         setUsersAvailability({ available, alreadyAssigned, refused, unavailable });
       } catch (error) {
-        // Error calculating availability
       } finally {
         setCheckingAvailability(false);
       }
@@ -474,7 +439,6 @@ const DashboardPage = () => {
     calculateAvailability();
   }, [resendingAssignment, assignments, users]);
 
-  // Function to resend the invitation to a new user
   const handleResend = async () => {
     if (!resendingAssignment || !selectedNewUser) return;
 
@@ -613,7 +577,6 @@ const DashboardPage = () => {
             })
           });
         } catch {
-          // Failed to delete old event - continue with resend
         }
       }
 
@@ -625,12 +588,10 @@ const DashboardPage = () => {
       });
       setTimeout(() => setActionMessage(null), 5000);
 
-      // Close the modal
       setResendingAssignment(null);
       setSelectedNewUser(null);
 
     } catch (error) {
-      // Resend error - notification shown to user
       setActionMessage({
         type: 'error',
         text: error instanceof Error ? error.message : t('resendError')
@@ -657,7 +618,6 @@ const DashboardPage = () => {
               body: JSON.stringify({ mailbox, eventId: deletingAssignment.outlookEventId })
             });
           } catch {
-            // Outlook event deletion failed - continue with DB deletion
           }
         }
       }
@@ -681,14 +641,12 @@ const DashboardPage = () => {
     }
   };
 
-  // Sync handler: uses global auto-sync + refreshes dashboard data
   const syncOutlook = async () => {
     await triggerSync();
     await refresh();
     fetchCalendarAssignments();
   };
 
-  // Calculate user statistics with all details
   const userStatsWithDetails = useMemo(() => {
     if (!userStats || !users) return [];
 
@@ -696,7 +654,6 @@ const DashboardPage = () => {
       const user = users.find(u => u.id === stat.userId);
       const userAssignments = assignments.filter(a => a.userId === stat.userId);
 
-      // Per-shift/pikett breakdown
       const itemMap = new Map<string, { name: string; color: string; total: number; accepted: number; pending: number; refused: number; cancelled: number }>();
       userAssignments.forEach(a => {
         const item = mode === 'shifts' ? (a as any).shift : (a as any).pikett;
@@ -710,7 +667,6 @@ const DashboardPage = () => {
         itemMap.set(key, entry);
       });
 
-      // Count piketts assigned to this user (only shown in shift mode)
       const userPiketts = piketts.filter(p => p.userId === stat.userId && p.status === 'ACTIVE');
 
       return {
@@ -724,37 +680,30 @@ const DashboardPage = () => {
     }).filter(stat => stat.user);
   }, [userStats, users, assignments, piketts, mode]);
 
-  // Filter assignments based on all filters
   const filteredAssignments = useMemo(() => {
     let filtered = [...assignments];
 
-    // Filter by user
     if (selectedUser !== 'all') {
       filtered = filtered.filter(a => a.userId === selectedUser);
     }
 
-    // Filter by shift/pikett
     if (selectedShift !== 'all') {
       filtered = filtered.filter(a =>
         mode === 'shifts' ? (a as any).shift?.id === selectedShift : (a as any).pikett?.id === selectedShift
       );
     }
 
-    // Filter by status
     if (selectedStatus !== 'all') {
       filtered = filtered.filter(a => a.status === selectedStatus);
     }
 
-    // Filter by date - normalize dates for comparison
     if (selectedDate) {
       filtered = filtered.filter(a => {
-        // Normalize the assignment date to YYYY-MM-DD format
         const assignmentDate = new Date(a.date).toISOString().split('T')[0];
         return assignmentDate === selectedDate;
       });
     }
 
-    // Sort by date
     if (sortByDate) {
       filtered.sort((a, b) => {
         const dateA = new Date(a.date).getTime();
@@ -766,19 +715,16 @@ const DashboardPage = () => {
     return filtered;
   }, [assignments, selectedUser, selectedShift, selectedStatus, selectedDate, sortByDate]);
 
-  // Calculate total pages
   const totalPages = useMemo(() => {
     return Math.ceil(filteredAssignments.length / itemsPerPage);
-  }, [filteredAssignments.length]);
+  }, [filteredAssignments.length, itemsPerPage]);
 
-  // Paginated assignments
   const paginatedAssignments = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredAssignments.slice(startIndex, endIndex);
-  }, [filteredAssignments, currentPage]);
+  }, [filteredAssignments, currentPage, itemsPerPage]);
 
-  // For compatibility with the rest of the code
   const recentAssignments = paginatedAssignments;
 
   const getStatusBadge = (status: string) => {
@@ -960,7 +906,7 @@ const DashboardPage = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <StatCard
             icon={CheckCircle}
             title={mode === 'shifts' ? t('shiftsAccepted') : t('pikettsAccepted')}
@@ -978,6 +924,18 @@ const DashboardPage = () => {
             title={t('pending')}
             value={stats.pending}
             color="text-orange-600"
+          />
+          <StatCard
+            icon={Send}
+            title={mode === 'shifts' ? t('shiftsResent') : t('pikettsResent')}
+            value={(stats as any).resent ?? 0}
+            color="text-purple-600"
+          />
+          <StatCard
+            icon={AlertCircle}
+            title={mode === 'shifts' ? t('shiftsRefusedNotResent') : t('pikettsRefusedNotResent')}
+            value={(stats as any).refusedNotResent ?? 0}
+            color="text-amber-600"
           />
           <StatCard
             icon={TrendingUp}
@@ -1205,6 +1163,7 @@ const DashboardPage = () => {
                             </th>
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('status')}</th>
                             <th className="text-left text-slate-600 font-medium py-3 px-2">{t('actions')}</th>
+                            <th className="text-left text-slate-600 font-medium py-3 px-2">{t('sentBy')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1285,6 +1244,23 @@ const DashboardPage = () => {
                                   </Button>
                                 </div>
                               </td>
+                              <td className="py-4 px-2">
+                                {(assignment as any).sentBy ? (
+                                  <div className="text-xs">
+                                    <p className="font-medium text-slate-700">
+                                      {(assignment as any).sentBy.firstName} {(assignment as any).sentBy.lastName}
+                                    </p>
+                                    <p className="text-slate-500">
+                                      {new Date(assignment.createdAt).toLocaleString(locale, {
+                                        day: '2-digit', month: '2-digit', year: 'numeric',
+                                        hour: '2-digit', minute: '2-digit'
+                                      })}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400">—</span>
+                                )}
+                              </td>
                             </tr>
                             );
                           })}
@@ -1292,10 +1268,29 @@ const DashboardPage = () => {
                       </table>
                     </div>
 
-                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
-                      <p className="text-sm text-slate-600">
-                        {t('pageOf', { current: currentPage, total: totalPages })} • {t('results', { count: filteredAssignments.length })}
-                      </p>
+                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200 flex-wrap gap-3">
+                      <div className="flex items-center gap-3">
+                        <p className="text-sm text-slate-600">
+                          {t('pageOf', { current: currentPage, total: totalPages })} • {t('results', { count: filteredAssignments.length })}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-slate-500">{t('perPage')}</label>
+                          <Select
+                            value={String(itemsPerPage)}
+                            onValueChange={(v) => { setItemsPerPage(parseInt(v, 10)); setCurrentPage(1); }}
+                          >
+                            <SelectTrigger className="h-8 w-20 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="25">25</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
 
                       {totalPages > 1 && (
                         <div className="flex items-center gap-2">
@@ -1509,44 +1504,57 @@ const DashboardPage = () => {
           {/* Calendar View */}
           <TabsContent value="calendar">
             <Card className="bg-white border-0 shadow-sm">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-semibold text-slate-800">
-                    {t('calendarView')}
-                  </CardTitle>
+              <CardHeader className="pb-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* < Month Year > */}
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" onClick={() => {
-                      if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); }
-                      else setCalendarMonth(m => m - 1);
-                    }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 hover:bg-green-100 hover:text-green-700"
+                      onClick={() => {
+                        if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); }
+                        else setCalendarMonth(m => m - 1);
+                      }}
+                    >
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <span className="text-sm font-medium text-slate-700 min-w-[140px] text-center">
-                      {new Date(calendarYear, calendarMonth).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                    <span className="text-sm font-medium text-slate-700 capitalize min-w-[140px] text-center select-none">
+                      {new Date(calendarYear, calendarMonth).toLocaleDateString(locale, { month: 'long', year: 'numeric' })}
                     </span>
-                    <Button variant="outline" size="icon" onClick={() => {
-                      if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); }
-                      else setCalendarMonth(m => m + 1);
-                    }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 hover:bg-green-100 hover:text-green-700"
+                      onClick={() => {
+                        if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); }
+                        else setCalendarMonth(m => m + 1);
+                      }}
+                    >
                       <ChevronRight className="w-4 h-4" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => {
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
+                    onClick={() => {
                       const today = new Date();
                       setCalendarMonth(today.getMonth());
                       setCalendarYear(today.getFullYear());
-                    }}>
-                      {t('today')}
-                    </Button>
-                  </div>
-                </div>
+                    }}
+                  >
+                    {t('today')}
+                  </Button>
 
-                {/* Legend */}
-                <div className="flex items-center gap-4 mt-3 text-xs text-slate-600">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> {t('statusAccepted')}</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> {t('statusRefused')}</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> {t('statusNoAnswer')}</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> {t('statusTentative')}</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400 inline-block" /> {t('statusCancelled')}</span>
+                  {/* Legend on the same line, pushed to the right when there's space */}
+                  <div className="flex items-center gap-3 text-xs text-slate-600 ml-auto flex-wrap">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> {t('statusAccepted')}</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> {t('statusRefused')}</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> {t('statusNoAnswer')}</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> {t('statusTentative')}</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400 inline-block" /> {t('statusCancelled')}</span>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1571,9 +1579,7 @@ const DashboardPage = () => {
                         }
                         const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                         const rawDayAssignments = calendarByDate[dateStr] || [];
-                        // Once a shift/pikett has an ACCEPTED assignment, only show the ACCEPTED one
-                        // and hide every other status (PENDING/TENTATIVE/REFUSED/CANCELLED) for that
-                        // same shift/pikett that day.
+                        // Hide non-ACCEPTED entries once the same shift/pikett has an ACCEPTED one that day
                         const acceptedItemIds = new Set(
                           rawDayAssignments
                             .filter((a: any) => a.status === 'ACCEPTED')

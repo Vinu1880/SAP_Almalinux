@@ -61,6 +61,16 @@ export async function GET(request: NextRequest) {
     const cancelled = assignments.filter(a => a.status === 'CANCELLED').length;
     const total = assignments.length;
 
+    // Track resend coverage (same logic as shifts).
+    const resentSourceIds = new Set(
+      assignments
+        .map(a => (a as any).resentFromId)
+        .filter((v): v is string => !!v)
+    );
+    const resent = assignments.filter(a => (a as any).resent === true).length;
+    const refusedRows = assignments.filter(a => a.status === 'REFUSED');
+    const refusedNotResent = refusedRows.filter(a => !resentSourceIds.has(a.id)).length;
+
     const userStats: any = {};
     assignments.forEach(assignment => {
       const userId = assignment.userId;
@@ -104,7 +114,9 @@ export async function GET(request: NextRequest) {
         pending,
         tentative,
         cancelled,
-        total
+        total,
+        resent,
+        refusedNotResent,
       },
       userStats: Object.values(userStats),
       teamStats: Object.values(teamStats)

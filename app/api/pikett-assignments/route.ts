@@ -1,12 +1,10 @@
-// app/api/pikett-assignments/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, createBulkPikettAssignmentsSchema } from '@/lib/validation';
 
-// GET - Retrieve pikett assignments with filters
+// Retrieve pikett assignments with filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -59,23 +57,16 @@ export async function GET(request: NextRequest) {
     const assignments = await prisma.pikettAssignment.findMany({
       where,
       include: {
-        user: {
-          include: {
-            team: true
-          }
-        },
-        pikett: {
-          include: {
-            team: true
-          }
-        }
+        user: { include: { team: true } },
+        pikett: { include: { team: true } },
+        sentBy: { select: { id: true, firstName: true, lastName: true, email: true } }
       },
       orderBy: {
         createdAt: 'desc'
       }
     });
 
-    // Team filter applied post-query since team is nested in pikett
+    // Team filter is post-query — team lives inside pikett
     let filteredAssignments = assignments;
     if (teamId) {
       filteredAssignments = assignments.filter(a => a.pikett.teamId === teamId);
@@ -90,7 +81,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Bulk create pikett assignments
+// Bulk create pikett assignments
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -111,7 +102,8 @@ export async function POST(request: NextRequest) {
         pikettId: a.pikettId,
         userId: a.userId,
         status: a.status || 'PENDING',
-        reason: a.reason || null
+        reason: a.reason || null,
+        sentById: auth.user.id
       })),
       skipDuplicates: true
     });
@@ -127,24 +119,14 @@ export async function POST(request: NextRequest) {
 
     const createdAssignments = await prisma.pikettAssignment.findMany({
       where: {
-        date: {
-          in: assignments.map((a: any) => new Date(a.date))
-        },
-        pikettId: {
-          in: assignments.map((a: any) => a.pikettId)
-        }
+        date: { in: assignments.map((a: any) => new Date(a.date)) },
+        pikettId: { in: assignments.map((a: any) => a.pikettId) },
+        userId: { in: assignments.map((a: any) => a.userId) },
       },
       include: {
-        user: {
-          include: {
-            team: true
-          }
-        },
-        pikett: {
-          include: {
-            team: true
-          }
-        }
+        user: { include: { team: true } },
+        pikett: { include: { team: true } },
+        sentBy: { select: { id: true, firstName: true, lastName: true, email: true } }
       },
       orderBy: {
         createdAt: 'desc'

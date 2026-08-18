@@ -1,4 +1,3 @@
-// app/api/backup/restore/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
@@ -8,7 +7,7 @@ import { logSecurityEvent } from '@/lib/securityLogger';
 import fs from 'fs';
 import path from 'path';
 
-// POST - Restore database from a backup file
+// Restore database from a backup file
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -49,7 +48,7 @@ export async function POST(request: NextRequest) {
       data = body;
     }
 
-    // Phase 1: Return confirmation preview if not confirmed
+    // Preview counts when not yet confirmed
     if (!body.confirmed) {
       const counts = {
         teams: data.teams?.length || 0,
@@ -58,6 +57,7 @@ export async function POST(request: NextRequest) {
         piketts: data.piketts?.length || 0,
         rotationPatterns: data.rotationPatterns?.length || 0,
         shiftAssignments: data.shiftAssignments?.length || 0,
+        pikettAssignments: data.pikettAssignments?.length || 0,
         outOfOfficeEvents: data.outOfOfficeEvents?.length || 0,
         auditLogs: data.auditLogs?.length || 0,
         userRules: data.userRules?.length || 0,
@@ -72,7 +72,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Phase 2: Execute restore
     await prisma.auditLog.create({
       data: {
         action: 'RESTORE_START',
@@ -87,11 +86,12 @@ export async function POST(request: NextRequest) {
       throw new Error('Prisma client not initialized');
     }
 
-    // STEP 1: Clean the database
+    // Clear the database
     await prisma.$transaction(async (tx) => {
       await tx.auditLog.deleteMany();
       await tx.userRule.deleteMany();
       await tx.shiftAssignment.deleteMany();
+      await tx.pikettAssignment.deleteMany();
       await tx.pikett.deleteMany();
       await tx.shift.deleteMany();
       await tx.outOfOfficeEvent.deleteMany();
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       timeout: 10000,
     });
 
-    // STEP 2: Restore Teams
+    // Restore Teams
     if (data.teams?.length > 0) {
       await prisma.$transaction(async (tx) => {
         for (const team of data.teams) {
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // STEP 3: Restore RotationPatterns
+    // Restore RotationPatterns
     if (data.rotationPatterns?.length > 0) {
       await prisma.$transaction(async (tx) => {
         await tx.rotationPattern.createMany({
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // STEP 4: Restore Users in batches of 50
+    // Restore Users
     if (data.users?.length > 0) {
       const batchSize = 50;
       for (let i = 0; i < data.users.length; i += batchSize) {
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 5: Restore Shifts in batches of 100
+    // Restore Shifts
     if (data.shifts?.length > 0) {
       const batchSize = 100;
       for (let i = 0; i < data.shifts.length; i += batchSize) {
@@ -188,6 +188,7 @@ export async function POST(request: NextRequest) {
               status: shift.status,
               color: shift.color,
               senderMailbox: shift.senderMailbox || '',
+              minConsecutiveDays: shift.minConsecutiveDays ?? 1,
               includedUserIds: shift.includedUserIds,
               excludedUserIds: shift.excludedUserIds,
               teamId: shift.teamId,
@@ -204,7 +205,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 6: Restore Piketts in batches of 100
+    // Restore Piketts
     if (data.piketts?.length > 0) {
       const batchSize = 100;
       for (let i = 0; i < data.piketts.length; i += batchSize) {
@@ -216,12 +217,14 @@ export async function POST(request: NextRequest) {
               name: pikett.name,
               description: pikett.description,
               startWeek: pikett.startWeek,
-              daysOfWeek: pikett.daysOfWeek,
               endWeek: pikett.endWeek,
               color: pikett.color,
               status: pikett.status,
               is24_7: pikett.is24_7,
               senderMailbox: pikett.senderMailbox || '',
+              startHour: pikett.startHour || '08:00',
+              minRestWeeks: pikett.minRestWeeks ?? 3,
+              avoidSupportSameWeek: pikett.avoidSupportSameWeek ?? true,
               teamId: pikett.teamId,
               userId: pikett.userId,
               includedUserIds: pikett.includedUserIds,
@@ -237,7 +240,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 7: Restore ShiftAssignments in batches of 200
+    // Restore ShiftAssignments
     if (data.shiftAssignments?.length > 0) {
       const batchSize = 200;
       for (let i = 0; i < data.shiftAssignments.length; i += batchSize) {
@@ -250,6 +253,11 @@ export async function POST(request: NextRequest) {
               status: assignment.status,
               reason: assignment.reason,
               respondedAt: assignment.respondedAt ? new Date(assignment.respondedAt) : null,
+              outlookEventId: assignment.outlookEventId ?? null,
+              resent: assignment.resent ?? false,
+              resentAt: assignment.resentAt ? new Date(assignment.resentAt) : null,
+              resentFromId: assignment.resentFromId ?? null,
+              sentById: assignment.sentById ?? null,
               shiftId: assignment.shiftId,
               userId: assignment.userId,
               createdAt: new Date(assignment.createdAt),
@@ -263,7 +271,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 8: Restore OutOfOfficeEvents in batches of 200
+    if (data.pikettAssignments?.length > 0) {
+      const batchSize = 200;
+      for (let i = 0; i < data.pikettAssignments.length; i += batchSize) {
+        const batch = data.pikettAssignments.slice(i, i + batchSize);
+        await prisma.$transaction(async (tx) => {
+          await tx.pikettAssignment.createMany({
+            data: batch.map((assignment: any) => ({
+              id: assignment.id,
+              date: new Date(assignment.date),
+              status: assignment.status,
+              reason: assignment.reason,
+              respondedAt: assignment.respondedAt ? new Date(assignment.respondedAt) : null,
+              pikettId: assignment.pikettId,
+              userId: assignment.userId,
+              createdAt: new Date(assignment.createdAt),
+              updatedAt: new Date(assignment.updatedAt),
+              outlookEventId: assignment.outlookEventId || null,
+              resent: assignment.resent ?? false,
+              resentAt: assignment.resentAt ? new Date(assignment.resentAt) : null,
+              resentFromId: assignment.resentFromId || null,
+              sentById: assignment.sentById ?? null,
+            })),
+            skipDuplicates: true,
+          });
+        }, {
+          maxWait: 10000,
+          timeout: 10000,
+        });
+      }
+    }
+
+    // Restore OutOfOfficeEvents
     if (data.outOfOfficeEvents?.length > 0) {
       const batchSize = 200;
       for (let i = 0; i < data.outOfOfficeEvents.length; i += batchSize) {
@@ -291,7 +330,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 9: Restore AuditLogs in batches of 500
+    // Restore AuditLogs
     if (data.auditLogs?.length > 0) {
       const batchSize = 500;
       for (let i = 0; i < data.auditLogs.length; i += batchSize) {
@@ -315,7 +354,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 10: Restore UserRules
+    // Restore UserRules
     if (data.userRules?.length > 0) {
       await prisma.$transaction(async (tx) => {
         await tx.userRule.createMany({
@@ -335,7 +374,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // STEP 11: Restore Holidays
+    // Restore Holidays
     if (data.holidays?.length > 0) {
       await prisma.$transaction(async (tx) => {
         await tx.holiday.createMany({
@@ -357,7 +396,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Log successful restore
     await prisma.auditLog.create({
       data: {
         action: 'RESTORE_COMPLETE',

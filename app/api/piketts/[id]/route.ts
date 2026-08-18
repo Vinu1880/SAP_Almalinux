@@ -1,12 +1,9 @@
-// app/api/piketts/[id]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, updatePikettSchema } from '@/lib/validation';
 
-// PUT - Update a pikett by ID
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,9 +35,11 @@ export async function PUT(
     if (body.status !== undefined) updateData.status = body.status;
     if (body.is24_7 !== undefined) updateData.is24_7 = body.is24_7;
     if (body.senderMailbox !== undefined) updateData.senderMailbox = body.senderMailbox;
+    if (body.startHour !== undefined) updateData.startHour = body.startHour;
+    if (body.minRestWeeks !== undefined) updateData.minRestWeeks = body.minRestWeeks;
+    if (body.avoidSupportSameWeek !== undefined) updateData.avoidSupportSameWeek = body.avoidSupportSameWeek;
     if (body.includedUserIds !== undefined) updateData.includedUserIds = body.includedUserIds;
     if (body.excludedUserIds !== undefined) updateData.excludedUserIds = body.excludedUserIds;
-    if (body.daysOfWeek !== undefined) updateData.daysOfWeek = body.daysOfWeek;
 
     const pikett = await prisma.pikett.update({
       where: { id },
@@ -69,7 +68,6 @@ export async function PUT(
   }
 }
 
-// DELETE - Delete a pikett by ID
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -83,7 +81,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Clean up UserRules that reference this pikett in their JSON config
+    // Remove UserRules referencing this pikett in their JSON config
     const allRules = await prisma.userRule.findMany({
       where: { type: { in: ['DOUBLE_SHIFT', 'MAX_LOAD'] } }
     });

@@ -1,5 +1,4 @@
-// app/api/cron/backup/route.ts
-// Automated scheduled backup with rotation (delete old backups beyond maxBackups)
+// Scheduled backup with rotation (deletes old backups beyond maxBackups)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -8,16 +7,19 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-// GET - Check scheduled backup status
+// Check scheduled backup status
 export async function GET(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret') || new URL(request.url).searchParams.get('secret');
-  const expected = process.env.NEXT_PUBLIC_CRON_SECRET;
+  // Server-only CRON_SECRET, with legacy NEXT_PUBLIC_ fallback
+  const expected = process.env.CRON_SECRET || process.env.NEXT_PUBLIC_CRON_SECRET;
 
   if (!expected || expected === 'dev-secret-change-in-production') {
     return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });
   }
 
-  if (!secret || !crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(expected))) {
+  const secretBuf = secret ? Buffer.from(secret) : null;
+  const expectedBuf = Buffer.from(expected);
+  if (!secretBuf || secretBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(secretBuf, expectedBuf)) {
     logSecurityEvent({ type: 'CRON_AUTH_FAILURE', userEmail: 'cron', details: 'backup endpoint' });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -36,16 +38,18 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// POST - Create a scheduled backup with rotation
+// Create a scheduled backup with rotation
 export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret') || new URL(request.url).searchParams.get('secret');
-  const expected = process.env.NEXT_PUBLIC_CRON_SECRET;
+  const expected = process.env.CRON_SECRET || process.env.NEXT_PUBLIC_CRON_SECRET;
 
   if (!expected || expected === 'dev-secret-change-in-production') {
     return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });
   }
 
-  if (!secret || !crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(expected))) {
+  const secretBuf = secret ? Buffer.from(secret) : null;
+  const expectedBuf = Buffer.from(expected);
+  if (!secretBuf || secretBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(secretBuf, expectedBuf)) {
     logSecurityEvent({ type: 'CRON_AUTH_FAILURE', userEmail: 'cron', details: 'backup endpoint' });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -54,7 +58,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const maxBackups = body?.maxBackups || 10;
 
-    // Fetch all data
     const data = {
       teams: await prisma.team.findMany(),
       users: await prisma.user.findMany(),
@@ -62,6 +65,7 @@ export async function POST(request: NextRequest) {
       piketts: await prisma.pikett.findMany(),
       rotationPatterns: await prisma.rotationPattern.findMany(),
       shiftAssignments: await prisma.shiftAssignment.findMany(),
+      pikettAssignments: await prisma.pikettAssignment.findMany(),
       outOfOfficeEvents: await prisma.outOfOfficeEvent.findMany(),
       auditLogs: await prisma.auditLog.findMany(),
       userRules: await prisma.userRule.findMany(),
@@ -84,6 +88,7 @@ export async function POST(request: NextRequest) {
         piketts: data.piketts.length,
         rotationPatterns: data.rotationPatterns.length,
         shiftAssignments: data.shiftAssignments.length,
+        pikettAssignments: data.pikettAssignments.length,
         outOfOfficeEvents: data.outOfOfficeEvents.length,
         auditLogs: data.auditLogs.length,
         userRules: data.userRules.length,
@@ -101,11 +106,9 @@ export async function POST(request: NextRequest) {
 
     fs.writeFileSync(filePath, jsonString, 'utf-8');
 
-    // Update latest
     const latestPath = path.join(backupsDir, 'backup_latest.json');
     fs.writeFileSync(latestPath, jsonString, 'utf-8');
 
-    // Rotate: delete old backups beyond maxBackups
     const allBackups = fs.readdirSync(backupsDir)
       .filter(f => f.startsWith('backup_ShiftPilot_') && f.endsWith('.json'))
       .sort((a, b) => b.localeCompare(a));

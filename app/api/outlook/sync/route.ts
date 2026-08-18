@@ -34,13 +34,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Include ACCEPTED to detect cancellations from shared mailbox
-    const pendingAssignments = await prisma.shiftAssignment.findMany({
-      where: {
-        status: { in: ['PENDING', 'TENTATIVE', 'ACCEPTED'] },
-        outlookEventId: { not: null }
-      },
-      include: { user: true, shift: true }
-    });
+    const [pendingShifts, pendingPiketts] = await Promise.all([
+      prisma.shiftAssignment.findMany({
+        where: {
+          status: { in: ['PENDING', 'TENTATIVE', 'ACCEPTED'] },
+          outlookEventId: { not: null }
+        },
+        include: { user: true, shift: true }
+      }),
+      prisma.pikettAssignment.findMany({
+        where: {
+          status: { in: ['PENDING', 'TENTATIVE', 'ACCEPTED'] },
+          outlookEventId: { not: null }
+        },
+        include: { user: true, pikett: true }
+      })
+    ]);
+
+    const pendingAssignments = [
+      ...pendingShifts.map(a => ({ ...a, _kind: 'shift' as const, _mailbox: a.shift.senderMailbox || 'me' })),
+      ...pendingPiketts.map(a => ({ ...a, _kind: 'pikett' as const, _mailbox: a.pikett.senderMailbox || 'me' })),
+    ];
 
     if (pendingAssignments.length === 0) {
       return NextResponse.json({ success: true, message: 'No pending assignments to sync', updated: 0, errors: 0 });
@@ -51,10 +65,10 @@ export async function POST(request: NextRequest) {
 
     for (const assignment of pendingAssignments) {
       try {
-        const { outlookEventId, user, shift, id } = assignment;
+        const { outlookEventId, user, id, _kind, _mailbox } = assignment as any;
         if (!outlookEventId) continue;
 
-        const mailbox = shift.senderMailbox || 'me';
+        const mailbox = _mailbox;
         const eventUrl = mailbox === 'me'
           ? `https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`
           : `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/calendar/events/${outlookEventId}`;
@@ -63,18 +77,19 @@ export async function POST(request: NextRequest) {
           headers: { 'Authorization': `Bearer ${graphToken}` }
         });
 
+        const entityLabel = _kind === 'pikett' ? 'PIKETT_ASSIGNMENT' : 'SHIFT_ASSIGNMENT';
+        const updateStatus = (data: any) => _kind === 'pikett'
+          ? prisma.pikettAssignment.update({ where: { id }, data })
+          : prisma.shiftAssignment.update({ where: { id }, data });
+
         if (!eventResponse.ok) {
           if (eventResponse.status === 404) {
-            // Event was deleted/cancelled from Outlook — mark as CANCELLED
             if (assignment.status !== 'CANCELLED') {
-              await prisma.shiftAssignment.update({
-                where: { id },
-                data: { status: 'CANCELLED', respondedAt: new Date() }
-              });
+              await updateStatus({ status: 'CANCELLED', respondedAt: new Date() });
               await prisma.auditLog.create({
                 data: {
                   action: 'UPDATE',
-                  entity: 'SHIFT_ASSIGNMENT',
+                  entity: entityLabel,
                   entityId: id,
                   userId: auth.user.id,
                   data: {
@@ -95,17 +110,13 @@ export async function POST(request: NextRequest) {
 
         const event = await eventResponse.json();
 
-        // Check if event was cancelled by organizer (shared mailbox)
         if (event.isCancelled === true) {
           if (assignment.status !== 'CANCELLED') {
-            await prisma.shiftAssignment.update({
-              where: { id },
-              data: { status: 'CANCELLED', respondedAt: new Date() }
-            });
+            await updateStatus({ status: 'CANCELLED', respondedAt: new Date() });
             await prisma.auditLog.create({
               data: {
                 action: 'UPDATE',
-                entity: 'SHIFT_ASSIGNMENT',
+                entity: entityLabel,
                 entityId: id,
                 userId: auth.user.id,
                 data: {
@@ -125,18 +136,35 @@ export async function POST(request: NextRequest) {
           (a: any) => a.emailAddress?.address?.toLowerCase() === user.email.toLowerCase()
         );
 
-        if (!attendee?.status?.response) continue;
+        let responseStatus: string = attendee?.status?.response || 'none';
 
-        const responseStatus = attendee.status.response;
+        // Fallback: when the attendee accepted without sending a response back,
+        // the organizer copy still shows 'none'. Query the attendee's own
+        // calendar via iCalUId and read the local responseStatus.
+        if ((responseStatus === 'none' || !responseStatus) && event.iCalUId) {
+          try {
+            const localUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(user.email)}/events?$filter=iCalUId eq '${event.iCalUId}'&$select=responseStatus&$top=1`;
+            const localResp = await fetch(localUrl, {
+              headers: { 'Authorization': `Bearer ${graphToken}` }
+            });
+            if (localResp.ok) {
+              const localData = await localResp.json();
+              const localEvent = localData.value?.[0];
+              const localResponse = localEvent?.responseStatus?.response;
+              if (localResponse && localResponse !== 'none') {
+                responseStatus = localResponse;
+              }
+            }
+          } catch { /* fallback failed — keep 'none' */ }
+        }
+
+        if (!responseStatus || responseStatus === 'none') continue;
+
         const newStatus = mapOutlookResponseToStatus(responseStatus);
 
         if (newStatus !== 'PENDING' && newStatus !== assignment.status) {
-          await prisma.shiftAssignment.update({
-            where: { id },
-            data: { status: newStatus, respondedAt: new Date() }
-          });
+          await updateStatus({ status: newStatus, respondedAt: new Date() });
 
-          // Cancel the calendar event when the shift is declined
           if (newStatus === 'REFUSED' && outlookEventId) {
             try {
               const cancelRes = await fetch(`${eventUrl}/cancel`, {
@@ -153,7 +181,7 @@ export async function POST(request: NextRequest) {
           await prisma.auditLog.create({
             data: {
               action: 'UPDATE',
-              entity: 'SHIFT_ASSIGNMENT',
+              entity: entityLabel,
               entityId: id,
               userId: auth.user.id,
               data: {

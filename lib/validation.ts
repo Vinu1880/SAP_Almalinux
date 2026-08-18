@@ -1,4 +1,4 @@
-// lib/validation.ts - Zod schemas for API input validation
+// Zod schemas for API input validation
 import { z } from 'zod';
 
 const cuidSchema = z.string().min(1).max(30);
@@ -26,7 +26,6 @@ export const createUserSchema = z.object({
 });
 export const updateUserSchema = createUserSchema.partial();
 
-// UserRule validation
 export const weekParityConfigSchema = z.object({
   parity: z.enum(['odd', 'even']),
 });
@@ -85,9 +84,11 @@ export const createPikettSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional().default('ACTIVE'),
   is24_7: z.boolean().optional().default(true),
   senderMailbox: z.string().max(255).optional().default(''),
+  startHour: z.string().regex(/^\d{2}:\d{2}$/).optional().default('08:00'),
+  minRestWeeks: z.number().int().min(0).max(12).optional().default(3),
+  avoidSupportSameWeek: z.boolean().optional().default(true),
   includedUserIds: z.array(cuidSchema).optional().default([]),
   excludedUserIds: z.array(cuidSchema).optional().default([]),
-  daysOfWeek: z.array(dayOfWeekSchema).optional().default([0, 1, 2, 3, 4, 5, 6]),
   userId: z.string().nullable().optional(),
 });
 export const updatePikettSchema = createPikettSchema.partial();

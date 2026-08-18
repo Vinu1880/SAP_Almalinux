@@ -52,6 +52,8 @@ export interface ShiftAssignmentStats {
   tentative: number;
   cancelled: number;
   total: number;
+  resent: number;
+  refusedNotResent: number;
 }
 
 export interface UserStats {
@@ -91,7 +93,9 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
     pending: 0,
     tentative: 0,
     cancelled: 0,
-    total: 0
+    total: 0,
+    resent: 0,
+    refusedNotResent: 0,
   });
   const [userStats, setUserStats] = useState<UserStats[]>([]);
   const [teamStats, setTeamStats] = useState<TeamStats[]>([]);

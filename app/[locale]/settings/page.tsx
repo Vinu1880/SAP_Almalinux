@@ -43,7 +43,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
-// Types
 interface Backup {
   fileName: string;
   date: string;
@@ -72,15 +71,30 @@ const SettingsPage = () => {
     balanceShifts: true,
     checkCalendars: true,
     prioritySystem: true,
-    enableRotations: true
+    enableRotations: true,
+    respectWorkPercentage: true
   });
 
   useEffect(() => {
     const saved = localStorage.getItem('shiftSettings');
     if (saved) {
-      setSettings(JSON.parse(saved));
+      // Merge with defaults so keys other pages rely on aren't dropped
+      setSettings(prev => ({ ...prev, ...JSON.parse(saved) }));
     }
+    // Cross-tab sync — reflect Planner dialog changes
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'shiftSettings' && e.newValue) {
+        setSettings(prev => ({ ...prev, ...JSON.parse(e.newValue!) }));
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  // Persist toggles immediately so the Planner picks them up on next open
+  useEffect(() => {
+    localStorage.setItem('shiftSettings', JSON.stringify(settings));
+  }, [settings]);
 
   const [backups, setBackups] = useState<Backup[]>([]);
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
@@ -93,40 +107,48 @@ const SettingsPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Scheduled backup states
   const [backupSchedule, setBackupSchedule] = useState({
     enabled: false,
     frequency: 'daily' as 'daily' | 'weekly' | 'monthly',
     hour: '02:00',
-    dayOfWeek: 1, // Monday
+    dayOfWeek: 1,
     dayOfMonth: 1,
     maxBackups: 10,
   });
 
-  // Load scheduled backup settings from localStorage
+  // Load schedule from server (DB-backed)
   useEffect(() => {
-    const saved = localStorage.getItem('backupSchedule');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Migrate old format
-      if (parsed.intervalHours && !parsed.frequency) {
-        parsed.frequency = parsed.intervalHours <= 24 ? 'daily' : parsed.intervalHours <= 168 ? 'weekly' : 'monthly';
-        parsed.hour = parsed.hour || '02:00';
-        parsed.dayOfWeek = parsed.dayOfWeek || 1;
-        parsed.dayOfMonth = parsed.dayOfMonth || 1;
-        delete parsed.intervalHours;
+    (async () => {
+      try {
+        const resp = await authFetch('/api/backup-schedule');
+        if (resp.ok) {
+          const s = await resp.json();
+          setBackupSchedule(prev => ({ ...prev, ...s }));
+        } else {
+          // Migration: fall back to legacy localStorage until re-saved
+          const saved = localStorage.getItem('backupSchedule');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.intervalHours && !parsed.frequency) {
+              parsed.frequency = parsed.intervalHours <= 24 ? 'daily' : parsed.intervalHours <= 168 ? 'weekly' : 'monthly';
+              parsed.hour = parsed.hour || '02:00';
+              parsed.dayOfWeek = parsed.dayOfWeek || 1;
+              parsed.dayOfMonth = parsed.dayOfMonth || 1;
+              delete parsed.intervalHours;
+            }
+            setBackupSchedule(prev => ({ ...prev, ...parsed }));
+          }
+        }
+      } catch {
       }
-      setBackupSchedule(prev => ({ ...prev, ...parsed }));
-    }
-  }, []);
+    })();
+  }, [authFetch]);
 
-  // Delete confirmation dialog states
   const [deleteBackupFileName, setDeleteBackupFileName] = useState<string | null>(null);
   const [isDeleteBackupDialogOpen, setIsDeleteBackupDialogOpen] = useState(false);
   const [deleteHolidayId, setDeleteHolidayId] = useState<string | null>(null);
   const [isDeleteHolidayDialogOpen, setIsDeleteHolidayDialogOpen] = useState(false);
 
-  // Holiday states
   const currentYear = new Date().getFullYear();
   const { 
     holidays,
@@ -167,7 +189,6 @@ const SettingsPage = () => {
         setBackups(data);
       }
     } catch (error) {
-      // Error loading backups - notification shown to user
       showNotification(t('loadBackupsError'), 'error');
     } finally {
       setIsLoadingBackups(false);
@@ -185,7 +206,13 @@ const SettingsPage = () => {
 
   const saveBackupSchedule = (newSchedule: typeof backupSchedule) => {
     setBackupSchedule(newSchedule);
+    // Push to DB (server scheduler) + local fallback
     localStorage.setItem('backupSchedule', JSON.stringify(newSchedule));
+    authFetch('/api/backup-schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSchedule),
+    }).catch(() => { /* ignore */ });
   };
 
   const createBackup = async () => {
@@ -289,13 +316,11 @@ const SettingsPage = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate JSON file type
     if (!file.name.endsWith('.json')) {
       showNotification(t('fileMustBeJSON'), 'error');
       return;
     }
 
-    // Ask for confirmation
     if (!confirm(t('confirmRestoreBackup'))) {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -305,11 +330,9 @@ const SettingsPage = () => {
 
     setIsUploading(true);
     try {
-      // Read file content
       const fileContent = await file.text();
       const backupData = JSON.parse(fileContent);
 
-      // Use the same API as restoring from the list
       const response = await authFetch('/api/backup/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -332,14 +355,12 @@ const SettingsPage = () => {
       );
     } finally {
       setIsUploading(false);
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   };
 
-  // Holiday management functions
   const handleCreateHoliday = async () => {
     if (!newHoliday.name || !newHoliday.date || newHoliday.cantons.length === 0) {
       showNotification(t('fillAllFields'), 'error');
@@ -423,7 +444,6 @@ const SettingsPage = () => {
         return;
       }
 
-      // Parse header to find canton columns
       const header = lines[0].split(',').map(h => h.trim());
       const dateIdx = header.findIndex(h => h.toLowerCase() === 'date');
       const nameIdx = header.findIndex(h => h.toLowerCase() === 'name');
@@ -432,7 +452,6 @@ const SettingsPage = () => {
         return;
       }
 
-      // Find canton columns (CH, BE, VD, ZH, etc.)
       const cantonColumns: { idx: number; code: string }[] = [];
       header.forEach((h, i) => {
         const upper = h.toUpperCase();
@@ -441,7 +460,6 @@ const SettingsPage = () => {
         }
       });
 
-      // Parse all rows into holiday objects
       const holidayList: any[] = [];
       for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(',').map(c => c.trim());
@@ -451,7 +469,7 @@ const SettingsPage = () => {
         const name = cols[nameIdx];
         if (!rawDate || !name) continue;
 
-        // Parse date (DD.MM.YYYY or YYYY-MM-DD)
+        // Accept DD.MM.YYYY or YYYY-MM-DD
         let isoDate: string;
         if (rawDate.includes('.')) {
           const [day, month, year] = rawDate.split('.');
@@ -460,7 +478,6 @@ const SettingsPage = () => {
           isoDate = rawDate;
         }
 
-        // Determine cantons from TRUE/FALSE columns
         const cantons: string[] = [];
         let isCH = false;
         for (const cc of cantonColumns) {
@@ -486,7 +503,6 @@ const SettingsPage = () => {
         return;
       }
 
-      // Send all holidays in a single batch request
       const imported = await importCsvHolidays(holidayList);
 
       showNotification(
@@ -517,11 +533,26 @@ const SettingsPage = () => {
   const ALL_CANTONS = ['BE', 'ZH', 'VD'];
 
   const toggleCanton = (canton: string, isNewHoliday: boolean = true) => {
+    const ALL_CANTONS = ['BE', 'ZH', 'VD'];
     const computeCantons = (prev: string[]) => {
-      // Simple toggle — each checkbox is independent (CH is just a cosmetic badge)
-      return prev.includes(canton)
+      // CH toggle mirrors the full BE+ZH+VD set
+      if (canton === 'CH') {
+        const willSelect = !prev.includes('CH');
+        return willSelect
+          ? Array.from(new Set([...prev, 'CH', ...ALL_CANTONS]))
+          : prev.filter(c => c !== 'CH' && !ALL_CANTONS.includes(c));
+      }
+      // Toggle single canton; drop CH if full-set broken
+      const next = prev.includes(canton)
         ? prev.filter(c => c !== canton)
         : [...prev, canton];
+      const hasAllCantons = ALL_CANTONS.every(c => next.includes(c));
+      if (hasAllCantons && !next.includes('CH')) {
+        next.push('CH');
+      } else if (!hasAllCantons && next.includes('CH')) {
+        return next.filter(c => c !== 'CH');
+      }
+      return next;
     };
 
     if (isNewHoliday) {
@@ -686,8 +717,21 @@ const SettingsPage = () => {
                 >
                   <Switch
                     checked={settings.enableRotations}
-                    onCheckedChange={(checked) => 
+                    onCheckedChange={(checked) =>
                       setSettings({...settings, enableRotations: checked})
+                    }
+                  />
+                </SettingItem>
+
+                <SettingItem
+                  icon={Clock}
+                  title={t("respectWorkPercentage")}
+                  description={t("respectWorkPercentageDesc")}
+                >
+                  <Switch
+                    checked={settings.respectWorkPercentage}
+                    onCheckedChange={(checked) =>
+                      setSettings({...settings, respectWorkPercentage: checked})
                     }
                   />
                 </SettingItem>

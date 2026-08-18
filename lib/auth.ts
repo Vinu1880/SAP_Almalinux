@@ -1,4 +1,4 @@
-// lib/auth.ts - Azure AD token validation with local JWKS + cache
+// Azure AD token validation with local JWKS + cache
 import { NextRequest, NextResponse } from 'next/server';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { logSecurityEvent } from './securityLogger';
@@ -10,7 +10,7 @@ export interface AuthUser {
   userPrincipalName: string;
 }
 
-// JWKS setup (jose handles caching and key rotation automatically)
+// jose auto-handles JWKS caching + rotation
 const tenantId = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID;
 const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
 const JWKS_URI = `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`;
@@ -24,7 +24,6 @@ function getJWKS() {
   return jwks;
 }
 
-// In-memory token validation cache
 interface CachedAuth {
   user: AuthUser;
   expiresAt: number;
@@ -33,7 +32,6 @@ interface CachedAuth {
 const tokenCache = new Map<string, CachedAuth>();
 const CACHE_MARGIN_MS = 60_000;
 
-// Periodic cleanup
 if (typeof setInterval !== 'undefined') {
   setInterval(() => {
     const now = Date.now();
@@ -58,13 +56,11 @@ async function validateToken(request: NextRequest): Promise<AuthUser | null> {
   const token = authHeader.split(' ')[1];
   if (!token) return null;
 
-  // Check cache first
   const cached = tokenCache.get(token);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.user;
   }
 
-  // Try local JWT validation with JWKS
   try {
     const { payload } = await jwtVerify(token, getJWKS(), {
       issuer: ISSUER,
@@ -84,7 +80,7 @@ async function validateToken(request: NextRequest): Promise<AuthUser | null> {
     tokenCache.set(token, { user, expiresAt: exp - CACHE_MARGIN_MS });
     return user;
   } catch (jwksErr) {
-    // Fallback to Graph API validation (handles Graph API access tokens)
+    // Fallback: Graph API validation (handles Graph tokens)
     try {
       const response = await fetch('https://graph.microsoft.com/v1.0/me', {
         headers: { Authorization: `Bearer ${token}` },

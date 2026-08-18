@@ -10,7 +10,8 @@ import {
   UserCheck, Loader2, AlertCircle, Save, X, Sun, Moon,
   Building2, Crown, RotateCw, Info, AlertTriangle,
   UserPlus, UserMinus, Grid3X3, List, Filter,
-  ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal, Copy, Network
+  ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal, Copy, Network,
+  Upload, Download
 } from 'lucide-react';
 import { useShifts } from '@/lib/hooks/useShifts';
 import { usePiketts } from '@/lib/hooks/usePiketts';
@@ -42,7 +43,6 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Import hooks
 import { useUsers } from '@/lib/hooks/useUsers';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { useAuthFetch } from '@/lib/hooks/useAuthFetch';
@@ -92,7 +92,6 @@ const fullTimeAvailability: WeekAvailability = {
   sunday: { morning: false, afternoon: false }
 };
 
-// Available colors for teams (10 distinct colors)
 const TEAM_COLORS = [
   '#ef4444', // Red
   '#3b82f6', // Blue
@@ -112,7 +111,6 @@ const SWISS_CANTONS = [
   { value: 'ZH', labelKey: 'cantonZurich' }
 ] as const;
 
-// CSS style for rotation animation
 const rotationStyle = `
   @keyframes spin-slow {
     from {
@@ -154,7 +152,6 @@ const UsersPage = () => {
   const [teamSortBy, setTeamSortBy] = useState<'name' | 'members'>('name');
   const [teamSortOrder, setTeamSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // Helper function to get sort label
   const getSortLabel = () => {
     const arrow = sortOrder === 'asc' ? '↑' : '↓';
     const labels = {
@@ -168,8 +165,8 @@ const UsersPage = () => {
   const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedTeam, setSelectedTeam] = useState<any>(null);
-  const [workType, setWorkType] = useState<'full' | 'partial'>('full');
-  const [editWorkType, setEditWorkType] = useState<'full' | 'partial'>('full');
+  const [workType, setWorkType] = useState<'full' | 'partial' | 'joker'>('full');
+  const [editWorkType, setEditWorkType] = useState<'full' | 'partial' | 'joker'>('full');
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const { patterns: rotationPatterns, addPattern, updatePattern, deletePattern } = useRotationPatterns();
@@ -177,7 +174,6 @@ const UsersPage = () => {
   const { piketts } = usePiketts();
   const authFetch = useAuthFetch();
 
-  // Rules state
   const [userRules, setUserRules] = useState<any[]>([]);
   const [isAddingRule, setIsAddingRule] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
@@ -187,7 +183,6 @@ const UsersPage = () => {
     enabled: true,
   });
 
-  // Add CSS style
   useEffect(() => {
     const styleElement = document.createElement('style');
     styleElement.textContent = rotationStyle;
@@ -232,9 +227,8 @@ const UsersPage = () => {
     leadId: ''
   });
 
-  // Using hooks
-  const { 
-    users, 
+  const {
+    users,
     loading: usersLoading, 
     error: usersError, 
     createUser,
@@ -253,7 +247,7 @@ const UsersPage = () => {
     refetch: refetchTeams 
   } = useTeams();
 
-  // Auto-load user shifts when patternUserId changes and modal is open
+  // Auto-load user shifts when pattern modal opens
   useEffect(() => {
     if (isCreatePatternOpen && patternUserId && (!newPattern.userShifts || newPattern.userShifts.length === 0)) {
       const user = users.find(u => u.id === patternUserId);
@@ -274,16 +268,13 @@ const UsersPage = () => {
     }
   }, [isCreatePatternOpen, patternUserId, shifts, users]);
 
-  // ROTATION VERIFICATION FUNCTION - Fixed version
   const hasValidRotation = (user: any): boolean => {
-    // Check if the rotationConfig object exists and has a valid patternId
-    return !!(user.rotationConfig && 
-             typeof user.rotationConfig === 'object' && 
+    return !!(user.rotationConfig &&
+             typeof user.rotationConfig === 'object' &&
              user.rotationConfig.patternId &&
              user.rotationConfig.patternId !== '');
   };
 
-  // FUNCTION TO RETRIEVE ROTATION CONFIG
   const getRotationConfig = (user: any): RotationConfig | null => {
     if (!hasValidRotation(user)) return null;
     
@@ -293,14 +284,12 @@ const UsersPage = () => {
     };
   };
 
-  // Utility functions
   const showError = (message: string) => {
     setErrorMessage(message);
     setErrorDialogOpen(true);
   };
 
   const isValidEmail = (email: string): boolean => {
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
@@ -313,16 +302,14 @@ const UsersPage = () => {
     const workDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
     
     workDays.forEach((day) => {
-      totalSlots += 2; // 2 slots per day (morning + afternoon)
+      totalSlots += 2;
       const dayAvail = availability[day as keyof WeekAvailability];
       if (dayAvail?.morning) availableSlots++;
       if (dayAvail?.afternoon) availableSlots++;
     });
-    
-    // If the person works all slots Monday to Friday = 100%
-    if (availableSlots === 10) return 100; // 5 days x 2 slots = 10
 
-    // Otherwise calculate the actual percentage
+    if (availableSlots === 10) return 100;
+
     return Math.round((availableSlots / totalSlots) * 100);
   };
 
@@ -358,11 +345,19 @@ const UsersPage = () => {
   };
 
   const getWorkPercentBadge = (percent: number) => {
+    // 0% = "joker" user: manual-only assignment, never auto-picked
+    if (percent === 0) {
+      return (
+        <Badge className="bg-purple-100 text-purple-800 border-0">
+          {t('joker')}
+        </Badge>
+      );
+    }
     let colorClass = '';
     if (percent === 100) colorClass = 'bg-green-100 text-green-800';
     else if (percent >= 80) colorClass = 'bg-blue-100 text-blue-800';
     else colorClass = 'bg-orange-100 text-orange-800';
-    
+
     return (
       <Badge className={`${colorClass} border-0`}>
         {percent}%
@@ -370,8 +365,7 @@ const UsersPage = () => {
     );
   };
 
-  // AvailabilityEditor component - RESTRUCTURED
-  const AvailabilityEditor = ({ 
+  const AvailabilityEditor = ({
     availability, 
     onChange, 
     workType: localWorkType,
@@ -397,13 +391,11 @@ const UsersPage = () => {
       onChange(newAvailability);
     };
 
-    // Function to check if a day is available (at least one slot)
     const isDayAvailable = (day: string) => {
       const dayAvail = availability[day as keyof WeekAvailability];
       return dayAvail?.morning || dayAvail?.afternoon;
     };
 
-    // Function to get the user's shifts
     const getUserShifts = () => {
       if (!userId) return [];
       const user = users.find(u => u.id === userId);
@@ -433,10 +425,21 @@ const UsersPage = () => {
           
           <RadioGroup value={localWorkType} onValueChange={(value) => {
             onWorkTypeChange(value);
-            
-            // If switching to full-time, automatically update availability
+
             if (value === 'full') {
               onChange(fullTimeAvailability);
+            } else if (value === 'joker') {
+              // Joker = no availability at all → cannot be auto-assigned, only manual
+              const empty: any = {
+                monday: { morning: false, afternoon: false },
+                tuesday: { morning: false, afternoon: false },
+                wednesday: { morning: false, afternoon: false },
+                thursday: { morning: false, afternoon: false },
+                friday: { morning: false, afternoon: false },
+                saturday: { morning: false, afternoon: false },
+                sunday: { morning: false, afternoon: false },
+              };
+              onChange(empty);
             }
           }}>
             <div className="flex items-center space-x-2">
@@ -449,6 +452,13 @@ const UsersPage = () => {
               <RadioGroupItem value="partial" id={`partial-${userId || 'new'}`} />
               <Label htmlFor={`partial-${userId || 'new'}`} className="font-normal cursor-pointer">
                 {t("partTime")}
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="joker" id={`joker-${userId || 'new'}`} />
+              <Label htmlFor={`joker-${userId || 'new'}`} className="font-normal cursor-pointer">
+                {t("joker")}
+                <span className="ml-2 text-xs text-slate-500">— {t("jokerDesc")}</span>
               </Label>
             </div>
           </RadioGroup>
@@ -612,7 +622,6 @@ const UsersPage = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        // Auto-fill with the user's shifts when editing
                         if (userId && isEditMode) {
                           const userShifts = getUserShifts();
                           setNewPattern({
@@ -689,7 +698,6 @@ const UsersPage = () => {
                                     const hasMorning = dayAvail?.morning === true;
                                     const hasAfternoon = dayAvail?.afternoon === true;
 
-                                    // Filter shifts based on user availability for this day
                                     const filteredShifts = userShifts.filter((shift: any) => {
                                       if (!dayAvail) return true;
                                       const startHour = parseInt(shift.startTime?.split(':')[0] || '0');
@@ -771,8 +779,7 @@ const UsersPage = () => {
                                   } as any);
                                   setEditingPattern(null);
                                 } catch (err) {
-                                  // Pattern update error - handled by UI
-                                } finally {
+                                  } finally {
                                   setSavingPattern(false);
                                 }
                               }}
@@ -845,7 +852,6 @@ const UsersPage = () => {
     );
   };
 
-  // Component to manage team members (similar to MembersSelector from shifts)
   const TeamMembersSelector = ({
     teamId,
     currentMembers,
@@ -855,10 +861,8 @@ const UsersPage = () => {
     currentMembers: string[],
     onMembersChange: (memberIds: string[]) => void
   }) => {
-    // Users already in this team
     const teamUsers = users.filter(u => currentMembers.includes(u.id));
 
-    // Available users (not in this team AND active)
     const availableUsers = users.filter(u =>
       !currentMembers.includes(u.id) &&
       u.status === 'ACTIVE'
@@ -975,6 +979,178 @@ const UsersPage = () => {
     );
   };
 
+  // CSV import/export for users & teams
+  const [isImportingUsersCsv, setIsImportingUsersCsv] = useState(false);
+  const [isImportingTeamsCsv, setIsImportingTeamsCsv] = useState(false);
+  const usersCsvInputRef = React.useRef<HTMLInputElement>(null);
+  const teamsCsvInputRef = React.useRef<HTMLInputElement>(null);
+
+  const csvEscape = (v: any): string => {
+    const s = v === null || v === undefined ? '' : String(v);
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const parseCsvLine = (line: string): string[] => {
+    const out: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQuotes) {
+        if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (c === '"') { inQuotes = false; }
+        else cur += c;
+      } else {
+        if (c === ',') { out.push(cur); cur = ''; }
+        else if (c === '"') inQuotes = true;
+        else cur += c;
+      }
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+  };
+
+  const downloadCsv = (rows: string[][], filename: string) => {
+    const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  };
+
+  const handleExportUsersCsv = () => {
+    const header = ['firstName', 'lastName', 'email', 'phone', 'location', 'role', 'workPercent', 'team', 'notes', 'status'];
+    const rows: string[][] = [header];
+    for (const u of users) {
+      const team = teams.find((t: any) => t.id === u.teamId)?.name || '';
+      rows.push([
+        u.firstName || '', u.lastName || '', u.email || '', u.phone || '',
+        u.location || '', u.role || '', String(u.workPercent ?? 100),
+        team, u.notes || '', u.status || 'ACTIVE',
+      ]);
+    }
+    const today = new Date().toISOString().split('T')[0];
+    downloadCsv(rows, `users_${today}.csv`);
+  };
+
+  const handleExportTeamsCsv = () => {
+    const header = ['name', 'description', 'color'];
+    const rows: string[][] = [header];
+    for (const team of teams) {
+      rows.push([team.name || '', team.description || '', team.color || '#3b82f6']);
+    }
+    const today = new Date().toISOString().split('T')[0];
+    downloadCsv(rows, `teams_${today}.csv`);
+  };
+
+  const handleImportUsersCsv = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsImportingUsersCsv(true);
+    try {
+      const text = await file.text();
+      const lines = text.replace(/^﻿/, '').trim().split(/\r?\n/);
+      if (lines.length < 2) throw new Error(t('csvEmptyError'));
+      const header = parseCsvLine(lines[0]).map(h => h.toLowerCase());
+      const idx = (name: string) => header.indexOf(name.toLowerCase());
+      const iFirst = idx('firstName');
+      const iLast = idx('lastName');
+      const iEmail = idx('email');
+      if (iFirst === -1 || iLast === -1 || iEmail === -1) {
+        throw new Error(t('csvUsersHeaderError'));
+      }
+      const iPhone = idx('phone');
+      const iLoc = idx('location');
+      const iRole = idx('role');
+      const iWp = idx('workPercent');
+      const iTeam = idx('team');
+      const iNotes = idx('notes');
+      let created = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCsvLine(lines[i]);
+        if (cols.length < 3) continue;
+        const email = cols[iEmail];
+        if (!email) { skipped++; continue; }
+        if (users.some((u: any) => u.email?.toLowerCase() === email.toLowerCase())) { skipped++; continue; }
+        const teamName = iTeam >= 0 ? cols[iTeam] : '';
+        const team = teamName ? teams.find((tt: any) => tt.name?.toLowerCase() === teamName.toLowerCase()) : null;
+        try {
+          await createUser({
+            firstName: cols[iFirst] || '',
+            lastName: cols[iLast] || '',
+            email,
+            phone: iPhone >= 0 ? cols[iPhone] || undefined : undefined,
+            location: iLoc >= 0 ? cols[iLoc] || undefined : undefined,
+            role: iRole >= 0 ? cols[iRole] || undefined : undefined,
+            workPercent: iWp >= 0 && cols[iWp] !== '' ? parseInt(cols[iWp], 10) : 100,
+            teamId: team?.id || undefined,
+            notes: iNotes >= 0 ? cols[iNotes] || undefined : undefined,
+            status: 'ACTIVE',
+          });
+          created++;
+        } catch (err: any) {
+          errors.push(`${email}: ${err.message || 'failed'}`);
+        }
+      }
+      if (usersCsvInputRef.current) usersCsvInputRef.current.value = '';
+      alert(errors.length
+        ? t('csvImportResultWithErrors', { created, skipped, errorCount: errors.length, errorDetails: errors.slice(0, 3).join('; ') })
+        : t('csvImportResult', { created, skipped }));
+    } catch (e: any) {
+      alert(e.message || t('csvImportFailed'));
+    } finally {
+      setIsImportingUsersCsv(false);
+    }
+  };
+
+  const handleImportTeamsCsv = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsImportingTeamsCsv(true);
+    try {
+      const text = await file.text();
+      const lines = text.replace(/^﻿/, '').trim().split(/\r?\n/);
+      if (lines.length < 2) throw new Error(t('csvEmptyError'));
+      const header = parseCsvLine(lines[0]).map(h => h.toLowerCase());
+      const iName = header.indexOf('name');
+      if (iName === -1) throw new Error(t('csvTeamsHeaderError'));
+      const iDesc = header.indexOf('description');
+      const iColor = header.indexOf('color');
+      let created = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCsvLine(lines[i]);
+        const name = cols[iName];
+        if (!name) { skipped++; continue; }
+        if (teams.some((tt: any) => tt.name?.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
+        try {
+          await createTeam({
+            name,
+            description: iDesc >= 0 ? cols[iDesc] || undefined : undefined,
+            color: iColor >= 0 && cols[iColor] ? cols[iColor] : '#3b82f6',
+          });
+          created++;
+        } catch (err: any) {
+          errors.push(`${name}: ${err.message || 'failed'}`);
+        }
+      }
+      if (teamsCsvInputRef.current) teamsCsvInputRef.current.value = '';
+      alert(errors.length
+        ? t('csvImportResultWithErrors', { created, skipped, errorCount: errors.length, errorDetails: errors.slice(0, 3).join('; ') })
+        : t('csvImportResult', { created, skipped }));
+    } catch (e: any) {
+      alert(e.message || t('csvImportFailed'));
+    } finally {
+      setIsImportingTeamsCsv(false);
+    }
+  };
+
   const handleCreateUser = async () => {
     const errors: Record<string, boolean> = {};
     if (!newUser.firstName) errors.userFirstName = true;
@@ -997,7 +1173,6 @@ const UsersPage = () => {
         status: 'ACTIVE'
       };
 
-      // Add rotation configuration if applicable
       if (newUser.rotationConfig?.patternId) {
         userData.rotationConfig = newUser.rotationConfig;
       } else {
@@ -1022,7 +1197,6 @@ const UsersPage = () => {
       });
       setWorkType('full');
     } catch (error: any) {
-      // Display the specific API error message
       if (error.response?.data?.error) {
         showError(error.response.data.error);
       } else if (error.message) {
@@ -1044,12 +1218,15 @@ const UsersPage = () => {
       location: user.location || '',
       teamId: user.teamId || '',
       role: user.role || '',
-      workPercent: user.workPercent || 100,
+      workPercent: user.workPercent ?? 100,
       notes: user.notes || '',
       availability: user.availability || fullTimeAvailability,
       rotationConfig: user.rotationConfig ? getRotationConfig(user) : null,
     });
-    setWorkType(user.workPercent && user.workPercent < 100 ? 'partial' : 'full');
+    setWorkType(
+      user.workPercent === 0 ? 'joker' :
+      (user.workPercent && user.workPercent < 100 ? 'partial' : 'full')
+    );
     setIsCreateUserDialogOpen(true);
   };
 
@@ -1063,7 +1240,6 @@ const UsersPage = () => {
     setIsCreateTeamDialogOpen(true);
   };
 
-  // === Rules handlers ===
   const fetchUserRules = async (userId: string) => {
     try {
       const res = await authFetch(`/api/users/${userId}/rules`);
@@ -1104,7 +1280,6 @@ const UsersPage = () => {
   const handleSaveRule = async () => {
     if (!selectedUser) return;
     try {
-      // Prevent duplicate rules
       const existingRules = userRules.filter((r: any) => editingRuleId ? r.id !== editingRuleId : true);
       if (newRule.type === 'WEEK_PARITY') {
         const existing = existingRules.find((r: any) => r.type === 'WEEK_PARITY');
@@ -1240,7 +1415,6 @@ const UsersPage = () => {
         availability: selectedUser.availability
       };
 
-      // Add or remove rotation configuration
       if (selectedUser.rotationConfig?.patternId) {
         userData.rotationConfig = selectedUser.rotationConfig;
       } else {
@@ -1253,7 +1427,6 @@ const UsersPage = () => {
       setSelectedUser(null);
       setEditWorkType('full');
     } catch (error: any) {
-      // Display the specific API error message
       if (error.response?.data?.error) {
         showError(error.response.data.error);
       } else if (error.message) {
@@ -1328,7 +1501,6 @@ const UsersPage = () => {
 
       await updateTeam(selectedTeam.id, updateData);
 
-      // Refresh users to see team changes
       await refetchUsers();
       await refetchTeams();
 
@@ -1355,11 +1527,14 @@ const UsersPage = () => {
   };
 
   const openEditUser = (user: any) => {
-    setEditWorkType(user.workPercent && user.workPercent < 100 ? 'partial' : 'full');
+    setEditWorkType(
+      user.workPercent === 0 ? 'joker' :
+      (user.workPercent && user.workPercent < 100 ? 'partial' : 'full')
+    );
     setSelectedUser({
       id: user.id, firstName: user.firstName || '', lastName: user.lastName || '',
       email: user.email || '', phone: user.phone || '', location: user.location || '',
-      teamId: user.teamId || '', role: user.role || '', workPercent: user.workPercent || 100,
+      teamId: user.teamId || '', role: user.role || '', workPercent: user.workPercent ?? 100,
       status: user.status || 'ACTIVE', notes: user.notes || '',
       availability: user.availability || fullTimeAvailability, rotationConfig: getRotationConfig(user)
     });
@@ -1411,7 +1586,6 @@ const UsersPage = () => {
       return teamSortOrder === 'asc' ? comparison : -comparison;
     });
 
-  // Constants for the pattern editor
   const days: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   const dayLabels = {
     monday: 'Mon',
@@ -1475,15 +1649,79 @@ const UsersPage = () => {
           </div>
 
           {viewMode === 'users' ? (
-            <Button className="bg-primary hover:bg-primary/90" onClick={() => setIsCreateUserDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              {t("createUser")}
-            </Button>
+            <div className="flex items-center gap-2">
+              <input
+                ref={usersCsvInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleImportUsersCsv}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportUsersCsv}
+                title={t('exportCsv')}
+                className="hover:bg-green-50 hover:text-green-700 hover:border-green-200"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                {t('exportCsv')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => usersCsvInputRef.current?.click()}
+                disabled={isImportingUsersCsv}
+                title={t('importCsv')}
+                className="hover:bg-green-50 hover:text-green-700 hover:border-green-200"
+              >
+                {isImportingUsersCsv
+                  ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  : <Upload className="w-4 h-4 mr-1" />}
+                {t('importCsv')}
+              </Button>
+              <Button className="bg-primary hover:bg-primary/90" onClick={() => setIsCreateUserDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                {t("createUser")}
+              </Button>
+            </div>
           ) : (
-            <Button className="bg-primary hover:bg-primary/90" onClick={() => setIsCreateTeamDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              {t("createTeam")}
-            </Button>
+            <div className="flex items-center gap-2">
+              <input
+                ref={teamsCsvInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleImportTeamsCsv}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportTeamsCsv}
+                title={t('exportCsv')}
+                className="hover:bg-green-50 hover:text-green-700 hover:border-green-200"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                {t('exportCsv')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => teamsCsvInputRef.current?.click()}
+                disabled={isImportingTeamsCsv}
+                title={t('importCsv')}
+                className="hover:bg-green-50 hover:text-green-700 hover:border-green-200"
+              >
+                {isImportingTeamsCsv
+                  ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  : <Upload className="w-4 h-4 mr-1" />}
+                {t('importCsv')}
+              </Button>
+              <Button className="bg-primary hover:bg-primary/90" onClick={() => setIsCreateTeamDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                {t("createTeam")}
+              </Button>
+            </div>
           )}
         </div>
 
@@ -1780,7 +2018,7 @@ const UsersPage = () => {
                           onChange={(newAvailability: WeekAvailability) => setNewUser({...newUser, availability: newAvailability})}
                           workType={workType}
                           onWorkTypeChange={(type: string) => {
-                            setWorkType(type as 'full' | 'partial');
+                            setWorkType(type as 'full' | 'partial' | 'joker');
                           }}
                           rotationConfig={newUser.rotationConfig}
                           onRotationConfigChange={(config: RotationConfig | null) => setNewUser({...newUser, rotationConfig: config})}
@@ -1977,7 +2215,7 @@ const UsersPage = () => {
                                 {user.team.name}
                               </Badge>
                             )}
-                            {getWorkPercentBadge(user.workPercent || 100)}
+                            {getWorkPercentBadge(user.workPercent ?? 100)}
                           </div>
                           {getStatusBadge(user.status)}
                         </div>
@@ -2083,7 +2321,7 @@ const UsersPage = () => {
                           </TableCell>
                           <TableCell className="text-sm">{user.role}</TableCell>
                           <TableCell>
-                            {getWorkPercentBadge(user.workPercent || 100)}
+                            {getWorkPercentBadge(user.workPercent ?? 100)}
                           </TableCell>
                           <TableCell>
                             {hasRotation ? (
@@ -2396,9 +2634,8 @@ const UsersPage = () => {
                   onChange={(newAvailability: WeekAvailability) => setSelectedUser({...selectedUser, availability: newAvailability})}
                   workType={editWorkType}
                   onWorkTypeChange={(type: string) => {
-                    setEditWorkType(type as 'full' | 'partial');
+                    setEditWorkType(type as 'full' | 'partial' | 'joker');
                     
-                    // If switching to full-time, reset availability
                     if (type === 'full') {
                       setSelectedUser({
                         ...selectedUser,
@@ -2504,29 +2741,37 @@ const UsersPage = () => {
                       )}
 
                       {newRule.type === 'MAX_LOAD' && (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-xs">{t('shift')}</Label>
-                            <Select value={newRule.config.shiftId || ''} onValueChange={(v) => setNewRule({ ...newRule, config: { ...newRule.config, shiftId: v } })}>
-                              <SelectTrigger><SelectValue placeholder={t('selectShift')} /></SelectTrigger>
-                              <SelectContent>
-                                {getUserShiftsForRules(selectedUser).map((s: any) => (
-                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-xs">{t('shift')}</Label>
+                              <Select value={newRule.config.shiftId || ''} onValueChange={(v) => setNewRule({ ...newRule, config: { ...newRule.config, shiftId: v } })}>
+                                <SelectTrigger><SelectValue placeholder={t('selectShift')} /></SelectTrigger>
+                                <SelectContent>
+                                  {getUserShiftsForRules(selectedUser).map((s: any) => (
+                                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-xs">{t('maxPercentage')}</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={newRule.config.maxPercentage ?? 50}
+                                onChange={(e) => {
+                                  const v = parseInt(e.target.value, 10);
+                                  setNewRule({ ...newRule, config: { ...newRule.config, maxPercentage: isNaN(v) ? 1 : Math.max(1, Math.min(100, v)) } });
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <Label className="text-xs">{t('maxPercentage')}</Label>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={100}
-                              value={newRule.config.maxPercentage || 50}
-                              onChange={(e) => setNewRule({ ...newRule, config: { ...newRule.config, maxPercentage: parseInt(e.target.value) || 50 } })}
-                            />
-                          </div>
-                        </div>
+                          <p className="text-xs text-slate-500 bg-blue-50 border-l-2 border-blue-300 px-2 py-1.5 rounded">
+                            ℹ️ {t('maxLoadAnnualNote')}
+                          </p>
+                        </>
                       )}
 
                       <div className="flex justify-end gap-2">
@@ -2789,7 +3034,6 @@ const UsersPage = () => {
                       <h4 className="font-medium mb-2">{t("weekNumber", { week: weekIndex + 1 })}</h4>
                       <div className="grid grid-cols-7 gap-2">
                         {days.map((day) => {
-                          // Check user availability for this day using patternUserId
                           const patternUser = patternUserId ? users.find(u => u.id === patternUserId) : null;
                           const userAvailability = patternUser?.availability;
                           const dayAvail = userAvailability ? userAvailability[day as keyof WeekAvailability] : null;
@@ -2797,32 +3041,25 @@ const UsersPage = () => {
                           const hasAfternoon = dayAvail?.afternoon === true;
                           const isDayAvailable = userAvailability ? (hasMorning || hasAfternoon) : true;
 
-                          // Filter shifts/piketts based on user availability for this day
-                          // Uses proportion-based logic: if <25% of shift falls in a period, treat as single-period
+                          // Filter by availability; <25% overlap treated as single-period
                           const findShiftOrPikettById = (sid: string) => shifts.find((s: any) => s.id === sid) || piketts.find((p: any) => p.id === sid);
                           const availableShifts = (newPattern.userShifts || []).map(sid => findShiftOrPikettById(sid)).filter(Boolean).filter((item: any) => {
-                            // Piketts are always available (no time-based filtering)
                             if (!item.startTime) return true;
                             if (!userAvailability || !dayAvail) return true;
                             const [startH, startM] = (item.startTime || '0:0').split(':').map(Number);
                             const [endH, endM] = (item.endTime || '0:0').split(':').map(Number);
                             const startMinutes = startH * 60 + (startM || 0);
                             const endMinutes = endH * 60 + (endM || 0);
-                            const midday = 13 * 60; // 13:00
-                            // Shift entirely in morning
+                            const midday = 13 * 60;
                             if (endMinutes <= midday) return hasMorning;
-                            // Shift entirely in afternoon
                             if (startMinutes >= midday) return hasAfternoon;
-                            // Shift spans both — check proportions
                             const morningPortion = midday - startMinutes;
                             const afternoonPortion = endMinutes - midday;
                             const totalDuration = endMinutes - startMinutes;
                             const minorPortion = Math.min(morningPortion, afternoonPortion);
                             if (totalDuration > 0 && minorPortion / totalDuration < 0.25) {
-                              // Minor portion <25%: treat as single-period shift
                               return afternoonPortion > morningPortion ? hasAfternoon : hasMorning;
                             }
-                            // Both portions significant: needs both
                             return hasMorning && hasAfternoon;
                           });
 
@@ -2926,10 +3163,8 @@ const UsersPage = () => {
                     }
 
                     if (newPattern.id) {
-                      // Edit mode
                       await updatePattern({...newPattern, userShifts: newPattern.userShifts || []} as any);
                     } else {
-                      // Create mode
                       const newId = Date.now().toString();
                       const patternToAdd = { ...newPattern, id: newId, userShifts: newPattern.userShifts || [] };
                       await addPattern(patternToAdd as any);

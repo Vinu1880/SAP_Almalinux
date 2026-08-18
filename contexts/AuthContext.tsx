@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         } catch (e: any) {
-          // Normal error if no redirect occurred
+          // Ignore "no redirect" errors
           if (e.errorCode !== 'no_token_request_cache_error') {
             console.error('MSAL redirect error:', e);
           }

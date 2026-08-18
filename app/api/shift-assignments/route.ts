@@ -1,12 +1,10 @@
-// app/api/shift-assignments/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, createBulkShiftAssignmentsSchema } from '@/lib/validation';
 
-// GET - Retrieve shift assignments with filters
+// Retrieve shift assignments with filters
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -59,23 +57,16 @@ export async function GET(request: NextRequest) {
     const assignments = await prisma.shiftAssignment.findMany({
       where,
       include: {
-        user: {
-          include: {
-            team: true
-          }
-        },
-        shift: {
-          include: {
-            team: true
-          }
-        }
+        user: { include: { team: true } },
+        shift: { include: { team: true } },
+        sentBy: { select: { id: true, firstName: true, lastName: true, email: true } }
       },
       orderBy: {
         createdAt: 'desc'
       }
     });
 
-    // Team filter applied post-query since team is nested in shift
+    // Team filter is post-query — team lives inside shift
     let filteredAssignments = assignments;
     if (teamId) {
       filteredAssignments = assignments.filter(a => a.shift.teamId === teamId);
@@ -90,7 +81,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Bulk create shift assignments
+// Bulk create shift assignments
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -111,7 +102,8 @@ export async function POST(request: NextRequest) {
         shiftId: a.shiftId,
         userId: a.userId,
         status: a.status || 'PENDING',
-        reason: a.reason || null
+        reason: a.reason || null,
+        sentById: auth.user.id
       })),
       skipDuplicates: true
     });
@@ -127,24 +119,14 @@ export async function POST(request: NextRequest) {
 
     const createdAssignments = await prisma.shiftAssignment.findMany({
       where: {
-        date: {
-          in: assignments.map((a: any) => new Date(a.date))
-        },
-        shiftId: {
-          in: assignments.map((a: any) => a.shiftId)
-        }
+        date: { in: assignments.map((a: any) => new Date(a.date)) },
+        shiftId: { in: assignments.map((a: any) => a.shiftId) },
+        userId: { in: assignments.map((a: any) => a.userId) },
       },
       include: {
-        user: {
-          include: {
-            team: true
-          }
-        },
-        shift: {
-          include: {
-            team: true
-          }
-        }
+        user: { include: { team: true } },
+        shift: { include: { team: true } },
+        sentBy: { select: { id: true, firstName: true, lastName: true, email: true } }
       },
       orderBy: {
         createdAt: 'desc'

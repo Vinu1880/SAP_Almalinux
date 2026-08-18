@@ -53,6 +53,8 @@ export interface PikettAssignmentStats {
   tentative: number;
   cancelled: number;
   total: number;
+  resent: number;
+  refusedNotResent: number;
 }
 
 export interface UserStats {
@@ -92,7 +94,9 @@ export function usePikettAssignments(options: UsePikettAssignmentsOptions = {}) 
     pending: 0,
     tentative: 0,
     cancelled: 0,
-    total: 0
+    total: 0,
+    resent: 0,
+    refusedNotResent: 0,
   });
   const [userStats, setUserStats] = useState<UserStats[]>([]);
   const [teamStats, setTeamStats] = useState<TeamStats[]>([]);

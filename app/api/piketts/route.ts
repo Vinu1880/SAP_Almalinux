@@ -1,12 +1,9 @@
-// app/api/piketts/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, createPikettSchema } from '@/lib/validation';
 
-// GET - Retrieve all piketts with team relations
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -34,7 +31,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new pikett
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -61,9 +57,11 @@ export async function POST(request: NextRequest) {
         status: body.status || 'ACTIVE',
         is24_7: body.is24_7 !== undefined ? body.is24_7 : true,
         senderMailbox: body.senderMailbox || '',
+        startHour: body.startHour || '08:00',
+        minRestWeeks: body.minRestWeeks !== undefined ? body.minRestWeeks : 3,
+        avoidSupportSameWeek: body.avoidSupportSameWeek !== undefined ? body.avoidSupportSameWeek : true,
         includedUserIds: body.includedUserIds || [],
         excludedUserIds: body.excludedUserIds || [],
-        daysOfWeek: body.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]
       },
       include: {
         team: true

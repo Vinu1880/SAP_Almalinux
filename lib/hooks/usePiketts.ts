@@ -16,7 +16,9 @@ interface Pikett {
   status: string;
   is24_7: boolean;
   senderMailbox?: string;
-  daysOfWeek?: number[];
+  startHour?: string;
+  minRestWeeks?: number;
+  avoidSupportSameWeek?: boolean;
 }
 
 export function usePiketts() {

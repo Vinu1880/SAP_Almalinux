@@ -19,14 +19,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Checkbox } from '@/components/ui/checkbox';
 
-// Hooks for real data
 import { useShifts } from '@/lib/hooks/useShifts';
 import { useTeams } from '@/lib/hooks/useTeams';
 import { useUsers } from '@/lib/hooks/useUsers';
 import { usePiketts } from '@/lib/hooks/usePiketts';
 
-// Available colors for shifts (10 distinct colors)
 const SHIFT_COLORS = [
   '#ef4444', // Red
   '#3b82f6', // Blue
@@ -60,7 +59,6 @@ const ShiftsPage = () => {
   const [deletePikettId, setDeletePikettId] = useState<string | null>(null);
   const [isDeletePikettDialogOpen, setIsDeletePikettDialogOpen] = useState(false);
 
-  // Piketts hook
   const {
     piketts,
     loading: pikettsLoading,
@@ -71,9 +69,8 @@ const ShiftsPage = () => {
     refetch: refetchPiketts
   } = usePiketts();
 
-  // Shifts hook
-  const { 
-    shifts, 
+  const {
+    shifts,
     loading: shiftsLoading, 
     error: shiftsError, 
     createShift, 
@@ -117,7 +114,9 @@ const ShiftsPage = () => {
     status: 'ACTIVE',
     is24_7: true,
     senderMailbox: '',
-    daysOfWeek: [1, 2, 3, 4, 5]
+    startHour: '08:00',
+    minRestWeeks: 3,
+    avoidSupportSameWeek: true,
   });
 
   const getStatusBadge = (status: string) => {
@@ -195,10 +194,12 @@ const ShiftsPage = () => {
         status: newPikett.status,
         is24_7: newPikett.is24_7,
         senderMailbox: newPikett.senderMailbox,
+        startHour: newPikett.startHour,
+        minRestWeeks: newPikett.minRestWeeks,
+        avoidSupportSameWeek: newPikett.avoidSupportSameWeek,
         startWeek: '',
-        daysOfWeek: newPikett.daysOfWeek
       });
-      
+
       setIsCreatePikettDialogOpen(false);
       setNewPikett({
         id: '',
@@ -210,7 +211,9 @@ const ShiftsPage = () => {
         status: 'ACTIVE',
         is24_7: true,
         senderMailbox: '',
-        daysOfWeek: [0, 1, 2, 3, 4, 5, 6]
+        startHour: '08:00',
+        minRestWeeks: 3,
+        avoidSupportSameWeek: true,
       });
     } catch (error) {
       alert(t('pikettCreateError'));
@@ -245,7 +248,9 @@ const ShiftsPage = () => {
         status: selectedPikett.status,
         is24_7: selectedPikett.is24_7,
         senderMailbox: selectedPikett.senderMailbox || '',
-        daysOfWeek: selectedPikett.daysOfWeek
+        startHour: selectedPikett.startHour || '08:00',
+        minRestWeeks: selectedPikett.minRestWeeks ?? 3,
+        avoidSupportSameWeek: selectedPikett.avoidSupportSameWeek !== false,
       });
       
       setIsEditPikettDialogOpen(false);
@@ -352,7 +357,9 @@ const ShiftsPage = () => {
       status: pikett.status || 'ACTIVE',
       is24_7: pikett.is24_7,
       senderMailbox: pikett.senderMailbox || '',
-      daysOfWeek: pikett.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
+      startHour: pikett.startHour || '08:00',
+      minRestWeeks: pikett.minRestWeeks ?? 3,
+      avoidSupportSameWeek: pikett.avoidSupportSameWeek !== false,
     });
     setIsCreatePikettDialogOpen(true);
   };
@@ -383,8 +390,7 @@ const ShiftsPage = () => {
     return Math.round(duration / 60 * 10) / 10;
   };
 
-  // Day-of-week selector component
-  const DaysOfWeekSelector = ({ 
+  const DaysOfWeekSelector = ({
     selectedDays, 
     onChange 
   }: { 
@@ -441,8 +447,7 @@ const ShiftsPage = () => {
     );
   };
 
-  // Shift members management component
-  const MembersSelector = ({ 
+  const MembersSelector = ({
     selectedUserIds, 
     excludedUserIds,
     onIncludeChange, 
@@ -687,8 +692,7 @@ const ShiftsPage = () => {
 
   const PikettCard = ({ pikett }: { pikett: any }) => {
     const team = teams.find(t => t.id === pikett.teamId);
-    
-    // Get eligible users
+
     const eligibleUsers = [
       ...users.filter(u => u.teamId === pikett.teamId && u.status === 'ACTIVE' && !pikett.excludedUserIds?.includes(u.id)),
       ...users.filter(u => pikett.includedUserIds?.includes(u.id) && u.status === 'ACTIVE')
@@ -925,10 +929,6 @@ const ShiftsPage = () => {
                       </Select>
                     </div>
 
-                    <DaysOfWeekSelector
-                      selectedDays={newPikett.daysOfWeek}
-                      onChange={(days) => setNewPikett({...newPikett, daysOfWeek: days})}
-                    />
 
                     <div className="space-y-2">
                       <Label>{t("senderMailbox")}</Label>
@@ -939,6 +939,40 @@ const ShiftsPage = () => {
                         onChange={(e) => setNewPikett({...newPikett, senderMailbox: e.target.value})}
                       />
                       <p className="text-xs text-muted-foreground">{t("senderMailboxDesc")}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t("pikettStartHour")}</Label>
+                        <Input
+                          type="time"
+                          value={newPikett.startHour}
+                          onChange={(e) => setNewPikett({...newPikett, startHour: e.target.value})}
+                        />
+                        <p className="text-xs text-muted-foreground">{t("pikettStartHourDesc")}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t("pikettMinRestWeeks")}</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={12}
+                          value={newPikett.minRestWeeks}
+                          onChange={(e) => setNewPikett({...newPikett, minRestWeeks: parseInt(e.target.value) || 0})}
+                        />
+                        <p className="text-xs text-muted-foreground">{t("pikettMinRestWeeksDesc")}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>{t("pikettAvoidSupportSameWeek")}</Label>
+                        <p className="text-xs text-muted-foreground">{t("pikettAvoidSupportSameWeekDesc")}</p>
+                      </div>
+                      <Checkbox
+                        checked={newPikett.avoidSupportSameWeek}
+                        onCheckedChange={(checked) => setNewPikett({...newPikett, avoidSupportSameWeek: !!checked})}
+                      />
                     </div>
 
                     {newPikett.teamId && (
@@ -1155,10 +1189,6 @@ const ShiftsPage = () => {
                   </Select>
                 </div>
 
-                <DaysOfWeekSelector
-                  selectedDays={selectedPikett?.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]}
-                  onChange={(days) => setSelectedPikett({...selectedPikett, daysOfWeek: days})}
-                />
 
                 <div className="space-y-2">
                   <Label>{t("senderMailbox")}</Label>
@@ -1169,6 +1199,40 @@ const ShiftsPage = () => {
                     onChange={(e) => setSelectedPikett({...selectedPikett, senderMailbox: e.target.value})}
                   />
                   <p className="text-xs text-muted-foreground">{t("senderMailboxDesc")}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t("pikettStartHour")}</Label>
+                    <Input
+                      type="time"
+                      value={selectedPikett.startHour || '08:00'}
+                      onChange={(e) => setSelectedPikett({...selectedPikett, startHour: e.target.value})}
+                    />
+                    <p className="text-xs text-muted-foreground">{t("pikettStartHourDesc")}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t("pikettMinRestWeeks")}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={12}
+                      value={selectedPikett.minRestWeeks ?? 3}
+                      onChange={(e) => setSelectedPikett({...selectedPikett, minRestWeeks: parseInt(e.target.value) || 0})}
+                    />
+                    <p className="text-xs text-muted-foreground">{t("pikettMinRestWeeksDesc")}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>{t("pikettAvoidSupportSameWeek")}</Label>
+                    <p className="text-xs text-muted-foreground">{t("pikettAvoidSupportSameWeekDesc")}</p>
+                  </div>
+                  <Checkbox
+                    checked={selectedPikett.avoidSupportSameWeek !== false}
+                    onCheckedChange={(checked) => setSelectedPikett({...selectedPikett, avoidSupportSameWeek: !!checked})}
+                  />
                 </div>
 
                 <MembersSelector
