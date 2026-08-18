@@ -131,6 +131,14 @@ const DashboardPage = () => {
     return map;
   }, [calendarAssignments]);
 
+  // Wall-clock stamp with no zone marker. Paired with timeZone, Graph applies
+  // CET or CEST itself, so a shift stays at its configured hour year-round.
+  // toISOString() would send an instant built in the server's zone (UTC in the
+  // container) while labelling it Zurich, shifting events by one to two hours.
+  const localDateTime = (d: Date): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` +
+    `T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
+
   const statusDotColor = (status: string) => {
     switch (status) {
       case 'ACCEPTED': return 'bg-green-500';
@@ -584,8 +592,8 @@ const DashboardPage = () => {
                     </p>
                   `,
                 },
-                start: { dateTime: segStart.toISOString(), timeZone: 'Europe/Zurich' },
-                end: { dateTime: segEnd.toISOString(), timeZone: 'Europe/Zurich' },
+                start: { dateTime: localDateTime(segStart), timeZone: 'Europe/Zurich' },
+                end: { dateTime: localDateTime(segEnd), timeZone: 'Europe/Zurich' },
                 attendees: [{
                   emailAddress: { address: segRow.user.email, name: `${segRow.user.firstName} ${segRow.user.lastName}` },
                   type: 'required',
@@ -674,12 +682,15 @@ const DashboardPage = () => {
       // A split segment keeps its own window: resending it must not hand the
       // replacement the whole shift.
       const seg = resendingAssignment as any;
+      // A pikett day runs from its start hour to the same hour next day, not
+      // midnight to midnight — otherwise whoever takes over gets the wrong window.
+      const pikettHour = (shiftOrPikett.startHour || '08:00').slice(0, 5);
       const startTime = mode === 'shifts'
         ? (seg.segmentStart || shiftOrPikett.startTime || '00:00')
-        : '00:00';
+        : pikettHour;
       const endTime = mode === 'shifts'
         ? (seg.segmentEnd || shiftOrPikett.endTime || '23:59')
-        : '23:59';
+        : pikettHour;
 
       const [startHour, startMinute] = startTime.split(':');
       const [endHour, endMinute] = endTime.split(':');
@@ -710,11 +721,11 @@ const DashboardPage = () => {
           `
         },
         start: {
-          dateTime: startDateTime.toISOString(),
+          dateTime: localDateTime(startDateTime),
           timeZone: 'Europe/Zurich'
         },
         end: {
-          dateTime: endDateTime.toISOString(),
+          dateTime: localDateTime(endDateTime),
           timeZone: 'Europe/Zurich'
         },
         attendees: [
@@ -1488,7 +1499,7 @@ const DashboardPage = () => {
                                         onClick={() => handleRemoveSplit((assignment as any).segmentGroupId)}
                                         disabled={splitting}
                                         title={t('splitRemove')}
-                                        className="hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300"
+                                        className="hover:bg-amber-50/60 hover:text-amber-700 hover:border-amber-200 transition-colors"
                                       >
                                         <Scissors className="w-4 h-4" />
                                       </Button>
@@ -1498,7 +1509,7 @@ const DashboardPage = () => {
                                         size="sm"
                                         onClick={() => openSplitDialog(assignment)}
                                         title={t('splitShift')}
-                                        className="hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                                        className="hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-colors"
                                       >
                                         <Scissors className="w-4 h-4" />
                                       </Button>
@@ -2261,30 +2272,34 @@ const DashboardPage = () => {
 
                 <div className="space-y-2">
                   {splitSegments.map((seg, i) => (
-                    <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-slate-50">
-                      <span className="text-xs font-medium text-slate-500 w-20 flex-shrink-0">
-                        {t('splitSegment')} {i + 1}
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-amber-200 hover:bg-amber-50/40 transition-colors"
+                    >
+                      <span className="w-6 h-6 flex items-center justify-center text-xs font-semibold text-amber-700 bg-amber-100 rounded-full flex-shrink-0">
+                        {i + 1}
                       </span>
                       <Input
                         type="time"
                         value={seg.start}
                         disabled={i === 0}
                         onChange={(e) => updateSegment(i, { start: e.target.value })}
-                        className="h-8 w-28"
+                        className="h-8 w-[92px] px-2 flex-shrink-0 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                       />
-                      <span className="text-slate-400">→</span>
+                      <span className="text-slate-400 flex-shrink-0 text-sm">→</span>
                       <Input
                         type="time"
                         value={seg.end}
                         disabled={i === splitSegments.length - 1}
                         onChange={(e) => updateSegment(i, { end: e.target.value })}
-                        className="h-8 w-28"
+                        className="h-8 w-[92px] px-2 flex-shrink-0 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                       <Select
                         value={seg.userId}
                         onValueChange={(v) => updateSegment(i, { userId: v })}
                       >
-                        <SelectTrigger className="h-8 flex-1">
+                        {/* min-w-0 lets the trigger shrink instead of pushing the row past the dialog */}
+                        <SelectTrigger className="h-8 flex-1 min-w-0 hover:bg-white transition-colors">
                           <SelectValue placeholder={t('splitAssignedTo')} />
                         </SelectTrigger>
                         <SelectContent>
@@ -2295,16 +2310,19 @@ const DashboardPage = () => {
                           ))}
                         </SelectContent>
                       </Select>
-                      {splitSegments.length > 2 && (
+                      {splitSegments.length > 2 ? (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 hover:bg-red-50 hover:text-red-600"
+                          className="h-8 w-8 flex-shrink-0 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                           onClick={() => removeSegment(i)}
                           title={t('splitRemoveSegment')}
                         >
                           <X className="w-4 h-4" />
                         </Button>
+                      ) : (
+                        // Keep the columns aligned when no remove button shows.
+                        <span className="w-8 flex-shrink-0" />
                       )}
                     </div>
                   ))}
@@ -2332,6 +2350,7 @@ const DashboardPage = () => {
                     variant="outline"
                     onClick={() => setSplittingAssignment(null)}
                     disabled={splitting}
+                    className="hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors"
                   >
                     {tCommon('cancel')}
                   </Button>

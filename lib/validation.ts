@@ -155,6 +155,14 @@ export const splitShiftAssignmentSchema = z.object({
   }
 });
 
+// Hand selected days of a pikett week to another person. Capped at 31 days:
+// a handover covers part of a week, never a whole season.
+export const reassignPikettDaysSchema = z.object({
+  pikettId: cuidSchema,
+  newUserId: cuidSchema,
+  dates: z.array(z.string()).min(1).max(31),
+});
+
 export const createBulkPikettAssignmentsSchema = z.object({
   assignments: z.array(z.object({
     date: z.string(),

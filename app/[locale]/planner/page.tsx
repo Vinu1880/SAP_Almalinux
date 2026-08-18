@@ -722,6 +722,13 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     return dates;
   };
 
+  // "2026-08-18T08:00:00" — a wall-clock stamp with no zone marker. Sent
+  // alongside timeZone, it keeps a shift at 08:00 local whether Switzerland is
+  // on CET or CEST, and regardless of the server's own zone.
+  const localDateTime = (d: Date): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` +
+    `T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
+
   const HOLIDAY_KEYWORDS = /\b(ferien|holiday|holidays|vacances|urlaub|vacation|conges|congé|congés|absent|absence|sick|krank|malade|maladie|leave|off day|feiertag|feriado)\b/i;
   // Short OOF (< this many hours) is treated as a "busy" meeting — informational,
   // never blocking. Rationale: a 30-min "Namitalk" or lunch marked OOF must not
@@ -2437,8 +2444,12 @@ const processShiftAssignments = async () => {
                 </p>
               `
             },
-            start: { dateTime: startDateTime.toISOString(), timeZone: 'Europe/Zurich' },
-            end: { dateTime: endDateTime.toISOString(), timeZone: 'Europe/Zurich' },
+            // Wall-clock time, no Z suffix: paired with timeZone, Graph applies
+            // CET or CEST itself. Sending toISOString() would hand it an absolute
+            // instant built in the server's zone (UTC in the container) while
+            // still labelling it Zurich — a one to two hour shift.
+            start: { dateTime: localDateTime(startDateTime), timeZone: 'Europe/Zurich' },
+            end: { dateTime: localDateTime(endDateTime), timeZone: 'Europe/Zurich' },
             attendees: [{
               emailAddress: { address: user.email, name: user.displayName || `${user.firstName} ${user.lastName}` },
               type: 'required'
@@ -3222,16 +3233,31 @@ useEffect(() => {
                     row = { user: u, count: 0, total: 0, perShift: new Map() };
                     perUser.set(u.id, row);
                   }
-                  row.count++;
+                  // A split segment counts for the share of the shift it covers,
+                  // rounded to the nearest half so the figures stay readable:
+                  // 0.5 or 1, never 0.4 or 0.7.
+                  const weight = (() => {
+                    const seg = a as any;
+                    if (!seg.segmentStart || !a.shift?.startTime) return 1;
+                    const mins = (t2: string) => {
+                      const [h, m] = t2.slice(0, 5).split(':').map(Number);
+                      return h * 60 + m;
+                    };
+                    const full = mins(a.shift.endTime) - mins(a.shift.startTime);
+                    if (full <= 0) return 1;
+                    const part = mins(seg.segmentEnd) - mins(seg.segmentStart);
+                    return Math.max(0.5, Math.round((part / full) * 2) / 2);
+                  })();
+                  row.count += weight;
                   const sid = a.shiftId;
                   const key = sid;
                   const existing = row.perShift.get(key);
-                  if (existing) existing.count++;
+                  if (existing) existing.count += weight;
                   else row.perShift.set(key, {
                     name: a.shift?.name || t('shift'),
                     color: a.shift?.color,
                     isPikett: !!(a as any).isPikett,
-                    count: 1,
+                    count: weight,
                   });
                 }
               }
@@ -3241,6 +3267,8 @@ useEffect(() => {
                 entry.total = activeShift + activePikett;
               }
               const rows = Array.from(perUser.values()).sort((a, b) => b.count - a.count);
+              // Whole numbers stay bare, halves show one decimal: 4 and 4.5.
+              const fmtCount = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
               return (
                 <Card className="bg-white border-0 shadow-sm">
                   <CardHeader className="pb-3">
@@ -3280,7 +3308,7 @@ useEffect(() => {
                                   {isJoker && <span className="text-purple-600 text-xs">🃏</span>}
                                 </p>
                                 <p className="text-[11px] text-slate-500">
-                                  {count} {count === 1 ? t('shift') : t('shifts')}
+                                  {fmtCount(count)} {count === 1 ? t('shift') : t('shifts')}
                                   {total > 0 && (
                                     <span className="ml-1 text-slate-400">
                                       · {t('historyTotal', { count: total })}
@@ -3289,7 +3317,7 @@ useEffect(() => {
                                 </p>
                               </div>
                               <span className="text-lg font-semibold text-blue-600 tabular-nums">
-                                {count}
+                                {fmtCount(count)}
                               </span>
                               <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                             </div>
@@ -3309,7 +3337,7 @@ useEffect(() => {
                                         </span>
                                       )}
                                     </span>
-                                    <span className="text-slate-500 tabular-nums">{s.count}</span>
+                                    <span className="text-slate-500 tabular-nums">{fmtCount(s.count)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -3534,6 +3562,10 @@ useEffect(() => {
                     <div className="flex items-center gap-1">
                       <Link2 className="w-3 h-3 text-teal-600" />
                       <span className="text-slate-600">{t('doubleShiftAuto')}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Scissors className="w-3 h-3 text-amber-600" />
+                      <span className="text-slate-600">{t('splitBadge')}</span>
                     </div>
                     <div className="border-l pl-4 flex items-center gap-4">
                       <div className="flex items-center gap-1">
@@ -3933,9 +3965,9 @@ useEffect(() => {
                     {previewSegments.map((seg, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-amber-200 hover:bg-amber-50/40 transition-colors"
+                        className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-amber-200 hover:bg-amber-50/40 transition-colors"
                       >
-                        <span className="text-xs font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 w-8 text-center flex-shrink-0">
+                        <span className="w-6 h-6 flex items-center justify-center text-xs font-semibold text-amber-700 bg-amber-100 rounded-full flex-shrink-0">
                           {i + 1}
                         </span>
                         <Input
@@ -3943,18 +3975,19 @@ useEffect(() => {
                           value={seg.start}
                           disabled={i === 0}
                           onChange={(e) => updatePreviewSegment(i, { start: e.target.value })}
-                          className="h-8 w-28 disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="h-8 w-[92px] px-2 flex-shrink-0 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                         />
-                        <span className="text-slate-400 flex-shrink-0">→</span>
+                        <span className="text-slate-400 flex-shrink-0 text-sm">→</span>
                         <Input
                           type="time"
                           value={seg.end}
                           disabled={i === previewSegments.length - 1}
                           onChange={(e) => updatePreviewSegment(i, { end: e.target.value })}
-                          className="h-8 w-28 disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="h-8 w-[92px] px-2 flex-shrink-0 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                         <Select value={seg.userId} onValueChange={(v) => updatePreviewSegment(i, { userId: v })}>
-                          <SelectTrigger className="h-8 flex-1 hover:bg-white transition-colors">
+                          {/* min-w-0 lets the trigger shrink instead of pushing the row past the dialog */}
+                          <SelectTrigger className="h-8 flex-1 min-w-0 hover:bg-white transition-colors">
                             <SelectValue placeholder={t('splitAssignedTo')} />
                           </SelectTrigger>
                           <SelectContent>
@@ -3965,7 +3998,7 @@ useEffect(() => {
                             ))}
                           </SelectContent>
                         </Select>
-                        {previewSegments.length > 2 && (
+                        {previewSegments.length > 2 ? (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -3975,6 +4008,9 @@ useEffect(() => {
                           >
                             <X className="w-4 h-4" />
                           </Button>
+                        ) : (
+                          // Keep the columns aligned when no remove button shows.
+                          <span className="w-8 flex-shrink-0" />
                         )}
                       </div>
                     ))}
@@ -3985,7 +4021,7 @@ useEffect(() => {
                       variant="outline"
                       size="sm"
                       onClick={addPreviewSegment}
-                      className="hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-colors"
+                      className="hover:bg-amber-50/60 hover:text-amber-700 hover:border-amber-200 transition-colors"
                     >
                       + {t('splitAddSegment')}
                     </Button>
@@ -4006,7 +4042,7 @@ useEffect(() => {
                     <Button
                       variant="outline"
                       onClick={() => setSplittingPreview(null)}
-                      className="hover:bg-secondary/20 transition-colors"
+                      className="hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors"
                     >
                       {tCommon('cancel')}
                     </Button>
