@@ -199,7 +199,7 @@
     "splitAddSegment": "Ajouter un segment",
     "splitRemoveSegment": "Retirer",
     "splitAssignedTo": "Assigné à",
-    "splitSave": "Enregistrer la division",
+    "splitSave": "Enregistrer et envoyer",
     "splitRemove": "Supprimer la division",
     "splitCoverageError": "Les segments doivent couvrir tout le shift sans trou",
     "splitMinDuration": "Chaque segment doit durer au moins 30 minutes",
@@ -210,7 +210,8 @@
     "splitWarnOutlook": "Les invitations existantes de ce créneau sont annulées et de nouvelles sont envoyées par segment.",
     "splitCancelError": "Impossible d'annuler les invitations Outlook existantes — le shift n'a pas été divisé.",
     "splitInviteNote": "Ce shift a été divisé — vous ne couvrez que les heures indiquées ci-dessus.",
-    "splitPartialSend": "Shift divisé, mais seulement {sent}/{total} invitations envoyées. Renvoyez les autres depuis le planner."
+    "splitPartialSend": "Shift divisé, mais seulement {sent}/{total} invitations envoyées. Renvoyez les autres depuis le planner.",
+    "splitUndo": "Annuler la division"
   },
   "shifts": {
     "title": "Gestion des Shifts",
@@ -808,6 +809,7 @@
     "splitMinDuration": "Chaque segment doit durer au moins 30 minutes",
     "splitSave": "Enregistrer la division",
     "splitOriginal": "Original",
-    "splitBadge": "Divisé"
+    "splitBadge": "Divisé",
+    "splitUndo": "Annuler la division"
   }
 }

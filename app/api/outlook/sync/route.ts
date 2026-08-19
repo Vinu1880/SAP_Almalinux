@@ -151,9 +151,34 @@ export async function POST(request: NextRequest) {
               const localResponse = localEvent?.responseStatus?.response;
               if (localResponse && localResponse !== 'none') {
                 responseStatus = localResponse;
+              } else if (!localEvent) {
+                // Declining drops the event from the attendee's calendar, even
+                // when no response is sent. The organizer copy still exists, so
+                // a missing local copy points to a decline — but an invitation
+                // still sitting unopened in the inbox looks the same. Only read
+                // it as a decline once the invite has had a day to be handled.
+                const sentAt = new Date(assignment.createdAt).getTime();
+                const ageHours = (Date.now() - sentAt) / 3600000;
+                if (ageHours >= 24) {
+                  responseStatus = 'declined';
+                } else {
+                  console.warn(
+                    `[outlook/sync] ${user.email}: event missing from calendar but ` +
+                    `invite is ${Math.round(ageHours)}h old — left as no answer`
+                  );
+                }
               }
+            } else {
+              // Reading another mailbox needs Calendars.Read on that user. A 403
+              // here is the difference between "no answer yet" and "we cannot
+              // see the answer", so it must not stay silent.
+              console.warn(
+                `[outlook/sync] attendee lookup failed for ${user.email}: ${localResp.status}`
+              );
             }
-          } catch { /* fallback failed — keep 'none' */ }
+          } catch (e) {
+            console.warn(`[outlook/sync] attendee lookup error for ${user.email}:`, e);
+          }
         }
 
         if (!responseStatus || responseStatus === 'none') continue;

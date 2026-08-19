@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, createBulkPikettAssignmentsSchema } from '@/lib/validation';
+import { resolveLocalUserId } from '@/lib/resolveUser';
 
 // Retrieve pikett assignments with filters
 export async function GET(request: NextRequest) {
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
     const { assignments } = validation.data;
+    const sentById = await resolveLocalUserId(auth.user);
 
     const result = await prisma.pikettAssignment.createMany({
       data: assignments.map((a: any) => ({
@@ -103,7 +105,7 @@ export async function POST(request: NextRequest) {
         userId: a.userId,
         status: a.status || 'PENDING',
         reason: a.reason || null,
-        sentById: auth.user.id
+        sentById
       })),
       skipDuplicates: true
     });

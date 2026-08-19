@@ -199,7 +199,7 @@
     "splitAddSegment": "Abschnitt hinzufügen",
     "splitRemoveSegment": "Entfernen",
     "splitAssignedTo": "Zugewiesen an",
-    "splitSave": "Teilung speichern",
+    "splitSave": "Speichern und senden",
     "splitRemove": "Teilung entfernen",
     "splitCoverageError": "Die Abschnitte müssen die ganze Schicht lückenlos abdecken",
     "splitMinDuration": "Jeder Abschnitt muss mindestens 30 Minuten dauern",
@@ -210,7 +210,8 @@
     "splitWarnOutlook": "Bestehende Einladungen für diesen Slot werden storniert und neue pro Abschnitt gesendet.",
     "splitCancelError": "Die bestehenden Outlook-Einladungen konnten nicht storniert werden — die Schicht wurde nicht geteilt.",
     "splitInviteNote": "Diese Schicht wurde geteilt — Sie decken nur die oben genannten Stunden ab.",
-    "splitPartialSend": "Schicht geteilt, aber nur {sent}/{total} Einladungen gesendet. Senden Sie die übrigen über den Planer."
+    "splitPartialSend": "Schicht geteilt, aber nur {sent}/{total} Einladungen gesendet. Senden Sie die übrigen über den Planer.",
+    "splitUndo": "Teilung rückgängig"
   },
   "shifts": {
     "title": "Schichtverwaltung",
@@ -808,6 +809,7 @@
     "splitMinDuration": "Jeder Abschnitt muss mindestens 30 Minuten dauern",
     "splitSave": "Teilung speichern",
     "splitOriginal": "Original",
-    "splitBadge": "Geteilt"
+    "splitBadge": "Geteilt",
+    "splitUndo": "Teilung rückgängig"
   }
 }

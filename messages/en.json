@@ -199,7 +199,7 @@
     "splitAddSegment": "Add segment",
     "splitRemoveSegment": "Remove",
     "splitAssignedTo": "Assigned to",
-    "splitSave": "Save split",
+    "splitSave": "Save and send",
     "splitRemove": "Remove split",
     "splitCoverageError": "Segments must cover the whole shift without gaps",
     "splitMinDuration": "Each segment must last at least 30 minutes",
@@ -210,7 +210,8 @@
     "splitWarnOutlook": "Existing invitations for this slot are cancelled and new ones are sent per segment.",
     "splitCancelError": "Could not cancel the existing Outlook invitations — the shift was not split.",
     "splitInviteNote": "This shift was split — you only cover the hours shown above.",
-    "splitPartialSend": "Shift split, but only {sent}/{total} invitations were sent. Resend the rest from the planner."
+    "splitPartialSend": "Shift split, but only {sent}/{total} invitations were sent. Resend the rest from the planner.",
+    "splitUndo": "Undo split"
   },
   "shifts": {
     "title": "Shift Management",
@@ -808,6 +809,7 @@
     "splitMinDuration": "Each segment must last at least 30 minutes",
     "splitSave": "Save split",
     "splitOriginal": "Original",
-    "splitBadge": "Split"
+    "splitBadge": "Split",
+    "splitUndo": "Undo split"
   }
 }

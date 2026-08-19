@@ -31,6 +31,7 @@ import {
   Link2,
   Edit,
   Scissors,
+  Undo2,
   X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -2777,7 +2778,7 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                   <RotateCw className="w-3 h-3 flex-shrink-0" style={{ color }} />
                 )}
                 {assignment.segmentGroupId && (
-                  <Scissors className="w-3 h-3 flex-shrink-0 text-amber-600" />
+                  <Scissors className="w-3 h-3 flex-shrink-0 text-violet-600" />
                 )}
                 <span
                   style={{ color }}
@@ -2786,7 +2787,7 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                   {assignment.shift?.name || 'Shift'}
                 </span>
                 {assignment.segmentStart && (
-                  <span className="text-[10px] text-amber-700 flex-shrink-0 whitespace-nowrap">
+                  <span className="text-[10px] text-violet-700 flex-shrink-0 whitespace-nowrap">
                     {assignment.segmentStart}-{assignment.segmentEnd}
                   </span>
                 )}
@@ -3564,7 +3565,7 @@ useEffect(() => {
                       <span className="text-slate-600">{t('doubleShiftAuto')}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Scissors className="w-3 h-3 text-amber-600" />
+                      <Scissors className="w-3 h-3 text-violet-600" />
                       <span className="text-slate-600">{t('splitBadge')}</span>
                     </div>
                     <div className="border-l pl-4 flex items-center gap-4">
@@ -3933,7 +3934,7 @@ useEffect(() => {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Scissors className="w-5 h-5 text-amber-600" />
+                <Scissors className="w-5 h-5 text-violet-600" />
                 {t('splitTitle')}
               </DialogTitle>
             </DialogHeader>
@@ -4125,7 +4126,9 @@ useEffect(() => {
                             )}
                           </h3>
                           <Badge variant="outline" style={{ borderColor: color, color }}>
-                            {assignment.shift?.startTime} - {assignment.shift?.endTime}
+                            {(assignment as any).segmentStart || assignment.shift?.startTime}
+                            {' - '}
+                            {(assignment as any).segmentEnd || assignment.shift?.endTime}
                           </Badge>
                         </div>
 
@@ -4758,9 +4761,10 @@ useEffect(() => {
                                           variant="outline"
                                           onClick={() => undoPreviewSplit(assignment.segmentGroupId!)}
                                           title={t('splitRemove')}
-                                          className="hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300"
+                                          className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
                                         >
-                                          <Scissors className="w-3 h-3" />
+                                          <Undo2 className="w-3 h-3 mr-1" />
+                                          {t('splitUndo')}
                                         </Button>
                                       ) : (
                                         <Button

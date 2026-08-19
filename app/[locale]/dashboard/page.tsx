@@ -511,12 +511,28 @@ const DashboardPage = () => {
 
       // Cancel the Outlook invitations of this slot first — the split drops the
       // rows, and without this the events would stay orphaned in the calendars.
+      // Ask the API for the slot rather than filtering the in-memory list: the
+      // dashboard only holds the rows of the current date filter, so a split
+      // outside that window would silently find nothing to cancel.
       const shiftId = splittingAssignment.shiftId;
-      const sameSlot = (assignments || []).filter((a: any) =>
-        a.shiftId === shiftId &&
-        new Date(a.date).toDateString() === d.toDateString() &&
-        a.outlookEventId
-      );
+      let sameSlot: any[] = [];
+      try {
+        const slotRes = await authFetch(
+          `/api/shift-assignments?startDate=${dateStr}&endDate=${dateStr}`
+        );
+        if (!slotRes.ok) throw new Error('slot lookup failed');
+        const slotData = await slotRes.json();
+        const rows = Array.isArray(slotData) ? slotData : (slotData.assignments || []);
+        sameSlot = rows.filter((a: any) =>
+          a.shiftId === shiftId &&
+          new Date(a.date).toDateString() === d.toDateString() &&
+          a.outlookEventId
+        );
+      } catch {
+        setActionMessage({ type: 'error', text: t('splitCancelError') });
+        setSplitting(false);
+        return;
+      }
 
       if (sameSlot.length > 0) {
         const graphToken = await getAccessToken();
@@ -646,9 +662,33 @@ const DashboardPage = () => {
     }
   };
 
-  const handleRemoveSplit = async (segmentGroupId: string) => {
+  const handleRemoveSplit = async (segmentGroupId: string, segment?: any) => {
     setSplitting(true);
     try {
+      // Revoke the Outlook invitations before dropping the rows: once the
+      // segments are gone the event ids are unreachable, and the attendees
+      // would keep a meeting ShiftPilot no longer knows about.
+      const siblings = (assignments || []).filter(
+        (a: any) => a.segmentGroupId === segmentGroupId && a.outlookEventId
+      );
+      if (siblings.length > 0) {
+        const graphToken = await getAccessToken();
+        if (graphToken) {
+          const mailbox =
+            segment?.shift?.senderMailbox || (siblings[0] as any)?.shift?.senderMailbox || 'me';
+          for (const seg of siblings) {
+            try {
+              await authFetch('/api/outlook/send-event', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
+                body: JSON.stringify({ mailbox, eventId: seg.outlookEventId }),
+              });
+            } catch {
+            }
+          }
+        }
+      }
+
       const res = await authFetch(`/api/shift-assignments/split?segmentGroupId=${segmentGroupId}`, {
         method: 'DELETE',
       });
@@ -1418,7 +1458,15 @@ const DashboardPage = () => {
                         <tbody>
                           {recentAssignments.map((assignment) => {
                             return (
-                            <tr key={assignment.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${(assignment as any).resentFromId ? 'border-l-3 border-l-amber-400 bg-amber-50/30' : ''}`}>
+                            <tr key={assignment.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${
+                              (assignment as any).resentFromId
+                                ? 'border-l-3 border-l-amber-400 bg-amber-50/30'
+                                // A segment is a resend too — the slot went back
+                                // out, just split across several people.
+                                : (assignment as any).segmentGroupId
+                                  ? 'border-l-3 border-l-violet-400 bg-violet-50/30'
+                                  : ''
+                            }`}>
                               <td className="py-4 px-2">
                                 <div className="flex items-center space-x-3">
                                   <div className="relative">
@@ -1427,11 +1475,15 @@ const DashboardPage = () => {
                                         {assignment.user.firstName[0]}{assignment.user.lastName[0]}
                                       </span>
                                     </div>
-                                    {(assignment as any).resentFromId && (
+                                    {(assignment as any).resentFromId ? (
                                       <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
                                         <RefreshCw className="w-3 h-3 text-white" />
                                       </div>
-                                    )}
+                                    ) : (assignment as any).segmentGroupId ? (
+                                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-violet-500 rounded-full flex items-center justify-center">
+                                        <Scissors className="w-3 h-3 text-white" />
+                                      </div>
+                                    ) : null}
                                   </div>
                                   <div>
                                     <p className="font-medium text-slate-800">
@@ -1457,7 +1509,7 @@ const DashboardPage = () => {
                                       : (assignment as any).pikett?.is24_7 ? '24/7' : ''
                                     }
                                     {(assignment as any).segmentGroupId && (
-                                      <Badge variant="outline" className="text-[10px] bg-amber-50 border-amber-200 text-amber-700 px-1 py-0">
+                                      <Badge variant="outline" className="text-[10px] bg-violet-50 border-violet-200 text-violet-700 px-1 py-0">
                                         {t('splitBadge')} {(assignment as any).segmentIndex}
                                       </Badge>
                                     )}
@@ -1496,7 +1548,7 @@ const DashboardPage = () => {
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => handleRemoveSplit((assignment as any).segmentGroupId)}
+                                        onClick={() => handleRemoveSplit((assignment as any).segmentGroupId, assignment)}
                                         disabled={splitting}
                                         title={t('splitRemove')}
                                         className="hover:bg-amber-50/60 hover:text-amber-700 hover:border-amber-200 transition-colors"
@@ -1896,7 +1948,7 @@ const DashboardPage = () => {
                                 <div key={a.id} className="flex items-center gap-1 text-xs leading-tight truncate">
                                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(a.status)}`} />
                                   {a.segmentGroupId && (
-                                    <Scissors className="w-3 h-3 flex-shrink-0 text-amber-600" />
+                                    <Scissors className="w-3 h-3 flex-shrink-0 text-violet-600" />
                                   )}
                                   <span className="truncate text-slate-700">
                                     {(mode === 'shifts' ? a.shift?.name : a.pikett?.name) || ''}
@@ -1933,14 +1985,18 @@ const DashboardPage = () => {
           <ScrollArea className="max-h-[500px] pr-4">
             {(() => {
               const raw = selectedCalendarDay ? (calendarByDate[selectedCalendarDay] || []) : [];
+              // Group per segment when the slot is split, otherwise one accepted
+              // segment would hide the others of the same shift.
+              const slotKey = (a: any) => {
+                const itemId = mode === 'shifts' ? a.shiftId : a.pikettId;
+                return a.segmentIndex != null ? `${itemId}#${a.segmentIndex}` : itemId;
+              };
               const acceptedIds = new Set(
-                raw.filter((a: any) => a.status === 'ACCEPTED')
-                  .map((a: any) => mode === 'shifts' ? a.shiftId : a.pikettId)
+                raw.filter((a: any) => a.status === 'ACCEPTED').map(slotKey)
               );
               const filtered = raw.filter((a: any) => {
                 if (a.status === 'REFUSED' || a.status === 'CANCELLED') {
-                  const itemId = mode === 'shifts' ? a.shiftId : a.pikettId;
-                  return !acceptedIds.has(itemId);
+                  return !acceptedIds.has(slotKey(a));
                 }
                 return true;
               });
@@ -1956,11 +2012,16 @@ const DashboardPage = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm text-slate-800 truncate">
+                      <p className="font-medium text-sm text-slate-800 truncate flex items-center gap-1.5">
+                        {a.segmentGroupId && (
+                          <Scissors className="w-3 h-3 flex-shrink-0 text-violet-600" />
+                        )}
                         {a.user?.firstName} {a.user?.lastName}
                       </p>
                       <p className="text-xs text-slate-500 truncate">
-                        {mode === 'shifts' ? `${a.shift?.name} • ${a.shift?.startTime} - ${a.shift?.endTime}` : `${a.pikett?.name}${a.pikett?.is24_7 ? ' • 24/7' : ''}`}
+                        {mode === 'shifts'
+                          ? `${a.shift?.name} • ${a.segmentStart || a.shift?.startTime} - ${a.segmentEnd || a.shift?.endTime}`
+                          : `${a.pikett?.name}${a.pikett?.is24_7 ? ' • 24/7' : ''}`}
                       </p>
                     </div>
                     {getStatusBadge(a.status)}

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
 import { validateBody, reassignPikettDaysSchema } from '@/lib/validation';
+import { resolveLocalUserId } from '@/lib/resolveUser';
 
 /**
  * Hand part of a pikett week over to someone else, day by day.
@@ -39,16 +40,25 @@ export async function POST(request: NextRequest) {
     if (!newUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const days = dates.map(d => new Date(d));
+    const sentById = await resolveLocalUserId(auth.user);
 
     const result = await prisma.$transaction(async (tx) => {
+      // Only the live rows are replaced. REFUSED and CANCELLED ones are the
+      // history the resend dialog reads to know who already declined the slot.
+      const replaceable = {
+        in: ['PENDING', 'ACCEPTED', 'TENTATIVE'] as ('PENDING' | 'ACCEPTED' | 'TENTATIVE')[],
+      };
+
       const previous = await tx.pikettAssignment.findMany({
-        where: { pikettId, date: { in: days } },
+        where: { pikettId, date: { in: days }, status: replaceable },
         select: { id: true, date: true, userId: true, outlookEventId: true },
       });
 
       // Drop the old holders for those days before inserting, so the unique
       // (date, pikettId, userId) constraint cannot trip on a partial overlap.
-      await tx.pikettAssignment.deleteMany({ where: { pikettId, date: { in: days } } });
+      await tx.pikettAssignment.deleteMany({
+        where: { pikettId, date: { in: days }, status: replaceable },
+      });
 
       await tx.pikettAssignment.createMany({
         data: days.map(date => ({
@@ -56,7 +66,7 @@ export async function POST(request: NextRequest) {
           pikettId,
           userId: newUserId,
           status: 'PENDING' as const,
-          sentById: auth.user.id,
+          sentById,
         })),
       });
 
