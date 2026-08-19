@@ -632,7 +632,7 @@
     "loginError": "Microsoft login failed. Please try again.",
     "credentialsError": "Login failed. Check your credentials.",
     "secureConnection": "Secure connection",
-    "copyright": "© 2026 ShiftPilot v2.0. All rights reserved.",
+    "copyright": "© 2026 ShiftPilot v2.1. All rights reserved.",
     "needHelp": "Need help?",
     "contactSupport": "Contact support"
   },
