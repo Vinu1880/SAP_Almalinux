@@ -47,7 +47,24 @@ fi
 # Synchroniser le schéma Prisma (db push = additive, no data loss)
 echo "[2/4] Synchronisation du schéma Prisma..."
 PRISMA="node node_modules/prisma/build/index.js"
-$PRISMA db push 2>&1 || echo "ERREUR: prisma db push a échoué!"
+
+# Le schéma doit être en place avant que l'app ne serve quoi que ce soit.
+# Laisser passer un échec la fait tourner avec des colonnes manquantes : les
+# pages concernées se vident et le diagnostic se fait à l'aveugle, en prod.
+# Un db push en échec ne modifie rien, donc s'arrêter ici laisse la base intacte.
+if ! $PRISMA db push 2>&1; then
+    echo "==================================="
+    echo "ERREUR FATALE: la synchronisation du schéma a échoué."
+    echo "L'application ne démarre pas : tourner avec un schéma incomplet"
+    echo "viderait les pages concernées sans erreur visible."
+    echo ""
+    echo "Causes fréquentes :"
+    echo "  - changement destructif -> relancer db push --accept-data-loss,"
+    echo "    APRES avoir pris un backup"
+    echo "  - base inaccessible ou droits insuffisants"
+    echo "==================================="
+    exit 1
+fi
 
 # Fix permissions on mounted backup volume (host may own as root)
 echo "[3/4] Correction des permissions du dossier backups..."
