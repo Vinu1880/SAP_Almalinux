@@ -211,7 +211,14 @@
     "splitCancelError": "Impossible d'annuler les invitations Outlook existantes — le shift n'a pas été divisé.",
     "splitInviteNote": "Ce shift a été divisé — vous ne couvrez que les heures indiquées ci-dessus.",
     "splitPartialSend": "Shift divisé, mais seulement {sent}/{total} invitations envoyées. Renvoyez les autres depuis le planner.",
-    "splitUndo": "Annuler la division"
+    "splitUndo": "Annuler la division",
+    "ccLabel": "En copie (optionnel)",
+    "ccAdd": "Ajouter",
+    "ccEmpty": "Personne en copie",
+    "ccJoker": "Joker",
+    "ccWith": "avec",
+    "ccInCopyWith": "En copie avec {names}",
+    "splitEdit": "Modifier la division"
   },
   "shifts": {
     "title": "Gestion des Shifts",
@@ -321,7 +328,11 @@
     "tryModifySearch": "Essayez de modifier vos critères de recherche ou filtres.",
     "createFirstShift": "Créez votre premier shift pour commencer.",
     "shiftCount": "{count} shifts",
-    "pikettCount": "{count} piketts"
+    "pikettCount": "{count} piketts",
+    "searchMember": "Rechercher un membre...",
+    "searchUser": "Rechercher un utilisateur...",
+    "noSearchResult": "Aucun résultat",
+    "assignedMembersPikett": "Membres assignés au pikett"
   },
   "users": {
     "title": "Gestion des Utilisateurs & Équipes",
@@ -474,7 +485,10 @@
     "ruleDuplicateMaxLoad": "Une règle de charge max existe déjà pour ce shift",
     "ruleDuplicateDoubleShift": "Une règle double-shift existe déjà pour ce shift déclencheur",
     "saving": "Enregistrement...",
-    "name": "Nom"
+    "name": "Nom",
+    "searchMember": "Rechercher un membre...",
+    "searchUser": "Rechercher un utilisateur...",
+    "noSearchResult": "Aucun résultat"
   },
   "settings": {
     "title": "Paramètres",
@@ -810,6 +824,12 @@
     "splitSave": "Enregistrer la division",
     "splitOriginal": "Original",
     "splitBadge": "Divisé",
-    "splitUndo": "Annuler la division"
+    "splitUndo": "Annuler la division",
+    "ccLabel": "En copie (optionnel)",
+    "ccAdd": "Ajouter",
+    "ccEmpty": "Personne en copie",
+    "ccJoker": "Joker",
+    "ccWith": "avec",
+    "ccInCopyWith": "En copie avec {names}"
   }
 }

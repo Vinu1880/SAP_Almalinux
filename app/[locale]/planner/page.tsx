@@ -56,6 +56,8 @@ import { usePiketts } from '@/lib/hooks/usePiketts';
 import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { useTranslations, useLocale } from 'next-intl';
+import { CcSelector } from '@/components/CcSelector';
+import { subjectWithCc, ccAttendees, resolveCc, joinNames } from '@/lib/ccInvite';
 
 // Types
 interface OutlookEvent {
@@ -97,6 +99,9 @@ interface ShiftAssignment {
   segmentEnd?: string;
   segmentGroupId?: string;
   segmentIndex?: number;
+  // People copied on the invitation for this slot. Informational only: they
+  // never count towards load, fairness or the same-day block.
+  ccUserIds?: string[];
 }
 
 const PlannerPage = () => {
@@ -402,9 +407,16 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
 
     const replaceRow = (list: ShiftAssignment[]) => {
       const out: ShiftAssignment[] = [];
+      // The segments go in once. A slot can hold several preview rows (one per
+      // assigned person), and inserting the full set at each of them would show
+      // every segment as many times as there were holders.
+      let inserted = false;
       for (const a of list) {
         if (a.date === splittingPreview.date && a.shiftId === splittingPreview.shiftId && !a.segmentGroupId) {
-          out.push(...rows);
+          if (!inserted) {
+            out.push(...rows);
+            inserted = true;
+          }
         } else {
           out.push(a);
         }
@@ -416,6 +428,35 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     setTempShiftAssignments(prev => replaceRow(prev));
     setSelectedDayAssignments(prev => (prev ? replaceRow(prev) : prev));
     setSplittingPreview(null);
+  };
+
+  // Anyone on the shift may be copied, including jokers and people the
+  // algorithm ruled out: a copied person only watches the slot, so their own
+  // availability is irrelevant.
+  const ccCandidatesFor = (assignment: ShiftAssignment): any[] => {
+    const item = assignment.isPikett
+      ? piketts.find(p => p.id === assignment.shiftId)
+      : shifts.find(s => s.id === assignment.shiftId);
+    if (!item) return [];
+    return availableUsers.filter(u => {
+      if (u.status !== 'ACTIVE' && u.status !== 'active') return false;
+      const inTeam = u.teamId === (item as any).teamId;
+      const included = (item as any).includedUserIds?.includes(u.id);
+      const excluded = (item as any).excludedUserIds?.includes(u.id);
+      return (inTeam && !excluded) || included;
+    });
+  };
+
+  const updateAssignmentCc = (assignment: ShiftAssignment, ids: string[]) => {
+    const sameRow = (a: ShiftAssignment) =>
+      a.date === assignment.date &&
+      a.shiftId === assignment.shiftId &&
+      a.segmentIndex === assignment.segmentIndex;
+    const apply = (list: ShiftAssignment[]) =>
+      list.map(a => (sameRow(a) ? { ...a, ccUserIds: ids } : a));
+    setShiftAssignments(prev => apply(prev));
+    setTempShiftAssignments(prev => apply(prev));
+    setSelectedDayAssignments(prev => (prev ? apply(prev) : prev));
   };
 
   const undoPreviewSplit = (groupId: string) => {
@@ -449,9 +490,14 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
 
   const handleSaveAssignmentChange = (assignmentDate: string, assignmentShiftId: string) => {
   if (tempAssignedUser === null) return;
-  
-  const selectedUser = availableUsers.find(u => u.id === tempAssignedUser);
-  if (!selectedUser) return;
+
+  // "none" is the unassign option: clearing the slot is a real choice, so it
+  // must go through instead of being dropped by the lookup below.
+  const clearing = tempAssignedUser === 'none';
+  const selectedUser = clearing
+    ? undefined
+    : availableUsers.find(u => u.id === tempAssignedUser);
+  if (!clearing && !selectedUser) return;
   
   // Dialog view
   const updatedDayAssignments = selectedDayAssignments?.map(a => {
@@ -888,7 +934,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
         if (inTeam || included) memberIds.add(u.id);
       });
     }
-    for (const pikettId of selectedPiketts) {
+    for (const pikettId of [...new Set(selectedPiketts)]) {
       const pikett = piketts.find(p => p.id === pikettId);
       if (!pikett) continue;
       availableUsers.forEach(u => {
@@ -1226,7 +1272,8 @@ const processShiftAssignments = async () => {
     // PART 1: Process selected PIKETTS
     if (selectedPiketts.length > 0) {
       
-      for (const pikettId of selectedPiketts) {
+      // Same guard as the shift loop: a duplicate id would emit twin rows.
+      for (const pikettId of [...new Set(selectedPiketts)]) {
         const pikett = pikettMap.get(pikettId);
         if (!pikett) continue;
         
@@ -1523,7 +1570,9 @@ const processShiftAssignments = async () => {
     if (selectedShifts.length > 0) {
       const rotationUsers = currentUsers.filter(u => u.rotationConfig?.patternId);
 
-      let shiftsToProcess = [...selectedShifts];
+      // Deduplicated: a shift listed twice would generate two identical preview
+      // rows for the same date, which reads as a phantom double booking.
+      let shiftsToProcess = [...new Set(selectedShifts)];
       if (settings.prioritySystem) {
         shiftsToProcess.sort((a, b) => {
           const shiftA = shiftMap.get(a);
@@ -2234,11 +2283,57 @@ const processShiftAssignments = async () => {
           return fullUser || dbA.user || { id: dbA.userId, firstName: '?', lastName: '?', email: '' };
         });
         assignment.assignedUsers = dbUsers;
+
+        // A split slot is several rows, each with its own window. Collapsing
+        // them into one preview row would show every holder against the full
+        // shift hours, so the segments are carried over and split out below.
+        const segments = dbMatches.filter((a: any) => a.segmentGroupId);
+        if (segments.length > 0) {
+          (assignment as any)._dbSegments = segments;
+        }
+      }
+    }
+
+    // Expand the marked rows: one preview row per segment, in order.
+    //
+    // A split slot can be reached from several preview rows — the generator
+    // emits one per assigned person, and a split has one per segment — so each
+    // group is expanded once, keyed on segmentGroupId.
+    const expandedGroups = new Set<string>();
+    const expanded: ShiftAssignment[] = [];
+    for (const assignment of assignments) {
+      const segments = (assignment as any)._dbSegments as any[] | undefined;
+      if (!segments) {
+        expanded.push(assignment);
+        continue;
+      }
+      delete (assignment as any)._dbSegments;
+      const groupId = segments[0]?.segmentGroupId;
+      if (groupId) {
+        if (expandedGroups.has(groupId)) continue;
+        expandedGroups.add(groupId);
+      }
+      const ordered = [...segments].sort(
+        (a, b) => (a.segmentIndex ?? 0) - (b.segmentIndex ?? 0)
+      );
+      for (const seg of ordered) {
+        const holder =
+          users.find(u => u.id === seg.userId) ||
+          seg.user || { id: seg.userId, firstName: '?', lastName: '?', email: '' };
+        expanded.push({
+          ...assignment,
+          assignedUsers: [holder],
+          segmentStart: seg.segmentStart,
+          segmentEnd: seg.segmentEnd,
+          segmentGroupId: seg.segmentGroupId,
+          segmentIndex: seg.segmentIndex,
+          ccUserIds: seg.ccUserIds ?? [],
+        });
       }
     }
 
     setRandomSeed(prev => prev + 1);
-    setShiftAssignments(assignments);
+    setShiftAssignments(expanded);
 
   } catch (error) {
     alert(t('processingError'));
@@ -2313,6 +2408,7 @@ const processShiftAssignments = async () => {
         segmentEnd?: string;
         segmentGroupId?: string;
         segmentIndex?: number;
+        ccUserIds?: string[];
       }> = [];
 
       // Piketts send one event per (week, user) covering the whole ISO week
@@ -2431,8 +2527,12 @@ const processShiftAssignments = async () => {
           }
 
           const kindWord = assignment.isPikett ? 'pikett' : 'shift';
+          // Copied people ride along as optional attendees and land in the
+          // subject, so every calendar shows who else is involved.
+          const ccPeople = resolveCc(assignment.ccUserIds, availableUsers);
+          const baseSubject = `${assignment.shift.name} - ${user.displayName || `${user.firstName} ${user.lastName}`}${assignment.isPikett ? ' 🛡️ PIKETT' : ''}`;
           const event = {
-            subject: `${assignment.shift.name} - ${user.displayName || `${user.firstName} ${user.lastName}`}${assignment.isPikett ? ' 🛡️ PIKETT' : ''}`,
+            subject: subjectWithCc(baseSubject, ccPeople),
             body: {
               contentType: 'HTML',
               content: `
@@ -2451,10 +2551,13 @@ const processShiftAssignments = async () => {
             // still labelling it Zurich — a one to two hour shift.
             start: { dateTime: localDateTime(startDateTime), timeZone: 'Europe/Zurich' },
             end: { dateTime: localDateTime(endDateTime), timeZone: 'Europe/Zurich' },
-            attendees: [{
-              emailAddress: { address: user.email, name: user.displayName || `${user.firstName} ${user.lastName}` },
-              type: 'required'
-            }],
+            attendees: [
+              {
+                emailAddress: { address: user.email, name: user.displayName || `${user.firstName} ${user.lastName}` },
+                type: 'required'
+              },
+              ...ccAttendees(ccPeople)
+            ],
             location: { displayName: 'Office' },
             isReminderOn: true,
             reminderMinutesBeforeStart: 1440,
@@ -2515,7 +2618,8 @@ const processShiftAssignments = async () => {
               segmentStart: assignment.segmentStart,
               segmentEnd: assignment.segmentEnd,
               segmentGroupId: assignment.segmentGroupId,
-              segmentIndex: assignment.segmentIndex
+              segmentIndex: assignment.segmentIndex,
+              ccUserIds: assignment.ccUserIds
             });
           } else {
             outlookErrors++;
@@ -2563,6 +2667,7 @@ const processShiftAssignments = async () => {
             shiftId: a.shiftId,
             userId: a.userId,
             status: a.status,
+            ccUserIds: a.ccUserIds ?? [],
             ...(groupId ? {
               segmentStart: a.segmentStart,
               segmentEnd: a.segmentEnd,
@@ -2965,7 +3070,7 @@ useEffect(() => {
                               checked={isSelected}
                               onCheckedChange={(checked) => {
                                 if (checked) {
-                                  setSelectedShifts([...selectedShifts, shift.id]);
+                                  setSelectedShifts([...new Set([...selectedShifts, shift.id])]);
                                 } else {
                                   setSelectedShifts(selectedShifts.filter((id: string) => id !== shift.id));
                                 }
@@ -3034,7 +3139,7 @@ useEffect(() => {
                               checked={isSelected}
                               onCheckedChange={(checked) => {
                                 if (checked) {
-                                  setSelectedPiketts([...selectedPiketts, pikett.id]);
+                                  setSelectedPiketts([...new Set([...selectedPiketts, pikett.id])]);
                                 } else {
                                   setSelectedPiketts(selectedPiketts.filter((id: string) => id !== pikett.id));
                                 }
@@ -3666,7 +3771,7 @@ useEffect(() => {
                               (shift.daysOfWeek || [1, 2, 3, 4, 5]).forEach((d: number) => days.add(d));
                             }
                           }
-                          for (const pikettId of selectedPiketts) {
+                          for (const pikettId of [...new Set(selectedPiketts)]) {
                             const pikett = piketts.find(p => p.id === pikettId);
                             if (!pikett) continue;
                             const inTeam = user.teamId === pikett.teamId;
@@ -3735,7 +3840,7 @@ useEffect(() => {
                               (shift.daysOfWeek || [1, 2, 3, 4, 5]).forEach((d: number) => days.add(d));
                             }
                           }
-                          for (const pikettId of selectedPiketts) {
+                          for (const pikettId of [...new Set(selectedPiketts)]) {
                             const pikett = piketts.find(p => p.id === pikettId);
                             if (!pikett) continue;
                             const inTeam = user.teamId === pikett.teamId;
@@ -4704,6 +4809,15 @@ useEffect(() => {
                                                 <Badge variant="outline" className="text-xs mt-2 bg-slate-50 text-slate-500 inline-flex items-center gap-1"><Send className="w-3 h-3" />{t('statusNotSent')}</Badge>
                                               );
                                             })()}
+                                            {(assignment.ccUserIds?.length ?? 0) > 0 && (
+                                              <Badge
+                                                variant="outline"
+                                                className="text-xs mt-2 ml-1.5 bg-sky-50 border-sky-200 text-sky-700 inline-flex items-center gap-1"
+                                              >
+                                                <Users className="w-3 h-3" />
+                                                {t('ccWith')} {joinNames(resolveCc(assignment.ccUserIds, availableUsers), '&')}
+                                              </Badge>
+                                            )}
                                           </div>
                                         </>
                                       )}
@@ -4782,6 +4896,21 @@ useEffect(() => {
                                 )}
                               </div>
                             </div>
+                            {/* Always available: copying someone in is its own
+                                action and must not require editing the holder. */}
+                            {!assignment.isPikett && (
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <CcSelector
+                                  candidates={ccCandidatesFor(assignment)}
+                                  selectedIds={assignment.ccUserIds || []}
+                                  onChange={(ids) => updateAssignmentCc(assignment, ids)}
+                                  label={t('ccLabel')}
+                                  addLabel={t('ccAdd')}
+                                  emptyLabel={t('ccEmpty')}
+                                  jokerLabel={t('ccJoker')}
+                                />
+                              </div>
+                            )}
                           </div>
                         ) : editingAssignment === `${assignment.date}-${index}` ? (
                           <div className="bg-orange-50 rounded-lg p-3">
@@ -4859,6 +4988,17 @@ useEffect(() => {
                               >
                                 <X className="w-3 h-3" />
                               </Button>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-orange-200/70">
+                              <CcSelector
+                                candidates={ccCandidatesFor(assignment)}
+                                selectedIds={assignment.ccUserIds || []}
+                                onChange={(ids) => updateAssignmentCc(assignment, ids)}
+                                label={t('ccLabel')}
+                                addLabel={t('ccAdd')}
+                                emptyLabel={t('ccEmpty')}
+                                jokerLabel={t('ccJoker')}
+                              />
                             </div>
                           </div>
                         ) : (

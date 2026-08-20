@@ -5,11 +5,13 @@ import React, { useState, useMemo } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navigation from '@/components/Navigation';
 import { useTranslations, useLocale } from 'next-intl';
+import { CcSelector } from '@/components/CcSelector';
+import { subjectWithCc, ccAttendees, resolveCc, joinNames } from '@/lib/ccInvite';
 import {
   CheckCircle, XCircle, Clock3, TrendingUp, Users, Calendar, Filter,
   Download, RefreshCw, Loader2, Send, AlertCircle, X, Network,
   FilterX, ArrowUpDown, ArrowUp, ArrowDown, Trash2, AlertTriangle,
-  ChevronLeft, ChevronRight, Scissors
+  ChevronLeft, ChevronRight, Scissors, Undo2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,7 +60,9 @@ const DashboardPage = () => {
   const [deleting, setDeleting] = useState(false);
 
   const [splittingAssignment, setSplittingAssignment] = useState<any | null>(null);
-  const [splitSegments, setSplitSegments] = useState<Array<{ start: string; end: string; userId: string }>>([]);
+  const [splitSegments, setSplitSegments] = useState<Array<{ start: string; end: string; userId: string; ccUserIds?: string[] }>>([]);
+  // Copied people for the resend dialog, reset each time it opens.
+  const [resendCc, setResendCc] = useState<string[]>([]);
   const [splitting, setSplitting] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState<string>('all');
@@ -447,9 +451,43 @@ const DashboardPage = () => {
 
   // Seed the dialog with two halves of the shift window, rounded to the hour
   // boundary in the middle, so the admin only adjusts what differs.
+  // Anyone on the shift can be copied — availability is irrelevant for someone
+  // who only watches the slot, so jokers and booked people are offered too.
+  const ccCandidates = (assignment: any): any[] => {
+    const item = mode === 'shifts' ? assignment?.shift : assignment?.pikett;
+    if (!item || !users) return [];
+    return users.filter((u: any) => {
+      if (u.status !== 'ACTIVE' && u.status !== 'active') return false;
+      const inTeam = u.teamId === item.teamId;
+      const included = item.includedUserIds?.includes(u.id);
+      const excluded = item.excludedUserIds?.includes(u.id);
+      return (inTeam && !excluded) || included;
+    });
+  };
+
   const openSplitDialog = (assignment: any) => {
     const start = (assignment.shift?.startTime || '08:00').slice(0, 5);
     const end = (assignment.shift?.endTime || '17:00').slice(0, 5);
+
+    // An already split slot opens on its current segments, so the admin can
+    // rearrange or add to them instead of starting from a blank two-way cut.
+    if (assignment.segmentGroupId) {
+      const existing = (assignments || [])
+        .filter((a: any) => a.segmentGroupId === assignment.segmentGroupId)
+        .sort((a: any, b: any) => (a.segmentIndex ?? 0) - (b.segmentIndex ?? 0))
+        .map((a: any) => ({
+          start: (a.segmentStart || start).slice(0, 5),
+          end: (a.segmentEnd || end).slice(0, 5),
+          userId: a.userId,
+          ccUserIds: a.ccUserIds || [],
+        }));
+      if (existing.length >= 2) {
+        setSplitSegments(existing);
+        setSplittingAssignment(assignment);
+        return;
+      }
+    }
+
     const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     const toStr = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     const mid = toStr(Math.round((toMin(start) + toMin(end)) / 2 / 30) * 30);
@@ -595,8 +633,12 @@ const DashboardPage = () => {
               const segEnd = new Date(d); segEnd.setHours(eh, em, 0, 0);
               if (segEnd <= segStart) segEnd.setDate(segEnd.getDate() + 1);
 
+              const segCc = resolveCc((segRow as any).ccUserIds, users || []);
               const event = {
-                subject: `${splittingAssignment.shift?.name} - ${segRow.user.firstName} ${segRow.user.lastName}`,
+                subject: subjectWithCc(
+                  `${splittingAssignment.shift?.name} - ${segRow.user.firstName} ${segRow.user.lastName}`,
+                  segCc
+                ),
                 body: {
                   contentType: 'HTML',
                   content: `
@@ -610,10 +652,13 @@ const DashboardPage = () => {
                 },
                 start: { dateTime: localDateTime(segStart), timeZone: 'Europe/Zurich' },
                 end: { dateTime: localDateTime(segEnd), timeZone: 'Europe/Zurich' },
-                attendees: [{
-                  emailAddress: { address: segRow.user.email, name: `${segRow.user.firstName} ${segRow.user.lastName}` },
-                  type: 'required',
-                }],
+                attendees: [
+                  {
+                    emailAddress: { address: segRow.user.email, name: `${segRow.user.firstName} ${segRow.user.lastName}` },
+                    type: 'required',
+                  },
+                  ...ccAttendees(segCc),
+                ],
                 location: { displayName: 'Office' },
                 isReminderOn: true,
                 reminderMinutesBeforeStart: 1440,
@@ -668,9 +713,33 @@ const DashboardPage = () => {
       // Revoke the Outlook invitations before dropping the rows: once the
       // segments are gone the event ids are unreachable, and the attendees
       // would keep a meeting ShiftPilot no longer knows about.
-      const siblings = (assignments || []).filter(
-        (a: any) => a.segmentGroupId === segmentGroupId && a.outlookEventId
-      );
+      //
+      // The rows come from the API by date, not from the table on screen: that
+      // list is paginated and date-filtered, so a segment outside the current
+      // view would silently keep its invitation.
+      let siblings: any[] = [];
+      if (segment?.date) {
+        const dateStr = new Date(segment.date).toISOString().split('T')[0];
+        try {
+          const res = await authFetch(
+            `/api/shift-assignments?startDate=${dateStr}&endDate=${dateStr}`
+          );
+          if (!res.ok) throw new Error('slot lookup failed');
+          const data = await res.json();
+          const rows = Array.isArray(data) ? data : (data.assignments || []);
+          siblings = rows.filter(
+            (a: any) => a.segmentGroupId === segmentGroupId && a.outlookEventId
+          );
+        } catch {
+          setActionMessage({ type: 'error', text: t('splitCancelError') });
+          setSplitting(false);
+          return;
+        }
+      } else {
+        siblings = (assignments || []).filter(
+          (a: any) => a.segmentGroupId === segmentGroupId && a.outlookEventId
+        );
+      }
       if (siblings.length > 0) {
         const graphToken = await getAccessToken();
         if (graphToken) {
@@ -714,6 +783,7 @@ const DashboardPage = () => {
     try {
       const newUser = users?.find(u => u.id === selectedNewUser);
       if (!newUser) throw new Error(t('userNotFound'));
+      const resendCcPeople = resolveCc(resendCc, users || []);
 
       const shiftOrPikett = mode === 'shifts' ? resendingAssignment.shift : resendingAssignment.pikett;
       const date = new Date(resendingAssignment.date);
@@ -748,7 +818,7 @@ const DashboardPage = () => {
       const mailbox = shiftOrPikett.senderMailbox || 'me';
 
       const event = {
-        subject: `${itemName} - ${newUser.firstName} ${newUser.lastName}`,
+        subject: subjectWithCc(`${itemName} - ${newUser.firstName} ${newUser.lastName}`, resendCcPeople),
         body: {
           contentType: 'HTML',
           content: `
@@ -775,7 +845,8 @@ const DashboardPage = () => {
               name: `${newUser.firstName} ${newUser.lastName}`
             },
             type: 'required'
-          }
+          },
+          ...ccAttendees(resendCcPeople)
         ],
         location: {
           displayName: 'Office'
@@ -827,6 +898,7 @@ const DashboardPage = () => {
             shiftId: shiftOrPikett.id,
             userId: newUser.id,
             status: 'PENDING',
+            ccUserIds: resendCc,
             ...(seg.segmentGroupId ? {
               segmentStart: seg.segmentStart,
               segmentEnd: seg.segmentEnd,
@@ -834,7 +906,7 @@ const DashboardPage = () => {
               segmentIndex: seg.segmentIndex,
             } : {}),
           }
-        : { date: resendingAssignment.date, pikettId: shiftOrPikett.id, userId: newUser.id, status: 'PENDING' };
+        : { date: resendingAssignment.date, pikettId: shiftOrPikett.id, userId: newUser.id, status: 'PENDING', ccUserIds: resendCc };
 
       const createResponse = await authFetch(apiBase, {
         method: 'POST',
@@ -849,10 +921,18 @@ const DashboardPage = () => {
       const createResult = await createResponse.json();
       const newAssignment = createResult.assignments?.find((a: any) => a.userId === newUser.id);
       if (newAssignment) {
+        // ccUserIds is repeated here on purpose: resending to the same person
+        // hits the slot unique index, the bulk insert skips the duplicate, and
+        // the copy list from the payload above is silently dropped. The patch
+        // targets the row that already exists, so it lands either way.
         await authFetch(`${apiBase}/${newAssignment.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ outlookEventId: createdEvent.eventId, resentFromId: resendingAssignment.id })
+          body: JSON.stringify({
+            outlookEventId: createdEvent.eventId,
+            resentFromId: resendingAssignment.id,
+            ccUserIds: resendCc,
+          })
         });
       }
 
@@ -1513,6 +1593,19 @@ const DashboardPage = () => {
                                         {t('splitBadge')} {(assignment as any).segmentIndex}
                                       </Badge>
                                     )}
+                                    {((assignment as any).ccUserIds?.length ?? 0) > 0 && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] bg-sky-50 border-sky-200 text-sky-700 px-1 py-0"
+                                        title={t('ccInCopyWith', {
+                                          names: resolveCc((assignment as any).ccUserIds, users || [])
+                                            .map((u: any) => `${u.firstName} ${u.lastName}`)
+                                            .join(', '),
+                                        })}
+                                      >
+                                        {t('ccWith')} {joinNames(resolveCc((assignment as any).ccUserIds, users || []), '&')}
+                                      </Badge>
+                                    )}
                                   </p>
                                 </div>
                               </td>
@@ -1536,7 +1629,12 @@ const DashboardPage = () => {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => setResendingAssignment(assignment)}
+                                      onClick={() => {
+                                        // Carry the copied people over: a resend swaps the
+                                        // holder, not the observers. Still editable below.
+                                        setResendCc((assignment as any).ccUserIds || []);
+                                        setResendingAssignment(assignment);
+                                      }}
                                       className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
                                     >
                                       <Send className="w-4 h-4 mr-2" />
@@ -1544,28 +1642,34 @@ const DashboardPage = () => {
                                     </Button>
                                   )}
                                   {mode === 'shifts' && (
-                                    (assignment as any).segmentGroupId ? (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleRemoveSplit((assignment as any).segmentGroupId, assignment)}
-                                        disabled={splitting}
-                                        title={t('splitRemove')}
-                                        className="hover:bg-amber-50/60 hover:text-amber-700 hover:border-amber-200 transition-colors"
-                                      >
-                                        <Scissors className="w-4 h-4" />
-                                      </Button>
-                                    ) : (
+                                    <>
+                                      {/* Scissors always edits the cut. Removing one
+                                          is a separate, clearly marked action. */}
                                       <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={() => openSplitDialog(assignment)}
-                                        title={t('splitShift')}
-                                        className="hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-colors"
+                                        disabled={splitting}
+                                        title={(assignment as any).segmentGroupId ? t('splitEdit') : t('splitShift')}
+                                        className={(assignment as any).segmentGroupId
+                                          ? 'hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200 transition-colors'
+                                          : 'hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-colors'}
                                       >
                                         <Scissors className="w-4 h-4" />
                                       </Button>
-                                    )
+                                      {(assignment as any).segmentGroupId && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleRemoveSplit((assignment as any).segmentGroupId, assignment)}
+                                          disabled={splitting}
+                                          title={t('splitRemove')}
+                                          className="hover:bg-amber-50/60 hover:text-amber-700 hover:border-amber-200 transition-colors"
+                                        >
+                                          <Undo2 className="w-4 h-4" />
+                                        </Button>
+                                      )}
+                                    </>
                                   )}
                                   <Button
                                     variant="outline"
@@ -2023,6 +2127,15 @@ const DashboardPage = () => {
                           ? `${a.shift?.name} • ${a.segmentStart || a.shift?.startTime} - ${a.segmentEnd || a.shift?.endTime}`
                           : `${a.pikett?.name}${a.pikett?.is24_7 ? ' • 24/7' : ''}`}
                       </p>
+                      {(a.ccUserIds?.length ?? 0) > 0 && (
+                        <p className="text-xs text-sky-700 truncate">
+                          {t('ccInCopyWith', {
+                            names: resolveCc(a.ccUserIds, users || [])
+                              .map((u: any) => `${u.firstName} ${u.lastName}`)
+                              .join(', '),
+                          })}
+                        </p>
+                      )}
                     </div>
                     {getStatusBadge(a.status)}
                   </div>
@@ -2038,6 +2151,7 @@ const DashboardPage = () => {
       <Dialog open={!!resendingAssignment} onOpenChange={(open) => {
         if (!open) {
           setResendingAssignment(null);
+          setResendCc([]);
           setSelectedNewUser(null);
         }
       }}>
@@ -2267,12 +2381,26 @@ const DashboardPage = () => {
             )}
           </ScrollArea>
 
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <CcSelector
+              candidates={ccCandidates(resendingAssignment)}
+              selectedIds={resendCc}
+              onChange={setResendCc}
+              label={t('ccLabel')}
+              addLabel={t('ccAdd')}
+              emptyLabel={t('ccEmpty')}
+              jokerLabel={t('ccJoker')}
+              disabled={resending}
+            />
+          </div>
+
           <DialogFooter className="mt-6">
             <Button
               variant="outline"
               onClick={() => {
                 setResendingAssignment(null);
                 setSelectedNewUser(null);
+                setResendCc([]);
               }}
               disabled={resending}
               className="hover:bg-secondary/20"
@@ -2335,8 +2463,9 @@ const DashboardPage = () => {
                   {splitSegments.map((seg, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-amber-200 hover:bg-amber-50/40 transition-colors"
+                      className="p-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-amber-200 hover:bg-amber-50/40 transition-colors"
                     >
+                      <div className="flex items-center gap-2">
                       <span className="w-6 h-6 flex items-center justify-center text-xs font-semibold text-amber-700 bg-amber-100 rounded-full flex-shrink-0">
                         {i + 1}
                       </span>
@@ -2385,12 +2514,30 @@ const DashboardPage = () => {
                         // Keep the columns aligned when no remove button shows.
                         <span className="w-8 flex-shrink-0" />
                       )}
+                      </div>
+                      <div className="mt-2 pl-8 pr-9">
+                        <CcSelector
+                          candidates={ccCandidates(splittingAssignment)}
+                          selectedIds={seg.ccUserIds || []}
+                          onChange={(ids) => updateSegment(i, { ccUserIds: ids } as any)}
+                          label={t('ccLabel')}
+                          addLabel={t('ccAdd')}
+                          emptyLabel={t('ccEmpty')}
+                          jokerLabel={t('ccJoker')}
+                          disabled={splitting}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
 
                 {splitSegments.length < 6 && (
-                  <Button variant="outline" size="sm" onClick={addSegment}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addSegment}
+                    className="hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-colors"
+                  >
                     + {t('splitAddSegment')}
                   </Button>
                 )}

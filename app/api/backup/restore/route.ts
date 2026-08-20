@@ -262,6 +262,7 @@ export async function POST(request: NextRequest) {
               segmentEnd: assignment.segmentEnd ?? null,
               segmentGroupId: assignment.segmentGroupId ?? null,
               segmentIndex: assignment.segmentIndex ?? null,
+              ccUserIds: assignment.ccUserIds ?? [],
               shiftId: assignment.shiftId,
               userId: assignment.userId,
               createdAt: new Date(assignment.createdAt),
@@ -296,6 +297,7 @@ export async function POST(request: NextRequest) {
               resentAt: assignment.resentAt ? new Date(assignment.resentAt) : null,
               resentFromId: assignment.resentFromId || null,
               sentById: assignment.sentById ?? null,
+              ccUserIds: assignment.ccUserIds ?? [],
             })),
             skipDuplicates: true,
           });

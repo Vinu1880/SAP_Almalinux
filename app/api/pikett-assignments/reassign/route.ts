@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { pikettId, dates, newUserId } = validation.data;
+    const { pikettId, dates, newUserId, ccUserIds } = validation.data;
 
     const [pikett, newUser] = await Promise.all([
       prisma.pikett.findUnique({ where: { id: pikettId } }),
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
           userId: newUserId,
           status: 'PENDING' as const,
           sentById,
+          ccUserIds: ccUserIds ?? [],
         })),
       });
 

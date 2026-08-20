@@ -105,7 +105,8 @@ export async function POST(request: NextRequest) {
         userId: a.userId,
         status: a.status || 'PENDING',
         reason: a.reason || null,
-        sentById
+        sentById,
+        ccUserIds: a.ccUserIds ?? []
       })),
       skipDuplicates: true
     });

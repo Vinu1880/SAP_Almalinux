@@ -75,13 +75,21 @@ export async function POST(request: NextRequest) {
       // The declined rows that survive were effectively resent — the slot went
       // back out to other people as segments. Mark them so the dashboard shows
       // "resent" here just like it does after a plain resend.
-      await tx.shiftAssignment.updateMany({
+      //
+      // Their ids are recorded on the audit entry: undoing the split must clear
+      // exactly these, and nothing that was already flagged by an earlier plain
+      // resend, whose replacement row this very split may have just deleted.
+      const newlyFlagged = await tx.shiftAssignment.findMany({
         where: {
           date: assignmentDate,
           shiftId,
           resent: false,
           status: { in: ['REFUSED', 'CANCELLED'] },
         },
+        select: { id: true },
+      });
+      await tx.shiftAssignment.updateMany({
+        where: { id: { in: newlyFlagged.map(r => r.id) } },
         data: { resent: true, resentAt: new Date() },
       });
 
@@ -95,6 +103,7 @@ export async function POST(request: NextRequest) {
           segmentEnd: seg.end,
           segmentGroupId,
           segmentIndex: i + 1,
+          ccUserIds: seg.ccUserIds ?? [],
           sentById,
         })),
       });
@@ -105,7 +114,7 @@ export async function POST(request: NextRequest) {
           entity: 'SHIFT_ASSIGNMENT',
           entityId: segmentGroupId,
           userId: auth.user.id,
-          data: { date, shiftId, segments, replaced: previous },
+          data: { date, shiftId, segments, replaced: previous, flaggedResent: newlyFlagged.map(r => r.id) },
         },
       });
 
@@ -150,25 +159,24 @@ export async function DELETE(request: NextRequest) {
 
     await prisma.shiftAssignment.deleteMany({ where: { segmentGroupId } });
 
-    // Undoing the split takes the slot back: the declined rows it had marked as
-    // resent are no longer covered by anyone, so the badge has to go with it.
-    const { date, shiftId } = removed[0];
-    const declined = await prisma.shiftAssignment.findMany({
-      where: { date, shiftId, status: { in: ['REFUSED', 'CANCELLED'] }, resent: true },
-      select: { id: true },
+    // Undoing the split takes the slot back, so the declines it flagged as
+    // resent are no longer covered by anyone and lose the badge.
+    //
+    // Only the ids this split flagged are cleared. Checking for a surviving
+    // replacement row instead would be wrong: a plain resend earlier on the
+    // same slot leaves an ACCEPTED replacement that the split itself deletes,
+    // and that genuine resend would silently lose its badge here.
+    const splitLog = await prisma.auditLog.findFirst({
+      where: { action: 'SPLIT', entityId: segmentGroupId },
+      orderBy: { createdAt: 'desc' },
+      select: { data: true },
     });
-    for (const row of declined) {
-      // A plain resend leaves a replacement row pointing back here. If one still
-      // stands, the slot was genuinely resent and the badge must survive.
-      const replacement = await prisma.shiftAssignment.count({
-        where: { resentFromId: row.id },
+    const flagged = ((splitLog?.data as any)?.flaggedResent ?? []) as string[];
+    if (flagged.length > 0) {
+      await prisma.shiftAssignment.updateMany({
+        where: { id: { in: flagged }, resent: true },
+        data: { resent: false, resentAt: null },
       });
-      if (replacement === 0) {
-        await prisma.shiftAssignment.update({
-          where: { id: row.id },
-          data: { resent: false, resentAt: null },
-        });
-      }
     }
 
     await prisma.auditLog.create({

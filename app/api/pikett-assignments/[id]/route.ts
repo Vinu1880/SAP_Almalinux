@@ -82,6 +82,10 @@ export async function PUT(
       updateData.outlookEventId = input.outlookEventId;
     }
 
+    if (input.ccUserIds !== undefined) {
+      updateData.ccUserIds = input.ccUserIds;
+    }
+
     const assignment = await prisma.pikettAssignment.update({
       where: { id },
       data: updateData,

@@ -165,6 +165,12 @@ model ShiftAssignment {
   segmentGroupId  String?          // shared by every segment of one split
   segmentIndex    Int?             // 1-based position within the split
 
+  // People copied on the invitation as optional attendees. Purely
+  // informational: they see the slot but carry none of its weight, so they are
+  // ignored by MAX_LOAD, fairness and the same-day block. Plain user ids, no
+  // relation, since nothing here is ever joined on.
+  ccUserIds       String[]         @default([])
+
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -202,6 +208,9 @@ model PikettAssignment {
 
   sentById        String?
   sentBy          User?            @relation("SentPikettAssignments", fields: [sentById], references: [id], onDelete: SetNull)
+
+  // Optional attendees on the invitation — see ShiftAssignment.ccUserIds.
+  ccUserIds       String[]         @default([])
 
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt

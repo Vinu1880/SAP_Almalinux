@@ -452,26 +452,42 @@ const ShiftsPage = () => {
     excludedUserIds,
     onIncludeChange, 
     onExcludeChange,
-    teamId 
+    teamId,
+    isPikett = false
   }: { 
     selectedUserIds: string[], 
     excludedUserIds: string[],
     onIncludeChange: (userIds: string[]) => void,
     onExcludeChange: (userIds: string[]) => void,
-    teamId: string 
+    teamId: string,
+    isPikett?: boolean
   }) => {
     const baseTeamUsers = users.filter(u => u.teamId === teamId && u.status === 'ACTIVE');
     const otherTeamUsers = users.filter(u => u.teamId !== teamId && u.status === 'ACTIVE');
     
-    const effectiveTeamMembers = [
+    const [memberSearch, setMemberSearch] = useState('');
+    const [availableSearch, setAvailableSearch] = useState('');
+
+    const matches = (u: any, q: string) => {
+      const needle = q.trim().toLowerCase();
+      if (!needle) return true;
+      return `${u.firstName} ${u.lastName} ${u.email || ''} ${u.role || ''}`
+        .toLowerCase()
+        .includes(needle);
+    };
+
+    const allTeamMembers = [
       ...baseTeamUsers.filter(u => !excludedUserIds.includes(u.id)),
       ...otherTeamUsers.filter(u => selectedUserIds.includes(u.id))
     ];
-    
-    const availableUsers = [
+
+    const allAvailable = [
       ...otherTeamUsers.filter(u => !selectedUserIds.includes(u.id)),
       ...baseTeamUsers.filter(u => excludedUserIds.includes(u.id))
     ];
+
+    const effectiveTeamMembers = allTeamMembers.filter(u => matches(u, memberSearch));
+    const availableUsers = allAvailable.filter(u => matches(u, availableSearch));
 
     const handleRemoveFromShift = (userId: string) => {
       const user = users.find(u => u.id === userId);
@@ -499,11 +515,22 @@ const ShiftsPage = () => {
       <div className="space-y-4">
         <div>
           <div className="flex items-center justify-between mb-2">
-            <Label className="text-sm font-medium">{t("assignedMembers")}</Label>
+            <Label className="text-sm font-medium">{isPikett ? t("assignedMembersPikett") : t("assignedMembers")}</Label>
             <Badge variant="outline" className="text-xs">
-              {effectiveTeamMembers.length} {t("memberCount")}
+              {allTeamMembers.length} {t("memberCount")}
             </Badge>
           </div>
+          {allTeamMembers.length > 0 && (
+            <div className="relative mb-2">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <Input
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder={t("searchMember")}
+                className="h-8 pl-8 text-sm"
+              />
+            </div>
+          )}
           <div className="border rounded-lg p-3 space-y-2 max-h-60 overflow-y-auto bg-green-50/30">
             {effectiveTeamMembers.length > 0 ? (
               effectiveTeamMembers.map(user => (
@@ -539,7 +566,7 @@ const ShiftsPage = () => {
               ))
             ) : (
               <p className="text-sm text-slate-500 text-center py-4">
-                {t("noMemberAssigned")}
+                {memberSearch.trim() ? t("noSearchResult") : t("noMemberAssigned")}
               </p>
             )}
           </div>
@@ -549,9 +576,20 @@ const ShiftsPage = () => {
           <div className="flex items-center justify-between mb-2">
             <Label className="text-sm font-medium">{t("availableUsers")}</Label>
             <Badge variant="outline" className="text-xs">
-              {availableUsers.length} {t("available")}
+              {allAvailable.length} {t("available")}
             </Badge>
           </div>
+          {allAvailable.length > 0 && (
+            <div className="relative mb-2">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <Input
+                value={availableSearch}
+                onChange={(e) => setAvailableSearch(e.target.value)}
+                placeholder={t("searchUser")}
+                className="h-8 pl-8 text-sm"
+              />
+            </div>
+          )}
           <div className="border rounded-lg p-3 space-y-2 max-h-60 overflow-y-auto">
             {availableUsers.length > 0 ? (
               availableUsers.map(user => {
@@ -592,7 +630,7 @@ const ShiftsPage = () => {
               })
             ) : (
               <p className="text-sm text-slate-500 text-center py-4">
-                {t("allUsersAssigned")}
+                {availableSearch.trim() ? t("noSearchResult") : t("allUsersAssigned")}
               </p>
             )}
           </div>
@@ -978,6 +1016,7 @@ const ShiftsPage = () => {
                     {newPikett.teamId && (
                       <>
                         <MembersSelector
+                          isPikett
                           selectedUserIds={newPikett.includedUserIds}
                           excludedUserIds={newPikett.excludedUserIds}
                           onIncludeChange={(ids) => setNewPikett({...newPikett, includedUserIds: ids})}
@@ -1236,6 +1275,7 @@ const ShiftsPage = () => {
                 </div>
 
                 <MembersSelector
+                  isPikett
                   selectedUserIds={selectedPikett?.includedUserIds || []}
                   excludedUserIds={selectedPikett?.excludedUserIds || []}
                   onIncludeChange={(ids) => setSelectedPikett({...selectedPikett, includedUserIds: ids})}

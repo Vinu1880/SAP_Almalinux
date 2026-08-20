@@ -211,7 +211,14 @@
     "splitCancelError": "Die bestehenden Outlook-Einladungen konnten nicht storniert werden — die Schicht wurde nicht geteilt.",
     "splitInviteNote": "Diese Schicht wurde geteilt — Sie decken nur die oben genannten Stunden ab.",
     "splitPartialSend": "Schicht geteilt, aber nur {sent}/{total} Einladungen gesendet. Senden Sie die übrigen über den Planer.",
-    "splitUndo": "Teilung rückgängig"
+    "splitUndo": "Teilung rückgängig",
+    "ccLabel": "In Kopie (optional)",
+    "ccAdd": "Hinzufügen",
+    "ccEmpty": "Niemand in Kopie",
+    "ccJoker": "Joker",
+    "ccWith": "mit",
+    "ccInCopyWith": "In Kopie mit {names}",
+    "splitEdit": "Teilung bearbeiten"
   },
   "shifts": {
     "title": "Schichtverwaltung",
@@ -321,7 +328,11 @@
     "tryModifySearch": "Versuchen Sie, Ihre Suchkriterien oder Filter anzupassen.",
     "createFirstShift": "Erstellen Sie Ihre erste Schicht, um loszulegen.",
     "shiftCount": "{count} Schichten",
-    "pikettCount": "{count} Piketts"
+    "pikettCount": "{count} Piketts",
+    "searchMember": "Mitglied suchen...",
+    "searchUser": "Benutzer suchen...",
+    "noSearchResult": "Kein Treffer",
+    "assignedMembersPikett": "Dem Pikett zugewiesene Mitglieder"
   },
   "users": {
     "title": "Benutzer- & Teamverwaltung",
@@ -474,7 +485,10 @@
     "ruleDuplicateMaxLoad": "Eine Max-Last-Regel existiert bereits für diese Schicht",
     "ruleDuplicateDoubleShift": "Eine Doppelschicht-Regel existiert bereits für diese Auslöserschicht",
     "saving": "Speichern...",
-    "name": "Name"
+    "name": "Name",
+    "searchMember": "Mitglied suchen...",
+    "searchUser": "Benutzer suchen...",
+    "noSearchResult": "Kein Treffer"
   },
   "settings": {
     "title": "Einstellungen",
@@ -810,6 +824,12 @@
     "splitSave": "Teilung speichern",
     "splitOriginal": "Original",
     "splitBadge": "Geteilt",
-    "splitUndo": "Teilung rückgängig"
+    "splitUndo": "Teilung rückgängig",
+    "ccLabel": "In Kopie (optional)",
+    "ccAdd": "Hinzufügen",
+    "ccEmpty": "Niemand in Kopie",
+    "ccJoker": "Joker",
+    "ccWith": "mit",
+    "ccInCopyWith": "In Kopie mit {names}"
   }
 }

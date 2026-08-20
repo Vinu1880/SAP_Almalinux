@@ -860,12 +860,25 @@ const UsersPage = () => {
     currentMembers: string[],
     onMembersChange: (memberIds: string[]) => void
   }) => {
-    const teamUsers = users.filter(u => currentMembers.includes(u.id));
+    const [memberSearch, setMemberSearch] = useState('');
+    const [availableSearch, setAvailableSearch] = useState('');
 
-    const availableUsers = users.filter(u =>
+    const matches = (u: any, q: string) => {
+      const needle = q.trim().toLowerCase();
+      if (!needle) return true;
+      return `${u.firstName} ${u.lastName} ${u.email || ''} ${u.role || ''}`
+        .toLowerCase()
+        .includes(needle);
+    };
+
+    const allTeamUsers = users.filter(u => currentMembers.includes(u.id));
+    const allAvailable = users.filter(u =>
       !currentMembers.includes(u.id) &&
       u.status === 'ACTIVE'
     );
+
+    const teamUsers = allTeamUsers.filter(u => matches(u, memberSearch));
+    const availableUsers = allAvailable.filter(u => matches(u, availableSearch));
 
     const handleRemoveFromTeam = (userId: string) => {
       onMembersChange(currentMembers.filter(id => id !== userId));
@@ -881,9 +894,20 @@ const UsersPage = () => {
           <div className="flex items-center justify-between mb-2">
             <Label className="text-sm font-medium">{t("teamMembers")}</Label>
             <Badge variant="outline" className="text-xs">
-              {teamUsers.length}
+              {allTeamUsers.length}
             </Badge>
           </div>
+          {allTeamUsers.length > 0 && (
+            <div className="relative mb-2">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <Input
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder={t("searchMember")}
+                className="h-8 pl-8 text-sm"
+              />
+            </div>
+          )}
           <div className="border rounded-lg p-3 space-y-2 max-h-60 overflow-y-auto bg-green-50/30">
             {teamUsers.length > 0 ? (
               teamUsers.map(user => (
@@ -919,7 +943,7 @@ const UsersPage = () => {
               ))
             ) : (
               <p className="text-sm text-slate-500 text-center py-4">
-                {t("noMembersInTeam")}
+                {memberSearch.trim() ? t("noSearchResult") : t("noMembersInTeam")}
               </p>
             )}
           </div>
@@ -929,9 +953,20 @@ const UsersPage = () => {
           <div className="flex items-center justify-between mb-2">
             <Label className="text-sm font-medium">{t("availableUsers")}</Label>
             <Badge variant="outline" className="text-xs">
-              {availableUsers.length}
+              {allAvailable.length}
             </Badge>
           </div>
+          {allAvailable.length > 0 && (
+            <div className="relative mb-2">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <Input
+                value={availableSearch}
+                onChange={(e) => setAvailableSearch(e.target.value)}
+                placeholder={t("searchUser")}
+                className="h-8 pl-8 text-sm"
+              />
+            </div>
+          )}
           <div className="border rounded-lg p-3 space-y-2 max-h-60 overflow-y-auto">
             {availableUsers.length > 0 ? (
               availableUsers.map(user => (
@@ -969,7 +1004,7 @@ const UsersPage = () => {
               ))
             ) : (
               <p className="text-sm text-slate-500 text-center py-4">
-                {t("allUsersAssigned")}
+                {availableSearch.trim() ? t("noSearchResult") : t("allUsersAssigned")}
               </p>
             )}
           </div>

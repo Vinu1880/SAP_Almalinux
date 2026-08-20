@@ -109,7 +109,8 @@ export async function POST(request: NextRequest) {
         segmentStart: a.segmentStart ?? null,
         segmentEnd: a.segmentEnd ?? null,
         segmentGroupId: a.segmentGroupId ?? null,
-        segmentIndex: a.segmentIndex ?? null
+        segmentIndex: a.segmentIndex ?? null,
+        ccUserIds: a.ccUserIds ?? []
       })),
       skipDuplicates: true
     });

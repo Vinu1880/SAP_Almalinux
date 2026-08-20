@@ -211,7 +211,14 @@
     "splitCancelError": "Could not cancel the existing Outlook invitations — the shift was not split.",
     "splitInviteNote": "This shift was split — you only cover the hours shown above.",
     "splitPartialSend": "Shift split, but only {sent}/{total} invitations were sent. Resend the rest from the planner.",
-    "splitUndo": "Undo split"
+    "splitUndo": "Undo split",
+    "ccLabel": "In copy (optional)",
+    "ccAdd": "Add",
+    "ccEmpty": "Nobody in copy",
+    "ccJoker": "Joker",
+    "ccWith": "with",
+    "ccInCopyWith": "In copy with {names}",
+    "splitEdit": "Edit the split"
   },
   "shifts": {
     "title": "Shift Management",
@@ -321,7 +328,11 @@
     "tryModifySearch": "Try modifying your search criteria or filters.",
     "createFirstShift": "Create your first shift to get started.",
     "shiftCount": "{count} shifts",
-    "pikettCount": "{count} piketts"
+    "pikettCount": "{count} piketts",
+    "searchMember": "Search a member...",
+    "searchUser": "Search a user...",
+    "noSearchResult": "No match",
+    "assignedMembersPikett": "Members assigned to the pikett"
   },
   "users": {
     "title": "User & Team Management",
@@ -474,7 +485,10 @@
     "ruleDuplicateMaxLoad": "A max load rule already exists for this shift",
     "ruleDuplicateDoubleShift": "A double-shift rule already exists for this trigger shift",
     "saving": "Saving...",
-    "name": "Name"
+    "name": "Name",
+    "searchMember": "Search a member...",
+    "searchUser": "Search a user...",
+    "noSearchResult": "No match"
   },
   "settings": {
     "title": "Settings",
@@ -810,6 +824,12 @@
     "splitSave": "Save split",
     "splitOriginal": "Original",
     "splitBadge": "Split",
-    "splitUndo": "Undo split"
+    "splitUndo": "Undo split",
+    "ccLabel": "In copy (optional)",
+    "ccAdd": "Add",
+    "ccEmpty": "Nobody in copy",
+    "ccJoker": "Joker",
+    "ccWith": "with",
+    "ccInCopyWith": "In copy with {names}"
   }
 }

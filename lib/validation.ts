@@ -101,6 +101,7 @@ export const updateAssignmentSchema = z.object({
   resent: z.boolean().optional(),
   resentAt: z.string().nullable().optional(),
   resentFromId: z.string().max(255).nullable().optional(),
+  ccUserIds: z.array(cuidSchema).max(10).optional(),
 });
 
 export const createBulkShiftAssignmentsSchema = z.object({
@@ -116,6 +117,8 @@ export const createBulkShiftAssignmentsSchema = z.object({
     segmentEnd: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
     segmentGroupId: z.string().max(64).nullable().optional(),
     segmentIndex: z.number().int().min(1).max(6).nullable().optional(),
+    // Optional attendees on the invitation. Informational only.
+    ccUserIds: z.array(cuidSchema).max(10).optional(),
   })).min(1).max(1000),
 });
 
@@ -134,6 +137,9 @@ export const splitShiftAssignmentSchema = z.object({
     start: timeSchema,
     end: timeSchema,
     userId: cuidSchema,
+    // Optional attendees, copied per segment: a handover can involve different
+    // observers before and after the cut.
+    ccUserIds: z.array(cuidSchema).max(10).optional(),
   })).min(2).max(6),
 }).superRefine((val, ctx) => {
   const segs = val.segments;
@@ -161,6 +167,7 @@ export const reassignPikettDaysSchema = z.object({
   pikettId: cuidSchema,
   newUserId: cuidSchema,
   dates: z.array(z.string()).min(1).max(31),
+  ccUserIds: z.array(cuidSchema).max(10).optional(),
 });
 
 export const createBulkPikettAssignmentsSchema = z.object({
@@ -171,6 +178,8 @@ export const createBulkPikettAssignmentsSchema = z.object({
     status: z.enum(['PENDING', 'TENTATIVE', 'ACCEPTED', 'REFUSED', 'CANCELLED']).optional().default('PENDING'),
     reason: z.string().max(500).nullable().optional(),
     outlookEventId: z.string().max(255).nullable().optional(),
+    // Optional attendees on the invitation. Informational only.
+    ccUserIds: z.array(cuidSchema).max(10).optional(),
   })).min(1).max(1000),
 });
 export const createRotationPatternSchema = z.object({
