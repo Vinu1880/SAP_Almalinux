@@ -4908,6 +4908,7 @@ useEffect(() => {
                                   addLabel={t('ccAdd')}
                                   emptyLabel={t('ccEmpty')}
                                   jokerLabel={t('ccJoker')}
+                                  searchLabel={t('ccSearch')}
                                 />
                               </div>
                             )}
@@ -4998,6 +4999,7 @@ useEffect(() => {
                                 addLabel={t('ccAdd')}
                                 emptyLabel={t('ccEmpty')}
                                 jokerLabel={t('ccJoker')}
+                                  searchLabel={t('ccSearch')}
                               />
                             </div>
                           </div>

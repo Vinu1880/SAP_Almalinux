@@ -920,18 +920,22 @@ const DashboardPage = () => {
 
       const createResult = await createResponse.json();
       const newAssignment = createResult.assignments?.find((a: any) => a.userId === newUser.id);
+
+      // Resending to the same person hits the slot unique index, so the bulk
+      // insert skips the duplicate and returns the row that was already there.
+      // It is the same row we started from, which means there is no "previous"
+      // assignment to point back at — linking it to itself would corrupt the
+      // resend history that the dialog reads.
+      const sameRow = newAssignment?.id === resendingAssignment.id;
+
       if (newAssignment) {
-        // ccUserIds is repeated here on purpose: resending to the same person
-        // hits the slot unique index, the bulk insert skips the duplicate, and
-        // the copy list from the payload above is silently dropped. The patch
-        // targets the row that already exists, so it lands either way.
         await authFetch(`${apiBase}/${newAssignment.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             outlookEventId: createdEvent.eventId,
-            resentFromId: resendingAssignment.id,
             ccUserIds: resendCc,
+            ...(sameRow ? {} : { resentFromId: resendingAssignment.id }),
           })
         });
       }
@@ -1682,21 +1686,36 @@ const DashboardPage = () => {
                                 </div>
                               </td>
                               <td className="py-4 px-2">
-                                {(assignment as any).sentBy ? (
-                                  <div className="text-xs">
-                                    <p className="font-medium text-slate-700">
-                                      {(assignment as any).sentBy.firstName} {(assignment as any).sentBy.lastName}
-                                    </p>
-                                    <p className="text-slate-500">
-                                      {new Date(assignment.createdAt).toLocaleString(locale, {
-                                        day: '2-digit', month: '2-digit', year: 'numeric',
-                                        hour: '2-digit', minute: '2-digit'
-                                      })}
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-slate-400">—</span>
-                                )}
+                                {(() => {
+                                  const a = assignment as any;
+                                  const stamp = (d: string) =>
+                                    new Date(d).toLocaleString(locale, {
+                                      day: '2-digit', month: '2-digit', year: 'numeric',
+                                      hour: '2-digit', minute: '2-digit'
+                                    });
+                                  // Nothing at all to show: no sender recorded and never resent.
+                                  if (!a.sentBy && !a.resentAt) {
+                                    return <span className="text-xs text-slate-400">—</span>;
+                                  }
+                                  return (
+                                    <div className="text-xs">
+                                      {a.sentBy && (
+                                        <p className="font-medium text-slate-700">
+                                          {a.sentBy.firstName} {a.sentBy.lastName}
+                                        </p>
+                                      )}
+                                      <p className="text-slate-500">{stamp(a.createdAt)}</p>
+                                      {/* A resend to the same person updates this row instead of
+                                          adding one, so the resend date is the only trace of it. */}
+                                      {a.resentAt && (
+                                        <p className="text-amber-700 flex items-center gap-1 mt-0.5">
+                                          <RefreshCw className="w-3 h-3 flex-shrink-0" />
+                                          {stamp(a.resentAt)}
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </td>
                             </tr>
                             );
@@ -2390,6 +2409,7 @@ const DashboardPage = () => {
               addLabel={t('ccAdd')}
               emptyLabel={t('ccEmpty')}
               jokerLabel={t('ccJoker')}
+                                  searchLabel={t('ccSearch')}
               disabled={resending}
             />
           </div>
@@ -2524,6 +2544,7 @@ const DashboardPage = () => {
                           addLabel={t('ccAdd')}
                           emptyLabel={t('ccEmpty')}
                           jokerLabel={t('ccJoker')}
+                                  searchLabel={t('ccSearch')}
                           disabled={splitting}
                         />
                       </div>

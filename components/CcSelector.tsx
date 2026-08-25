@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { X, UserPlus, Check } from 'lucide-react';
+import { X, UserPlus, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 
 export interface CcCandidate {
   id: string;
@@ -22,6 +22,7 @@ interface CcSelectorProps {
   addLabel: string;
   emptyLabel: string;
   jokerLabel: string;
+  searchLabel?: string;
   disabled?: boolean;
 }
 
@@ -41,11 +42,20 @@ export function CcSelector({
   addLabel,
   emptyLabel,
   jokerLabel,
+  searchLabel,
   disabled = false,
 }: CcSelectorProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
   const selected = candidates.filter(c => selectedIds.includes(c.id));
+
+  const needle = query.trim().toLowerCase();
+  const shown = needle
+    ? candidates.filter(u =>
+        `${u.firstName} ${u.lastName} ${u.email || ''}`.toLowerCase().includes(needle)
+      )
+    : candidates;
 
   const toggle = (id: string) => {
     onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]);
@@ -96,9 +106,20 @@ export function CcSelector({
 
       {open && !disabled && (
         <div className="border border-slate-200 rounded-lg overflow-hidden">
-          <ScrollArea className="max-h-48">
+          {candidates.length > 5 && (
+            <div className="relative border-b border-slate-200">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchLabel}
+                className="h-8 pl-8 text-sm border-0 rounded-none focus-visible:ring-0"
+              />
+            </div>
+          )}
+          <div className="max-h-48 overflow-y-auto overscroll-contain">
             <div className="p-1">
-              {candidates.map(u => {
+              {shown.map(u => {
                 const isSelected = selectedIds.includes(u.id);
                 const isJoker = (u.workPercent ?? 100) === 0;
                 return (
@@ -131,8 +152,11 @@ export function CcSelector({
                   </button>
                 );
               })}
+              {shown.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-3">{emptyLabel}</p>
+              )}
             </div>
-          </ScrollArea>
+          </div>
         </div>
       )}
     </div>

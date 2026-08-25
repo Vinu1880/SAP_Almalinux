@@ -218,7 +218,8 @@
     "ccJoker": "Joker",
     "ccWith": "mit",
     "ccInCopyWith": "In Kopie mit {names}",
-    "splitEdit": "Teilung bearbeiten"
+    "splitEdit": "Teilung bearbeiten",
+    "ccSearch": "Suchen..."
   },
   "shifts": {
     "title": "Schichtverwaltung",
@@ -830,6 +831,7 @@
     "ccEmpty": "Niemand in Kopie",
     "ccJoker": "Joker",
     "ccWith": "mit",
-    "ccInCopyWith": "In Kopie mit {names}"
+    "ccInCopyWith": "In Kopie mit {names}",
+    "ccSearch": "Suchen..."
   }
 }

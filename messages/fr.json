@@ -218,7 +218,8 @@
     "ccJoker": "Joker",
     "ccWith": "avec",
     "ccInCopyWith": "En copie avec {names}",
-    "splitEdit": "Modifier la division"
+    "splitEdit": "Modifier la division",
+    "ccSearch": "Rechercher..."
   },
   "shifts": {
     "title": "Gestion des Shifts",
@@ -830,6 +831,7 @@
     "ccEmpty": "Personne en copie",
     "ccJoker": "Joker",
     "ccWith": "avec",
-    "ccInCopyWith": "En copie avec {names}"
+    "ccInCopyWith": "En copie avec {names}",
+    "ccSearch": "Rechercher..."
   }
 }

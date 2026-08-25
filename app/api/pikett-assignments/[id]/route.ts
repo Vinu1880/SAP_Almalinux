@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rateLimit';
+import { resolveLocalUserId } from '@/lib/resolveUser';
 import { validateBody, updateAssignmentSchema } from '@/lib/validation';
 
 export async function GET(
@@ -84,6 +85,15 @@ export async function PUT(
 
     if (input.ccUserIds !== undefined) {
       updateData.ccUserIds = input.ccUserIds;
+    }
+
+    // A new Outlook event means this row was just sent again. Stamp who did it:
+    // a resend to the same person reuses the existing row, which the bulk insert
+    // skips as a duplicate, so its sentById would otherwise stay whatever it was
+    // — empty on rows created before that column existed.
+    if (input.outlookEventId) {
+      const sentById = await resolveLocalUserId(auth.user);
+      if (sentById) updateData.sentById = sentById;
     }
 
     const assignment = await prisma.pikettAssignment.update({
