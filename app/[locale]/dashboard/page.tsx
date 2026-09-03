@@ -28,7 +28,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useShiftAssignments } from '@/lib/hooks/useShiftAssignments';
 import { usePikettAssignments } from '@/lib/hooks/usePikettAssignments';
 import { useUsers } from '@/lib/hooks/useUsers';
@@ -2099,13 +2098,13 @@ const DashboardPage = () => {
 
       {/* Day detail dialog */}
       <Dialog open={!!selectedCalendarDay} onOpenChange={(open) => { if (!open) setSelectedCalendarDay(null); }}>
-        <DialogContent className="sm:max-w-[550px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>
               {t('dayDetail', { date: selectedCalendarDay ? new Date(selectedCalendarDay + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '' })}
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[500px] pr-4">
+          <div className="pr-2 flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {(() => {
               const raw = selectedCalendarDay ? (calendarByDate[selectedCalendarDay] || []) : [];
               // Group per segment when the slot is split, otherwise one accepted
@@ -2162,7 +2161,7 @@ const DashboardPage = () => {
               </div>
               );
             })()}
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -2174,8 +2173,8 @@ const DashboardPage = () => {
           setSelectedNewUser(null);
         }
       }}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>{t('resendTitle')}</DialogTitle>
             <DialogDescription>
               {t('resendDescription', {
@@ -2185,7 +2184,7 @@ const DashboardPage = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="mt-4 max-h-[500px] pr-4">
+          <div className="mt-4 pr-2 flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {checkingAvailability ? (
               <div className="text-center py-8">
                 <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-blue-600" />
@@ -2398,9 +2397,9 @@ const DashboardPage = () => {
                 )}
               </div>
             )}
-          </ScrollArea>
+          </div>
 
-          <div className="mt-4 pt-4 border-t border-slate-200">
+          <div className="mt-4 pt-4 border-t border-slate-200 flex-shrink-0">
             <CcSelector
               candidates={ccCandidates(resendingAssignment)}
               selectedIds={resendCc}
@@ -2409,12 +2408,12 @@ const DashboardPage = () => {
               addLabel={t('ccAdd')}
               emptyLabel={t('ccEmpty')}
               jokerLabel={t('ccJoker')}
-                                  searchLabel={t('ccSearch')}
+              searchLabel={t('ccSearch')}
               disabled={resending}
             />
           </div>
 
-          <DialogFooter className="mt-6">
+          <DialogFooter className="mt-6 flex-shrink-0">
             <Button
               variant="outline"
               onClick={() => {
@@ -2453,7 +2452,7 @@ const DashboardPage = () => {
       <Dialog open={!!splittingAssignment} onOpenChange={(open) => {
         if (!open && !splitting) setSplittingAssignment(null);
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Scissors className="w-5 h-5 text-green-600" />

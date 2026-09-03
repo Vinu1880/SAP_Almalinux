@@ -4036,7 +4036,7 @@ useEffect(() => {
 
         {/* Split a preview row into time segments (nothing sent yet) */}
         <Dialog open={!!splittingPreview} onOpenChange={(open) => { if (!open) setSplittingPreview(null); }}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Scissors className="w-5 h-5 text-violet-600" />
