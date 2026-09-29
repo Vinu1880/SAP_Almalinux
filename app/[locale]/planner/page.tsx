@@ -32,6 +32,8 @@ import {
   Edit,
   Scissors,
   Undo2,
+  Sparkles,
+  ChevronsDownUp,
   X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,6 +59,7 @@ import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { useTranslations, useLocale } from 'next-intl';
 import { CcSelector } from '@/components/CcSelector';
+import { DateField } from '@/components/DateField';
 import { subjectWithCc, ccAttendees, resolveCc, joinNames } from '@/lib/ccInvite';
 
 // Types
@@ -135,7 +138,9 @@ const PlannerPage = () => {
   const { patterns: rotationPatterns } = useRotationPatterns();
   const [editingAssignment, setEditingAssignment] = useState<string | null>(null);
   const [tempAssignedUser, setTempAssignedUser] = useState<string | null>(null);
-  const [expandedAssignmentUserId, setExpandedAssignmentUserId] = useState<string | null>(null);
+  // A set, not a single id: comparing two people's history side by side is the
+  // whole point of expanding a card before reassigning by hand.
+  const [expandedAssignmentUserIds, setExpandedAssignmentUserIds] = useState<Set<string>>(new Set());
   const [tempShiftAssignments, setTempShiftAssignments] = useState<ShiftAssignment[]>([]);
   const [dateError, setDateError] = useState<string>('');
   const [sendingInvitations, setSendingInvitations] = useState(false);
@@ -163,11 +168,28 @@ const PlannerPage = () => {
   const { teams, loading: teamsLoading } = useTeams();
 
   // Fetch existing DB shift + pikett assignments for the current month
+  // Every year the planning range touches, plus the calendar's own. Deriving it
+  // from endDate alone queries the wrong year whenever a range crosses into
+  // January: the history comes back empty and the counters read zero.
+  const planningYearBounds = (): { from: string; to: string } => {
+    const yearOf = (d: string) => (/^\d{4}/.test(d) ? d.slice(0, 4) : '');
+    const years = [yearOf(startDate), yearOf(endDate), String(calendarYear)]
+      .filter(Boolean)
+      .map(Number);
+    return { from: `${Math.min(...years)}-01-01`, to: `${Math.max(...years)}-12-31` };
+  };
+
   const fetchDbAssignments = async () => {
     try {
-      const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-      const startDateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-01`;
-      const endDateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+      // The whole year, not just the month on screen: the per-user card shows a
+      // running total, and fairness is judged annually. Calendar badges filter
+      // this list down to the visible month themselves.
+      //
+      // Span every year the run touches, plus the calendar's own. A range
+      // ending in January would otherwise query the new year alone and report
+      // an empty history, and one ending in December would miss what the range
+      // already covers of the next.
+      const { from: startDateStr, to: endDateStr } = planningYearBounds();
       const [shiftResp, pikettResp] = await Promise.all([
         authFetch(`/api/shift-assignments?startDate=${startDateStr}&endDate=${endDateStr}`),
         authFetch(`/api/pikett-assignments?startDate=${startDateStr}&endDate=${endDateStr}`),
@@ -183,7 +205,7 @@ const PlannerPage = () => {
     if (isAuthReady) {
       fetchDbAssignments();
     }
-  }, [calendarMonth, calendarYear, isAuthReady]);
+  }, [calendarMonth, calendarYear, isAuthReady, startDate, endDate]);
 
   // Helper: normalize DB date to YYYY-MM-DD (local timezone)
   const normalizeDbDate = (dateValue: string | Date): string => {
@@ -782,6 +804,11 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
   // block a full-day shift.
   const SHORT_OOF_HOURS = 4;
 
+  // Shifts one person should take in a week at 100%. Scaled down for part-time
+  // contracts; see weeklyCapFor. Deliberately a preference, so a thin week
+  // still gets covered.
+  const WEEKLY_SHIFT_CAP = 3;
+
   // True absence for shifts: keyword, all-day, ≥24h, or long declared OOF.
   const isTrueOOF = (event: OutlookEvent): boolean => {
     const subject = (event.subject || '').toLowerCase();
@@ -978,6 +1005,11 @@ const processShiftAssignments = async () => {
     // Fairness counters (DB history + current run)
     const userShiftsTracking: { [userId: string]: { [shiftId: string]: number } } = {};
     const userAvailableDays: { [userId: string]: { [shiftId: string]: number } } = {};
+    // Distinct dates a user could work, whatever the shift. The per-shift map
+    // above counts the same day once per eligible shift, so summing it rewards
+    // people who sit on more shifts — their denominator grows, their apparent
+    // load drops, and the sort keeps picking them.
+    const userAvailableDateSet: { [userId: string]: Set<string> } = {};
     // MAX_LOAD counter — seeded from DB (annual) + current run.
     const userCurrentRunTracking: { [userId: string]: { [shiftId: string]: number } } = {};
     // Skip already-assigned DB slots
@@ -989,10 +1021,18 @@ const processShiftAssignments = async () => {
     const pikettWeekMembersFromDb = new Set<string>();
     // Prevent same user on same shift twice in one ISO week
     const weeklyAssignmentsFromDb: { [weekKey: string]: { [shiftId: string]: Set<string> } } = {};
+    // Shifts per person per week, all shifts together. The per-shift map above
+    // cannot see someone collecting one shift from each of five rosters, which
+    // is how a week ends up with four or five shifts for the same person.
+    const weeklyTotalPerUser: { [weekKey: string]: { [userId: string]: number } } = {};
     // "shiftId|userId|dow" → sorted list of ISO-week indexes where the user was
     // assigned this shift on this day-of-week (seeded from DB + updated during
     // the run). Used to spread same-day-of-week repeats across users.
     const shiftDowHistory = new Map<string, number[]>();
+    // Same, but ignoring which shift it was: someone doing Monday on three
+    // different shifts is still doing every Monday, and the per-shift map above
+    // never sees it.
+    const userDowHistory = new Map<string, number[]>();
 
     const isoWeekOfDate = (dateStr: string): string => {
       const [y, m, d] = dateStr.split('-').map(Number);
@@ -1027,9 +1067,7 @@ const processShiftAssignments = async () => {
     // the year `endDate` belongs to) so fairness + MAX_LOAD counters reflect
     // the annual load — critical when planning in ~15 tranches over the year.
     try {
-      const [ey] = String(endDate).split('-').map(Number);
-      const lookbackStr = `${ey}-01-01`;
-      const lookforwardStr = `${ey}-12-31`;
+      const { from: lookbackStr, to: lookforwardStr } = planningYearBounds();
       const [pastShiftsResp, pastPikettsResp] = await Promise.all([
         authFetch(`/api/shift-assignments?startDate=${lookbackStr}&endDate=${lookforwardStr}`),
         authFetch(`/api/pikett-assignments?startDate=${lookbackStr}&endDate=${lookforwardStr}`),
@@ -1058,12 +1096,18 @@ const processShiftAssignments = async () => {
         if (!weeklyAssignmentsFromDb[wk]) weeklyAssignmentsFromDb[wk] = {};
         if (!weeklyAssignmentsFromDb[wk][sid]) weeklyAssignmentsFromDb[wk][sid] = new Set();
         weeklyAssignmentsFromDb[wk][sid].add(uid);
+        if (!weeklyTotalPerUser[wk]) weeklyTotalPerUser[wk] = {};
+        weeklyTotalPerUser[wk][uid] = (weeklyTotalPerUser[wk][uid] || 0) + 1;
         // Track same-day-of-week history so the sort can spread repeats.
         const dow = new Date(dateStr).getDay();
         const dowKey = `${sid}|${uid}|${dow}`;
         const list = shiftDowHistory.get(dowKey) || [];
         list.push(weekKeyToIdx(wk));
         shiftDowHistory.set(dowKey, list);
+        const userDowKey = `${uid}|${dow}`;
+        const userList = userDowHistory.get(userDowKey) || [];
+        userList.push(weekKeyToIdx(wk));
+        userDowHistory.set(userDowKey, userList);
         // Surface the DB row in the preview only for shifts that were selected this run.
         if (dateStr >= startDate && dateStr <= endDate && selectedShifts.includes(sid)) {
           const shiftRef = shifts.find((s: any) => s.id === sid);
@@ -1264,6 +1308,8 @@ const processShiftAssignments = async () => {
             }
             if (!userAvailableDays[u.id]) userAvailableDays[u.id] = {};
             userAvailableDays[u.id][shiftId] = (userAvailableDays[u.id][shiftId] || 0) + 1;
+            if (!userAvailableDateSet[u.id]) userAvailableDateSet[u.id] = new Set();
+            userAvailableDateSet[u.id].add(dayStr);
           }
         }
       }
@@ -1756,6 +1802,17 @@ const processShiftAssignments = async () => {
             continue;
           }
 
+          // Reserve for this shift: kept out of the automatic pick, still
+          // listed so an admin can assign them by hand.
+          if (((shift as any)?.jokerUserIds || []).includes(user.id)) {
+            unavailableUsers.push({
+              user,
+              reason: t('jokerForShift'),
+              conflictEvents: []
+            });
+            continue;
+          }
+
           // Priority 2.5 — WEEK_PARITY rule
           const weekParityRules = (user.rules || []).filter(
             (r: any) => r.type === 'WEEK_PARITY' && r.enabled
@@ -1866,6 +1923,8 @@ const processShiftAssignments = async () => {
             userAvailableDays[user.id][shiftId] = 0;
           }
           userAvailableDays[user.id][shiftId]++;
+          if (!userAvailableDateSet[user.id]) userAvailableDateSet[user.id] = new Set();
+          userAvailableDateSet[user.id].add(date);
           }
 
           let assignedUsers: any[] = [];
@@ -1892,6 +1951,20 @@ const processShiftAssignments = async () => {
               ...(weeklyAssignments[weekKey]?.[shiftId] || []),
               ...(weeklyAssignmentsFromDb[weekKey]?.[shiftId] || []),
             ]);
+            // Weekly cap, scaled to the contract: 3 shifts at 100%, 2 at 80/60,
+            // 1 at 40 and below. It is a preference, not a wall — when nobody is
+            // under the cap the shift still gets filled rather than left open.
+            const weeklyCapFor = (user: any): number => {
+              const pct = user.workPercent ?? 100;
+              if (pct >= 100) return WEEKLY_SHIFT_CAP;
+              if (pct >= 60) return Math.max(1, WEEKLY_SHIFT_CAP - 1);
+              return 1;
+            };
+            const weekTotalFor = (userId: string): number =>
+              weeklyTotalPerUser[weekKey]?.[userId] || 0;
+            const overWeeklyCap = (user: any): boolean =>
+              weekTotalFor(user.id) >= weeklyCapFor(user);
+
             // Prefer non-pikett users; pikett users are fallback.
             const nonPikettAvailable = availableForThisDate.filter(u => !assignedPikettSet.has(`${date}|${u.id}`));
             const pikettOnlyAvailable = availableForThisDate.filter(u => assignedPikettSet.has(`${date}|${u.id}`));
@@ -1932,7 +2005,7 @@ const processShiftAssignments = async () => {
             // because they were away, so they would absorb every shift until they
             // caught up. Holidays must not create a backlog.
             const totalAvailableDaysFor = (userId: string): number =>
-              Object.values(userAvailableDays[userId] || {}).reduce((s: number, v: any) => s + (v as number), 0);
+              userAvailableDateSet[userId]?.size ?? 0;
             const globalLoadFor = (userId: string): number => {
               const days = totalAvailableDaysFor(userId);
               // No observed availability yet: stay neutral instead of looking idle.
@@ -1943,26 +2016,68 @@ const processShiftAssignments = async () => {
               (userShiftsTracking[userId]?.[shiftId] || 0) / (userAvailableDays[userId]?.[shiftId] || 1);
             // "How many of the last 4 weeks did this user already do this shift
             // on this same day-of-week?" — used to spread same-day repeats.
-            const currentWkIdx = weekKeyToIdx(weekKey);
             const currentDow = dateDowMap.get(date)!;
-            const sameDowRecentCount = (userId: string): number => {
-              const list = shiftDowHistory.get(`${shiftId}|${userId}|${currentDow}`) || [];
-              return list.filter(w => currentWkIdx - w <= 4 && currentWkIdx - w >= 0).length;
-            };
+            // Counted over the year, like the cross-shift one: a four-week
+            // window forgets a pattern as soon as it drifts out, and nothing
+            // then pulls it back.
+            const sameDowRecentCount = (userId: string): number =>
+              (shiftDowHistory.get(`${shiftId}|${userId}|${currentDow}`) || []).length;
 
-            // Sort order: (1) not adjacent, (2) not used this week,
-            // (3) FEWER same-shift-same-dow in last 4 weeks (spreads Fridays etc.),
-            // (4) lower overall load ratio, (5) lower per-shift ratio, (6) shuffle queue.
+            // Did this user take this weekday last week, on any shift? Annual
+            // balancing pushes people towards the weekdays they have had least,
+            // which is right over a year but bunches up inside a month — four
+            // Tuesdays running to make up for ten Mondays. Blocking the repeat
+            // spreads that catch-up out instead.
+            const thisWkIdx = weekKeyToIdx(weekKey);
+            const tookDowLastWeek = (userId: string): boolean =>
+              (userDowHistory.get(`${userId}|${currentDow}`) || []).includes(thisWkIdx - 1);
+            // Same day-of-week across every shift. Without this, somebody
+            // eligible for several shifts collects the same weekday over and
+            // over — each shift on its own looks balanced.
+            // Counted over the whole year, not a 4-week window: a lopsided
+            // pattern that settles in — every Monday and Friday, say — stops
+            // being visible once it drifts past the window, and then nothing
+            // pulls it back. The goal is an even spread across weekdays, which
+            // is an annual property.
+            const anyShiftDowCount = (userId: string): number =>
+              (userDowHistory.get(`${userId}|${currentDow}`) || []).length;
+
+            // Sort order: (1) not adjacent, (2) under the weekly cap,
+            // (3) did NOT take this weekday last week, (4) FEWER same-shift-
+            // same-dow this year, (5) FEWER same-dow across all shifts,
+            // (6) not used this week, (7) lower overall load ratio,
+            // (8) lower per-shift ratio, (9) shuffle queue.
+            //
+            // Day-of-week spread outranks "not used this week" on purpose. On a
+            // shift with five members covering five days, everyone is used once
+            // a week, so that key alone decides the pick and the same person
+            // lands on the same weekday over and over.
             const sortCandidates = (arr: any[]): any[] => arr.slice().sort((a, b) => {
               const aAdj = isAdjacentAssigned(a.id) ? 1 : 0;
               const bAdj = isAdjacentAssigned(b.id) ? 1 : 0;
               if (aAdj !== bAdj) return aAdj - bAdj;
-              const aWeek = weekSet.has(a.id) ? 1 : 0;
-              const bWeek = weekSet.has(b.id) ? 1 : 0;
-              if (aWeek !== bWeek) return aWeek - bWeek;
+              // Over the weekly cap sinks a candidate below everyone still under
+              // it, whatever their totals — this is what stops a week from
+              // piling up on someone back from leave.
+              const aCap = overWeeklyCap(a) ? 1 : 0;
+              const bCap = overWeeklyCap(b) ? 1 : 0;
+              if (aCap !== bCap) return aCap - bCap;
+              // Same weekday as last week sinks a candidate: this is what keeps
+              // the annual catch-up from landing on four Tuesdays in a row.
+              const aRepeat = tookDowLastWeek(a.id) ? 1 : 0;
+              const bRepeat = tookDowLastWeek(b.id) ? 1 : 0;
+              if (aRepeat !== bRepeat) return aRepeat - bRepeat;
+              // This shift on this weekday next: on a five-person roster it is
+              // the sharpest signal, and it is what stops "Maria every Thursday".
               const aDow = sameDowRecentCount(a.id);
               const bDow = sameDowRecentCount(b.id);
               if (aDow !== bDow) return aDow - bDow;
+              const aAnyDow = anyShiftDowCount(a.id);
+              const bAnyDow = anyShiftDowCount(b.id);
+              if (aAnyDow !== bAnyDow) return aAnyDow - bAnyDow;
+              const aWeek = weekSet.has(a.id) ? 1 : 0;
+              const bWeek = weekSet.has(b.id) ? 1 : 0;
+              if (aWeek !== bWeek) return aWeek - bWeek;
               if (settings.balanceShifts) {
                 const aLoad = globalLoadFor(a.id);
                 const bLoad = globalLoadFor(b.id);
@@ -2002,6 +2117,9 @@ const processShiftAssignments = async () => {
             if (!weeklyAssignments[weekKey]) weeklyAssignments[weekKey] = {};
             if (!weeklyAssignments[weekKey][shiftId]) weeklyAssignments[weekKey][shiftId] = new Set();
             weeklyAssignments[weekKey][shiftId].add(selectedUser.id);
+            if (!weeklyTotalPerUser[weekKey]) weeklyTotalPerUser[weekKey] = {};
+            weeklyTotalPerUser[weekKey][selectedUser.id] =
+              (weeklyTotalPerUser[weekKey][selectedUser.id] || 0) + 1;
 
             if (!userShiftsTracking[selectedUser.id]) userShiftsTracking[selectedUser.id] = {};
             if (!userShiftsTracking[selectedUser.id][shiftId]) userShiftsTracking[selectedUser.id][shiftId] = 0;
@@ -2012,10 +2130,15 @@ const processShiftAssignments = async () => {
             userCurrentRunTracking[selectedUser.id][shiftId]++;
             // Same-day-of-week history for the anti-repeat sort key.
             {
-              const dowKey = `${shiftId}|${selectedUser.id}|${dateDowMap.get(date)}`;
+              const dow = dateDowMap.get(date);
+              const dowKey = `${shiftId}|${selectedUser.id}|${dow}`;
               const list = shiftDowHistory.get(dowKey) || [];
               list.push(weekKeyToIdx(weekKey));
               shiftDowHistory.set(dowKey, list);
+              const userDowKey = `${selectedUser.id}|${dow}`;
+              const userList = userDowHistory.get(userDowKey) || [];
+              userList.push(weekKeyToIdx(weekKey));
+              userDowHistory.set(userDowKey, userList);
             }
 
             // Pre-count DOUBLE_SHIFT linked shifts for fair distribution
@@ -2101,9 +2224,7 @@ const processShiftAssignments = async () => {
     // path filters dates < today).
     let freshDbAssignments: any[] = [];
     try {
-      const [ey] = String(endDate).split('-').map(Number);
-      const dsLookbackStr = `${ey}-01-01`;
-      const dsLookforwardStr = `${ey}-12-31`;
+      const { from: dsLookbackStr, to: dsLookforwardStr } = planningYearBounds();
       const [shiftResp, pikettResp] = await Promise.all([
         authFetch(`/api/shift-assignments?startDate=${dsLookbackStr}&endDate=${dsLookforwardStr}`),
         authFetch(`/api/pikett-assignments?startDate=${dsLookbackStr}&endDate=${dsLookforwardStr}`),
@@ -2989,30 +3110,28 @@ useEffect(() => {
                   <div className="space-y-4">
                     <div>
                       <Label>{t('startDate')}</Label>
-                      <Input
-                        type="date"
+                      <DateField
+                        placeholder={tCommon('datePlaceholder')}
                         value={startDate}
                         min={new Date().toISOString().split('T')[0]}
-                        onChange={(e) => {
-                          setStartDate(e.target.value);
-                          const error = validateDates(e.target.value, endDate);
-                          setDateError(error);
+                        onChange={(v) => {
+                          setStartDate(v);
+                          setDateError(validateDates(v, endDate));
                         }}
-                        className={dateError ? 'border-red-500' : ''}
+                        className={dateError ? '[&_input]:border-red-500' : ''}
                       />
                     </div>
                     <div>
                       <Label>{t('endDate')}</Label>
-                      <Input
-                        type="date"
+                      <DateField
+                        placeholder={tCommon('datePlaceholder')}
                         value={endDate}
                         min={startDate || new Date().toISOString().split('T')[0]}
-                        onChange={(e) => {
-                          setEndDate(e.target.value);
-                          const error = validateDates(startDate, e.target.value);
-                          setDateError(error);
+                        onChange={(v) => {
+                          setEndDate(v);
+                          setDateError(validateDates(startDate, v));
                         }}
-                        className={dateError ? 'border-red-500' : ''}
+                        className={dateError ? '[&_input]:border-red-500' : ''}
                       />
                     </div>
                     {dateError && (
@@ -3329,14 +3448,22 @@ useEffect(() => {
             {/* Assignments per user (preview overview) */}
             {shiftAssignments.length > 0 && (() => {
               // Aggregate preview counts per user, with a per-shift breakdown for the expanded view.
-              type UserRow = { user: any; count: number; total: number; perShift: Map<string, { name: string; color?: string; isPikett: boolean; count: number }> };
+              type UserRow = {
+                user: any;
+                count: number;
+                total: number;
+                perShift: Map<string, { name: string; color?: string; isPikett: boolean; count: number }>;
+                // Same breakdown, but over the whole year: "3 MAS Support in
+                // this run" means little without "and 12 already this year".
+                perShiftYear: Map<string, number>;
+              };
               const perUser = new Map<string, UserRow>();
               for (const a of shiftAssignments) {
                 for (const u of a.assignedUsers) {
                   if (!u?.id) continue;
                   let row = perUser.get(u.id);
                   if (!row) {
-                    row = { user: u, count: 0, total: 0, perShift: new Map() };
+                    row = { user: u, count: 0, total: 0, perShift: new Map(), perShiftYear: new Map() };
                     perUser.set(u.id, row);
                   }
                   // A split segment counts for the share of the shift it covers,
@@ -3367,10 +3494,23 @@ useEffect(() => {
                   });
                 }
               }
+              // Name the years outright. "This year" is ambiguous on a range
+              // that crosses into January, where the window spans both.
+              const bounds = planningYearBounds();
+              const fromYear = bounds.from.slice(0, 4);
+              const toYear = bounds.to.slice(0, 4);
+              const yearLabel = fromYear === toYear ? fromYear : `${fromYear}-${toYear}`;
+              const isLive = (a: any) => a.status !== 'CANCELLED' && a.status !== 'REFUSED';
               for (const [uid, entry] of perUser.entries()) {
-                const activeShift = dbAssignments.filter((a: any) => a.userId === uid && a.status !== 'CANCELLED' && a.status !== 'REFUSED').length;
-                const activePikett = dbPikettAssignments.filter((a: any) => a.userId === uid && a.status !== 'CANCELLED' && a.status !== 'REFUSED').length;
-                entry.total = activeShift + activePikett;
+                const yearShifts = dbAssignments.filter((a: any) => a.userId === uid && isLive(a));
+                const yearPiketts = dbPikettAssignments.filter((a: any) => a.userId === uid && isLive(a));
+                entry.total = yearShifts.length + yearPiketts.length;
+                for (const a of yearShifts) {
+                  entry.perShiftYear.set(a.shiftId, (entry.perShiftYear.get(a.shiftId) || 0) + 1);
+                }
+                for (const a of yearPiketts) {
+                  entry.perShiftYear.set(a.pikettId, (entry.perShiftYear.get(a.pikettId) || 0) + 1);
+                }
               }
               const rows = Array.from(perUser.values()).sort((a, b) => b.count - a.count);
               // Whole numbers stay bare, halves show one decimal: 4 and 4.5.
@@ -3387,37 +3527,72 @@ useEffect(() => {
                       <span className="ml-1 text-[11px] font-normal text-slate-400">
                         · {t('clickForDetails')}
                       </span>
+                      {expandedAssignmentUserIds.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedAssignmentUserIds(new Set())}
+                          className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 hover:border-slate-300 transition-colors"
+                        >
+                          <ChevronsDownUp className="w-3 h-3" />
+                          {t('collapseAll')}
+                        </button>
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {rows.map(({ user, count, total, perShift }) => {
+                      {rows.map(({ user, count, total, perShift, perShiftYear }) => {
                         const isJoker = (user.workPercent ?? 100) === 0;
                         const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase();
-                        const isExpanded = expandedAssignmentUserId === user.id;
-                        const shiftBreakdown = Array.from(perShift.values()).sort((a, b) => b.count - a.count);
+                        const isExpanded = expandedAssignmentUserIds.has(user.id);
+                        // Every shift the user touched this year, whether or not
+                        // it appears in the current run — a shift they already did
+                        // 12 times is worth seeing even when this run skips it.
+                        const breakdownKeys = new Set<string>([
+                          ...Array.from(perShift.keys()),
+                          ...Array.from(perShiftYear.keys()),
+                        ]);
+                        const shiftBreakdown = Array.from(breakdownKeys).map(key => {
+                          const inRun = perShift.get(key);
+                          const meta = inRun || (() => {
+                            const sh = shifts.find((x: any) => x.id === key);
+                            const pk = piketts.find((x: any) => x.id === key);
+                            return {
+                              name: sh?.name || pk?.name || t('shift'),
+                              color: sh?.color || pk?.color,
+                              isPikett: !!pk,
+                              count: 0,
+                            };
+                          })();
+                          return { ...meta, yearCount: perShiftYear.get(key) || 0 };
+                        }).sort((a, b) => (b.count - a.count) || (b.yearCount - a.yearCount));
                         return (
                           <div
                             key={user.id}
                             className={`rounded-md transition-colors cursor-pointer ${isExpanded ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-slate-50 hover:bg-slate-100'}`}
-                            onClick={() => setExpandedAssignmentUserId(isExpanded ? null : user.id)}
+                            onClick={() => setExpandedAssignmentUserIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(user.id)) next.delete(user.id);
+                              else next.add(user.id);
+                              return next;
+                            })}
                           >
                             <div className="flex items-center gap-2 p-2">
                               <Avatar className="w-8 h-8 flex-shrink-0">
-                                <AvatarFallback className={`text-xs ${isJoker ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                <AvatarFallback className={`text-xs ${isJoker ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                                   {initials || '?'}
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-slate-800 truncate flex items-center gap-1">
                                   {user.firstName} {user.lastName}
-                                  {isJoker && <span className="text-purple-600 text-xs">🃏</span>}
+                                  {isJoker && <Sparkles className="w-3 h-3 text-amber-500 flex-shrink-0" />}
                                 </p>
                                 <p className="text-[11px] text-slate-500">
                                   {fmtCount(count)} {count === 1 ? t('shift') : t('shifts')}
                                   {total > 0 && (
                                     <span className="ml-1 text-slate-400">
-                                      · {t('historyTotal', { count: total })}
+                                      · {t('historyTotal', { count: total, year: yearLabel })}
                                     </span>
                                   )}
                                 </p>
@@ -3429,6 +3604,15 @@ useEffect(() => {
                             </div>
                             {isExpanded && (
                               <div className="px-2 pb-2 pt-1 border-t border-blue-100 space-y-1">
+                                {/* This breakdown is the preview only; the
+                                    annual figure sits next to the name above. */}
+                                <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-slate-400 pl-10 pb-0.5">
+                                  <span>{t('breakdownThisRun')}</span>
+                                  <span className="flex items-baseline gap-1.5">
+                                    <span>{t('breakdownRun')}</span>
+                                    <span>· {yearLabel}</span>
+                                  </span>
+                                </div>
                                 {shiftBreakdown.map((s, i) => (
                                   <div key={i} className="flex items-center justify-between text-xs pl-10">
                                     <span className="flex items-center gap-1.5 truncate">
@@ -3443,7 +3627,12 @@ useEffect(() => {
                                         </span>
                                       )}
                                     </span>
-                                    <span className="text-slate-500 tabular-nums">{fmtCount(s.count)}</span>
+                                    <span className="tabular-nums flex items-baseline gap-1.5 flex-shrink-0">
+                                      <span className="text-slate-500">{fmtCount(s.count)}</span>
+                                      <span className="text-slate-400 text-[10px]">
+                                        · {s.yearCount}
+                                      </span>
+                                    </span>
                                   </div>
                                 ))}
                               </div>
@@ -4668,6 +4857,14 @@ useEffect(() => {
                                                       <span>{user.firstName} {user.lastName}</span>
                                                     </div>
                                                     <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
+                                                      {/* Reserve for this shift: still selectable, but the
+                                                          admin has to see they were held back on purpose. */}
+                                                      {((currentShift as any)?.jokerUserIds || []).includes(user.id) && (
+                                                        <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300 text-amber-700 whitespace-nowrap gap-1">
+                                                          <Sparkles className="w-3 h-3" />
+                                                          {t('jokerForShift')}
+                                                        </Badge>
+                                                      )}
                                                       {(refusedShiftNames as string[])?.map((name, i) => (
                                                         <Badge key={`ref-${i}`} variant="outline" className="text-xs bg-red-50 border-red-200 text-red-700 whitespace-nowrap">
                                                           ⛔ {t('refusedShiftToday', { shift: name })}

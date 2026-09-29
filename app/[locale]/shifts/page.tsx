@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import {
   Clock, Plus, Edit, Trash2, Users, Search, Filter, Copy,
   AlertCircle, Loader2, Save, UserPlus, UserMinus,
-  CalendarDays, Shield, AlertTriangle, Mail, Network
+  CalendarDays, Shield, AlertTriangle, Mail, Network, Sparkles
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,6 +99,7 @@ const ShiftsPage = () => {
     senderMailbox: '',
     includedUserIds: [] as string[],
     excludedUserIds: [] as string[],
+    jokerUserIds: [] as string[],
     color: '#3b82f6',
     daysOfWeek: [1, 2, 3, 4, 5],
     minConsecutiveDays: 1
@@ -110,6 +111,7 @@ const ShiftsPage = () => {
     teamId: '',
     includedUserIds: [] as string[],
     excludedUserIds: [] as string[],
+    jokerUserIds: [] as string[],
     color: '#dc2626',
     status: 'ACTIVE',
     is24_7: true,
@@ -162,6 +164,7 @@ const ShiftsPage = () => {
         senderMailbox: '',
         includedUserIds: [],
         excludedUserIds: [],
+        jokerUserIds: [],
         color: '#3b82f6',
         daysOfWeek: [1, 2, 3, 4, 5],
         minConsecutiveDays: 1
@@ -190,6 +193,7 @@ const ShiftsPage = () => {
         teamId: newPikett.teamId,
         includedUserIds: newPikett.includedUserIds,
         excludedUserIds: newPikett.excludedUserIds,
+        jokerUserIds: newPikett.jokerUserIds,
         color: newPikett.color,
         status: newPikett.status,
         is24_7: newPikett.is24_7,
@@ -207,6 +211,7 @@ const ShiftsPage = () => {
         teamId: '',
         includedUserIds: [],
         excludedUserIds: [],
+        jokerUserIds: [],
         color: '#dc2626',
         status: 'ACTIVE',
         is24_7: true,
@@ -244,6 +249,7 @@ const ShiftsPage = () => {
         userId: selectedPikett.userId || null,
         includedUserIds: selectedPikett.includedUserIds,
         excludedUserIds: selectedPikett.excludedUserIds,
+        jokerUserIds: selectedPikett.jokerUserIds || [],
         color: selectedPikett.color,
         status: selectedPikett.status,
         is24_7: selectedPikett.is24_7,
@@ -305,6 +311,7 @@ const ShiftsPage = () => {
         daysOfWeek: selectedShift.daysOfWeek,
         includedUserIds: selectedShift.includedUserIds,
         excludedUserIds: selectedShift.excludedUserIds,
+        jokerUserIds: selectedShift.jokerUserIds || [],
       });
       
       setIsEditDialogOpen(false);
@@ -342,6 +349,7 @@ const ShiftsPage = () => {
       daysOfWeek: shift.daysOfWeek || [1, 2, 3, 4, 5],
       includedUserIds: shift.includedUserIds || [],
       excludedUserIds: shift.excludedUserIds || [],
+      jokerUserIds: shift.jokerUserIds || [],
     });
     setIsCreateDialogOpen(true);
   };
@@ -353,6 +361,7 @@ const ShiftsPage = () => {
       teamId: pikett.teamId,
       includedUserIds: pikett.includedUserIds || [],
       excludedUserIds: pikett.excludedUserIds || [],
+      jokerUserIds: pikett.jokerUserIds || [],
       color: pikett.color,
       status: pikett.status || 'ACTIVE',
       is24_7: pikett.is24_7,
@@ -453,14 +462,18 @@ const ShiftsPage = () => {
     onIncludeChange, 
     onExcludeChange,
     teamId,
-    isPikett = false
+    isPikett = false,
+    jokerUserIds = [],
+    onJokerChange
   }: { 
     selectedUserIds: string[], 
     excludedUserIds: string[],
     onIncludeChange: (userIds: string[]) => void,
     onExcludeChange: (userIds: string[]) => void,
     teamId: string,
-    isPikett?: boolean
+    isPikett?: boolean,
+    jokerUserIds?: string[],
+    onJokerChange?: (userIds: string[]) => void
   }) => {
     const baseTeamUsers = users.filter(u => u.teamId === teamId && u.status === 'ACTIVE');
     const otherTeamUsers = users.filter(u => u.teamId !== teamId && u.status === 'ACTIVE');
@@ -534,7 +547,14 @@ const ShiftsPage = () => {
           <div className="border rounded-lg p-3 space-y-2 max-h-60 overflow-y-auto bg-green-50/30">
             {effectiveTeamMembers.length > 0 ? (
               effectiveTeamMembers.map(user => (
-                <div key={user.id} className="flex items-center justify-between p-2 hover:bg-white/60 rounded">
+                <div
+                  key={user.id}
+                  className={`flex items-center justify-between p-2 rounded transition-colors ${
+                    jokerUserIds.includes(user.id)
+                      ? 'bg-amber-50/70 border border-amber-200 hover:bg-amber-50'
+                      : 'hover:bg-white/60'
+                  }`}
+                >
                   <div className="flex items-center space-x-3">
                     <Avatar className="w-8 h-8">
                       <AvatarFallback className="text-xs">
@@ -543,8 +563,17 @@ const ShiftsPage = () => {
                     </Avatar>
                     <div>
                       <p className="text-sm font-medium">{user.firstName} {user.lastName}</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-xs text-slate-500">{user.role || t("noRole")}</p>
+                        {jokerUserIds.includes(user.id) && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs bg-amber-50 border-amber-300 text-amber-700 gap-1 font-medium"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            {t("jokerBadge")}
+                          </Badge>
+                        )}
                         {user.teamId !== teamId && (
                           <Badge variant="outline" className="text-xs">
                             {user.team?.name || t("otherTeam")}
@@ -553,15 +582,35 @@ const ShiftsPage = () => {
                       </div>
                     </div>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="hover:bg-red-100 hover:text-red-600"
-                    onClick={() => handleRemoveFromShift(user.id)}
-                  >
-                    <UserMinus className="w-3 h-3" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {onJokerChange && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        title={t("jokerHint")}
+                        className={jokerUserIds.includes(user.id)
+                          ? 'bg-amber-100 text-amber-600 border-amber-300 hover:bg-amber-200'
+                          : 'text-slate-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'}
+                        onClick={() => onJokerChange(
+                          jokerUserIds.includes(user.id)
+                            ? jokerUserIds.filter(id => id !== user.id)
+                            : [...jokerUserIds, user.id]
+                        )}
+                      >
+                        <Sparkles className="w-3 h-3" />
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="hover:bg-red-100 hover:text-red-600"
+                      onClick={() => handleRemoveFromShift(user.id)}
+                    >
+                      <UserMinus className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
               ))
             ) : (
@@ -693,6 +742,7 @@ const ShiftsPage = () => {
                 ...shift,
                 includedUserIds: shift.includedUserIds || [],
                 excludedUserIds: shift.excludedUserIds || [],
+                jokerUserIds: shift.jokerUserIds || [],
                 daysOfWeek: shift.daysOfWeek || [1, 2, 3, 4, 5]
               });
               setIsEditDialogOpen(true);
@@ -1020,6 +1070,8 @@ const ShiftsPage = () => {
                           selectedUserIds={newPikett.includedUserIds}
                           excludedUserIds={newPikett.excludedUserIds}
                           onIncludeChange={(ids) => setNewPikett({...newPikett, includedUserIds: ids})}
+                          jokerUserIds={newPikett.jokerUserIds}
+                          onJokerChange={(ids) => setNewPikett({...newPikett, jokerUserIds: ids})}
                           onExcludeChange={(ids) => setNewPikett({...newPikett, excludedUserIds: ids})}
                           teamId={newPikett.teamId}
                         />
@@ -1163,6 +1215,8 @@ const ShiftsPage = () => {
                           selectedUserIds={newShift.includedUserIds}
                           excludedUserIds={newShift.excludedUserIds}
                           onIncludeChange={(ids) => setNewShift({...newShift, includedUserIds: ids})}
+                          jokerUserIds={newShift.jokerUserIds}
+                          onJokerChange={(ids) => setNewShift({...newShift, jokerUserIds: ids})}
                           onExcludeChange={(ids) => setNewShift({...newShift, excludedUserIds: ids})}
                           teamId={newShift.teamId}
                         />
@@ -1279,6 +1333,8 @@ const ShiftsPage = () => {
                   selectedUserIds={selectedPikett?.includedUserIds || []}
                   excludedUserIds={selectedPikett?.excludedUserIds || []}
                   onIncludeChange={(ids) => setSelectedPikett({...selectedPikett, includedUserIds: ids})}
+                          jokerUserIds={selectedPikett?.jokerUserIds || []}
+                  onJokerChange={(ids) => setSelectedPikett({...selectedPikett, jokerUserIds: ids})}
                   onExcludeChange={(ids) => setSelectedPikett({...selectedPikett, excludedUserIds: ids})}
                   teamId={selectedPikett?.teamId || ''}
                 />
@@ -1422,6 +1478,8 @@ const ShiftsPage = () => {
                       selectedUserIds={selectedShift.includedUserIds || []}
                       excludedUserIds={selectedShift.excludedUserIds || []}
                       onIncludeChange={(ids) => setSelectedShift({...selectedShift, includedUserIds: ids})}
+                          jokerUserIds={selectedShift.jokerUserIds || []}
+                      onJokerChange={(ids) => setSelectedShift({...selectedShift, jokerUserIds: ids})}
                       onExcludeChange={(ids) => setSelectedShift({...selectedShift, excludedUserIds: ids})}
                       teamId={selectedShift.teamId}
                     />

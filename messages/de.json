@@ -41,7 +41,8 @@
     "inactive": "Inaktiv",
     "select": "Auswählen",
     "selectDate": "Datum auswählen",
-    "dataLoadError": "Daten konnten nicht geladen werden. Bitte überprüfen Sie, ob die Datenbank läuft und versuchen Sie die Seite neu zu laden."
+    "dataLoadError": "Daten konnten nicht geladen werden. Bitte überprüfen Sie, ob die Datenbank läuft und versuchen Sie die Seite neu zu laden.",
+    "datePlaceholder": "TT/MM/JJJJ"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -219,7 +220,8 @@
     "ccWith": "mit",
     "ccInCopyWith": "In Kopie mit {names}",
     "splitEdit": "Teilung bearbeiten",
-    "ccSearch": "Suchen..."
+    "ccSearch": "Suchen...",
+    "jokerForShift": "Reserve für diese Schicht"
   },
   "shifts": {
     "title": "Schichtverwaltung",
@@ -333,7 +335,10 @@
     "searchMember": "Mitglied suchen...",
     "searchUser": "Benutzer suchen...",
     "noSearchResult": "Kein Treffer",
-    "assignedMembersPikett": "Dem Pikett zugewiesene Mitglieder"
+    "assignedMembersPikett": "Dem Pikett zugewiesene Mitglieder",
+    "jokerMembers": "Reservemitglieder",
+    "jokerHint": "Wird dieser Schicht nie automatisch zugewiesen, kann aber manuell gewählt werden",
+    "jokerBadge": "Reserve"
   },
   "users": {
     "title": "Benutzer- & Teamverwaltung",
@@ -647,7 +652,7 @@
     "loginError": "Microsoft-Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
     "credentialsError": "Anmeldung fehlgeschlagen. Überprüfen Sie Ihre Anmeldedaten.",
     "secureConnection": "Sichere Verbindung",
-    "copyright": "© 2026 ShiftPilot v2.1. Alle Rechte vorbehalten.",
+    "copyright": "© 2026 ShiftPilot v2.3. Alle Rechte vorbehalten.",
     "needHelp": "Brauchen Sie Hilfe?",
     "contactSupport": "Support kontaktieren"
   },
@@ -685,7 +690,7 @@
     "users": "Nutzer",
     "shift": "Schicht",
     "shifts": "Schichten",
-    "historyTotal": "{count} im Verlauf",
+    "historyTotal": "{count} in {year} (alle Schichten)",
     "assigned": "zugewiesen",
     "today": "Heute",
     "hideConfiguration": "Konfiguration ausblenden",
@@ -832,6 +837,10 @@
     "ccJoker": "Joker",
     "ccWith": "mit",
     "ccInCopyWith": "In Kopie mit {names}",
-    "ccSearch": "Suchen..."
+    "ccSearch": "Suchen...",
+    "jokerForShift": "Reserve für diese Schicht",
+    "breakdownThisRun": "Pro Schicht",
+    "breakdownRun": "Lauf",
+    "collapseAll": "Alle einklappen"
   }
 }

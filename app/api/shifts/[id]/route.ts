@@ -76,6 +76,7 @@ export async function PUT(
     if (validation.data.senderMailbox !== undefined) updateData.senderMailbox = validation.data.senderMailbox;
     if (validation.data.includedUserIds !== undefined) updateData.includedUserIds = validation.data.includedUserIds;
     if (validation.data.excludedUserIds !== undefined) updateData.excludedUserIds = validation.data.excludedUserIds;
+    if (validation.data.jokerUserIds !== undefined) updateData.jokerUserIds = validation.data.jokerUserIds;
     if (validation.data.daysOfWeek !== undefined) updateData.daysOfWeek = validation.data.daysOfWeek;
 
     const shift = await prisma.shift.update({

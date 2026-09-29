@@ -95,6 +95,10 @@ model Pikett {
 
   includedUserIds String[]
   excludedUserIds String[]
+  // Members held in reserve for this shift only: never auto-assigned here, but
+  // still pickable by hand and offered on resend. Distinct from a global joker
+  // (workPercent 0), which sits out every shift.
+  jokerUserIds    String[]
   
   assignments     PikettAssignment[]
 
@@ -123,6 +127,10 @@ model Shift {
 
   includedUserIds String[]
   excludedUserIds String[]
+  // Members held in reserve for this shift only: never auto-assigned here, but
+  // still pickable by hand and offered on resend. Distinct from a global joker
+  // (workPercent 0), which sits out every shift.
+  jokerUserIds    String[]
 
   teamId         String
   team           Team     @relation(fields: [teamId], references: [id])

@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
         avoidSupportSameWeek: input.avoidSupportSameWeek,
         includedUserIds: input.includedUserIds,
         excludedUserIds: input.excludedUserIds,
+        jokerUserIds: input.jokerUserIds,
       },
       include: {
         team: true

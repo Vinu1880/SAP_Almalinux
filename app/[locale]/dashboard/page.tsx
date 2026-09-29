@@ -6,6 +6,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Navigation from '@/components/Navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { CcSelector } from '@/components/CcSelector';
+import { DateField } from '@/components/DateField';
 import { subjectWithCc, ccAttendees, resolveCc, joinNames } from '@/lib/ccInvite';
 import {
   CheckCircle, XCircle, Clock3, TrendingUp, Users, Calendar, Filter,
@@ -38,6 +39,10 @@ import { usePiketts } from '@/lib/hooks/usePiketts';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAutoSync } from '@/contexts/AutoSyncContext';
+
+// An absence only blocks a shift when it covers a real part of the day. Below
+// this, an "out of office" is an errand, not a day off.
+const MIN_OOF_HOURS = 4;
 
 const DashboardPage = () => {
   const t = useTranslations('dashboard');
@@ -193,7 +198,12 @@ const DashboardPage = () => {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   // Check which users are OOF/busy on a date via getSchedule (delegated perms)
-  const fetchUnavailableUsersForDate = async (date: string, userEmails: string[]): Promise<Map<string, { status: string; subject?: string }>> => {
+  const fetchUnavailableUsersForDate = async (
+    date: string,
+    userEmails: string[],
+    windowStart = '08:00',
+    windowEnd = '17:30'
+  ): Promise<Map<string, { status: string; subject?: string }>> => {
     const unavailableMap = new Map<string, { status: string; subject?: string }>();
 
     try {
@@ -216,12 +226,16 @@ const DashboardPage = () => {
           },
           body: JSON.stringify({
             schedules: batch,
+            // The shift window, not the whole day. Asking from 00:00 catches a
+            // holiday that ended at midnight the night before — it touches the
+            // first instant of the day and comes back as an absence, marking
+            // someone out of office on a day their calendar is empty.
             startTime: {
-              dateTime: date + 'T00:00:00',
+              dateTime: `${date}T${windowStart}:00`,
               timeZone: 'Europe/Zurich'
             },
             endTime: {
-              dateTime: date + 'T23:59:59',
+              dateTime: `${date}T${windowEnd}:00`,
               timeZone: 'Europe/Zurich'
             },
             availabilityViewInterval: 60
@@ -242,20 +256,31 @@ const DashboardPage = () => {
           const userEmail = (userSchedule.scheduleId || '').toLowerCase();
 
           const items = userSchedule.scheduleItems || [];
-          const oofItem = items.find((item: any) => item.status === 'oof');
-          const busyItem = items.find((item: any) => item.status === 'busy');
 
-          if (oofItem) {
-            unavailableMap.set(userEmail, { status: 'oof', subject: oofItem.subject });
-          } else if (busyItem) {
-            unavailableMap.set(userEmail, { status: 'busy', subject: busyItem.subject });
-          } else if (userSchedule.availabilityView) {
-            // Fallback when scheduleItems absent
+          // Only a real absence blocks a shift. Ordinary meetings do not: on a
+          // normal day everyone has one, and counting them would leave nobody
+          // available. A short "out of office" — a dentist appointment, say —
+          // is a meeting too, so it takes a half day to count as one.
+          const hours = (item: any) => {
+            const start = new Date(item.start?.dateTime).getTime();
+            const end = new Date(item.end?.dateTime).getTime();
+            if (!start || !end || Number.isNaN(start) || Number.isNaN(end)) return 0;
+            return (end - start) / 3600000;
+          };
+          const blockingOof = items.find(
+            (item: any) => item.status === 'oof' && hours(item) >= MIN_OOF_HOURS
+          );
+
+          if (blockingOof) {
+            unavailableMap.set(userEmail, { status: 'oof', subject: blockingOof.subject });
+          } else if (items.length === 0 && userSchedule.availabilityView) {
+            // Fallback when scheduleItems are absent: 3 marks out-of-office.
+            // Code 2 (busy) is deliberately ignored — see above.
             const viewCodes = userSchedule.availabilityView.split('');
-            if (viewCodes.some((c: string) => c === '3')) {
+            // availabilityViewInterval is 60, so one slot is one hour.
+            const oofHours = viewCodes.filter((c: string) => c === '3').length;
+            if (oofHours >= MIN_OOF_HOURS) {
               unavailableMap.set(userEmail, { status: 'oof' });
-            } else if (viewCodes.some((c: string) => c === '2')) {
-              unavailableMap.set(userEmail, { status: 'busy' });
             }
           }
         }
@@ -350,7 +375,12 @@ const DashboardPage = () => {
         }
 
         const eligibleEmails = eligibleUsers.filter(u => u.email).map(u => u.email);
-        const unavailableUsersMap = await fetchUnavailableUsersForDate(dateStr, eligibleEmails);
+        const unavailableUsersMap = await fetchUnavailableUsersForDate(
+          dateStr,
+          eligibleEmails,
+          (shift?.startTime || '08:00').slice(0, 5),
+          (shift?.endTime || '17:30').slice(0, 5)
+        );
 
         const available: any[] = [];
         const alreadyAssigned: any[] = [];
@@ -397,7 +427,19 @@ const DashboardPage = () => {
           }
 
           if (!isUserWorkingOnDay(user, dateStr, shift?.startTime)) {
-            unavailable.push({ user, reason: t('reasonNotWorkingToday') });
+            // A global joker (workPercent 0) never "works today" — saying so
+            // hides why they are really set aside.
+            const isGlobalJoker = (user.workPercent ?? 100) === 0;
+            unavailable.push({
+              user,
+              reason: isGlobalJoker ? t('ccJoker') : t('reasonNotWorkingToday'),
+            });
+            continue;
+          }
+
+          // Reserve for this shift only: still pickable, but flagged as such.
+          if (((shift as any)?.jokerUserIds || []).includes(user.id)) {
+            unavailable.push({ user, reason: t('jokerForShift') });
             continue;
           }
 
@@ -405,11 +447,6 @@ const DashboardPage = () => {
           if (userCalendarStatus) {
             if (userCalendarStatus.status === 'oof') {
               unavailable.push({ user, reason: t('reasonOutOfOffice') });
-              continue;
-            }
-            if (userCalendarStatus.status === 'busy') {
-              const busySubject = userCalendarStatus.subject || '';
-              unavailable.push({ user, reason: busySubject ? `${t('reasonBusy')} (${busySubject})` : t('reasonBusy') });
               continue;
             }
           }
@@ -462,6 +499,24 @@ const DashboardPage = () => {
       const excluded = item.excludedUserIds?.includes(u.id);
       return (inTeam && !excluded) || included;
     });
+  };
+
+  const openResendDialog = async (assignment: any) => {
+    // Read the row back first: a sync may have dropped someone who declined
+    // since this table was loaded, and prefilling from stale memory would
+    // invite them all over again.
+    setResendingAssignment(assignment);
+    setResendCc((assignment as any).ccUserIds || []);
+    try {
+      const apiBase = mode === 'shifts' ? '/api/shift-assignments' : '/api/pikett-assignments';
+      const res = await authFetch(`${apiBase}/${assignment.id}`);
+      if (res.ok) {
+        const fresh = await res.json();
+        if (Array.isArray(fresh?.ccUserIds)) setResendCc(fresh.ccUserIds);
+      }
+    } catch {
+      // Keep the in-memory value; the selector stays editable.
+    }
   };
 
   const openSplitDialog = (assignment: any) => {
@@ -1452,10 +1507,10 @@ const DashboardPage = () => {
                     {/* Filter by date */}
                     <div className="flex flex-col gap-2">
                       <label className="text-xs font-medium text-slate-600">{tCommon('date')}</label>
-                      <Input
-                        type="date"
+                      <DateField
+                        placeholder={tCommon('datePlaceholder')}
                         value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
+                        onChange={setSelectedDate}
                         className="w-full"
                       />
                     </div>
@@ -1632,12 +1687,7 @@ const DashboardPage = () => {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => {
-                                        // Carry the copied people over: a resend swaps the
-                                        // holder, not the observers. Still editable below.
-                                        setResendCc((assignment as any).ccUserIds || []);
-                                        setResendingAssignment(assignment);
-                                      }}
+                                      onClick={() => openResendDialog(assignment)}
                                       className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
                                     >
                                       <Send className="w-4 h-4 mr-2" />

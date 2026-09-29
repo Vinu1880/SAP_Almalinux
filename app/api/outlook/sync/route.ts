@@ -31,18 +31,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing Graph access token' }, { status: 401 });
     }
 
-    // Include ACCEPTED to detect cancellations from shared mailbox
+    // ACCEPTED is included to catch cancellations from the shared mailbox, and
+    // REFUSED because a decline is not final: someone who said no can accept the
+    // same invitation later, and a row left out of this query would stay refused
+    // for good. CANCELLED stays out — that slot is closed.
+    const syncableStatuses = ['PENDING', 'TENTATIVE', 'ACCEPTED', 'REFUSED'] as const;
     const [pendingShifts, pendingPiketts] = await Promise.all([
       prisma.shiftAssignment.findMany({
         where: {
-          status: { in: ['PENDING', 'TENTATIVE', 'ACCEPTED'] },
+          status: { in: [...syncableStatuses] },
           outlookEventId: { not: null }
         },
         include: { user: true, shift: true }
       }),
       prisma.pikettAssignment.findMany({
         where: {
-          status: { in: ['PENDING', 'TENTATIVE', 'ACCEPTED'] },
+          status: { in: [...syncableStatuses] },
           outlookEventId: { not: null }
         },
         include: { user: true, pikett: true }
@@ -60,6 +64,9 @@ export async function POST(request: NextRequest) {
 
     let updatedCount = 0;
     let errorCount = 0;
+    // Subject rewrites the caller must push to Graph: the sync runs server-side
+    // and has no delegated token of its own.
+    const ccDeclines: any[] = [];
 
     for (const assignment of pendingAssignments) {
       try {
@@ -136,10 +143,15 @@ export async function POST(request: NextRequest) {
 
         let responseStatus: string = attendee?.status?.response || 'none';
 
-        // Fallback: when the attendee accepted without sending a response back,
-        // the organizer copy still shows 'none'. Query the attendee's own
-        // calendar via iCalUId and read the local responseStatus.
-        if ((responseStatus === 'none' || !responseStatus) && event.iCalUId) {
+        // The attendee's own calendar is the source of truth, so it is read
+        // whatever the organizer copy says — not only when that copy is empty.
+        //
+        // Two things go wrong otherwise. Accepting without sending a response
+        // leaves the organizer at 'none', and re-inviting the same person for
+        // the same slot can carry their earlier decline over to the new
+        // invitation: the organizer then reports a refusal the person has
+        // already taken back, and the row stays wrong for good.
+        if (event.iCalUId) {
           try {
             const localUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(user.email)}/events?$filter=iCalUId eq '${event.iCalUId}'&$select=responseStatus&$top=1`;
             const localResp = await fetch(localUrl, {
@@ -150,8 +162,10 @@ export async function POST(request: NextRequest) {
               const localEvent = localData.value?.[0];
               const localResponse = localEvent?.responseStatus?.response;
               if (localResponse && localResponse !== 'none') {
+                // Overrides the organizer copy on purpose: this is what the
+                // person actually answered, most recently.
                 responseStatus = localResponse;
-              } else if (!localEvent) {
+              } else if (!localEvent && (responseStatus === 'none' || !responseStatus)) {
                 // Declining drops the event from the attendee's calendar, even
                 // when no response is sent. The organizer copy still exists, so
                 // a missing local copy points to a decline — but an invitation
@@ -181,12 +195,79 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Copied people who declined: drop them from the row and hand the
+        // caller what the subject should become. Leaving them on keeps the
+        // shared calendar reading "with Luis" when Luis said no — the team then
+        // treats him as busy while he is free.
+        const currentCc: string[] = (assignment as any).ccUserIds || [];
+        if (currentCc.length > 0) {
+          const ccUsers = await prisma.user.findMany({
+            where: { id: { in: currentCc } },
+            select: { id: true, email: true, firstName: true, lastName: true },
+          });
+          const declinedCcIds = ccUsers
+            .filter(cc => {
+              const att = event.attendees?.find(
+                (a: any) => a.emailAddress?.address?.toLowerCase() === cc.email.toLowerCase()
+              );
+              return att?.status?.response === 'declined';
+            })
+            .map(cc => cc.id);
+
+          if (declinedCcIds.length > 0) {
+            const remaining = currentCc.filter(id => !declinedCcIds.includes(id));
+            await updateStatus({ ccUserIds: remaining } as any);
+            ccDeclines.push({
+              assignmentId: id,
+              outlookEventId: assignment.outlookEventId!,
+              mailbox,
+              removed: declinedCcIds,
+              remainingCc: ccUsers.filter(u => remaining.includes(u.id)),
+              holder: { firstName: user.firstName, lastName: user.lastName },
+              itemName: _kind === 'pikett'
+                ? (assignment as any).pikett?.name
+                : (assignment as any).shift?.name,
+            });
+            await prisma.auditLog.create({
+              data: {
+                action: 'UPDATE',
+                entity: entityLabel,
+                entityId: id,
+                userId: auth.user.id,
+                data: { source: 'outlook-sync', reason: 'CC declined', removed: declinedCcIds },
+              },
+            });
+          }
+        }
+
         if (!responseStatus || responseStatus === 'none') continue;
 
         const newStatus = mapOutlookResponseToStatus(responseStatus);
 
         if (newStatus !== 'PENDING' && newStatus !== assignment.status) {
           await updateStatus({ status: newStatus, respondedAt: new Date() });
+
+          // The holder said no, so nobody is covering the slot. Copied people
+          // were only watching it — leaving them on the event keeps a shift in
+          // their calendar that no longer exists.
+          if (newStatus === 'REFUSED') {
+            const stillCc: string[] = (assignment as any).ccUserIds || [];
+            if (stillCc.length > 0) {
+              await updateStatus({ ccUserIds: [] } as any);
+              ccDeclines.push({
+                assignmentId: id,
+                outlookEventId: assignment.outlookEventId!,
+                mailbox,
+                removed: stillCc,
+                remainingCc: [],
+                dropAttendees: true,
+                holder: { firstName: user.firstName, lastName: user.lastName, email: user.email },
+                itemName: _kind === 'pikett'
+                  ? (assignment as any).pikett?.name
+                  : (assignment as any).shift?.name,
+              });
+            }
+          }
 
           // A decline is deliberately left on the calendar. Cancelling it made
           // the slot vanish, so a refused shift read as "not planned" instead of
@@ -221,7 +302,8 @@ export async function POST(request: NextRequest) {
       message: 'Synchronization completed',
       checked: pendingAssignments.length,
       updated: updatedCount,
-      errors: errorCount
+      errors: errorCount,
+      ccDeclines
     });
 
   } catch (error) {

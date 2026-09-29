@@ -70,6 +70,7 @@ export const createShiftSchema = z.object({
   senderMailbox: z.string().max(255).optional().default(''),
   includedUserIds: z.array(cuidSchema).optional().default([]),
   excludedUserIds: z.array(cuidSchema).optional().default([]),
+  jokerUserIds: z.array(cuidSchema).optional().default([]),
   teamId: cuidSchema,
 });
 export const updateShiftSchema = createShiftSchema.partial();
@@ -89,6 +90,7 @@ export const createPikettSchema = z.object({
   avoidSupportSameWeek: z.boolean().optional().default(true),
   includedUserIds: z.array(cuidSchema).optional().default([]),
   excludedUserIds: z.array(cuidSchema).optional().default([]),
+  jokerUserIds: z.array(cuidSchema).optional().default([]),
   userId: z.string().nullable().optional(),
 });
 export const updatePikettSchema = createPikettSchema.partial();

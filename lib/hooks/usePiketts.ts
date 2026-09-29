@@ -12,6 +12,7 @@ interface Pikett {
   userId?: string | null;
   includedUserIds: string[];
   excludedUserIds: string[];
+  jokerUserIds?: string[];
   color: string;
   status: string;
   is24_7: boolean;

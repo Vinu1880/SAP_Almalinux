@@ -41,6 +41,7 @@ import { useHolidays } from '@/lib/hooks/useHolidays';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { DateField } from '@/components/DateField';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Backup {
@@ -1199,10 +1200,10 @@ const SettingsPage = () => {
               
               <div>
                 <Label>Date *</Label>
-                <Input
-                  type="date"
+                <DateField
+                  placeholder={tCommon('datePlaceholder')}
                   value={newHoliday.date}
-                  onChange={(e) => setNewHoliday({...newHoliday, date: e.target.value})}
+                  onChange={(v) => setNewHoliday({...newHoliday, date: v})}
                 />
               </div>
 
@@ -1293,10 +1294,10 @@ const SettingsPage = () => {
                 
                 <div>
                   <Label>{tCommon("date")}</Label>
-                  <Input
-                    type="date"
+                  <DateField
+                    placeholder={tCommon('datePlaceholder')}
                     value={selectedHoliday.date}
-                    onChange={(e) => setSelectedHoliday({...selectedHoliday, date: e.target.value})}
+                    onChange={(v) => setSelectedHoliday({...selectedHoliday, date: v})}
                   />
                 </div>
 

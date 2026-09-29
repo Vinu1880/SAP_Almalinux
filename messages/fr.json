@@ -41,7 +41,8 @@
     "inactive": "Inactif",
     "select": "Sélectionner",
     "selectDate": "Sélectionner une date",
-    "dataLoadError": "Impossible de charger les données. Vérifiez que la base de données est en cours d'exécution et essayez de rafraîchir la page."
+    "dataLoadError": "Impossible de charger les données. Vérifiez que la base de données est en cours d'exécution et essayez de rafraîchir la page.",
+    "datePlaceholder": "JJ/MM/AAAA"
   },
   "nav": {
     "dashboard": "Tableau de bord",
@@ -219,7 +220,8 @@
     "ccWith": "avec",
     "ccInCopyWith": "En copie avec {names}",
     "splitEdit": "Modifier la division",
-    "ccSearch": "Rechercher..."
+    "ccSearch": "Rechercher...",
+    "jokerForShift": "Réserve pour ce shift"
   },
   "shifts": {
     "title": "Gestion des Shifts",
@@ -333,7 +335,10 @@
     "searchMember": "Rechercher un membre...",
     "searchUser": "Rechercher un utilisateur...",
     "noSearchResult": "Aucun résultat",
-    "assignedMembersPikett": "Membres assignés au pikett"
+    "assignedMembersPikett": "Membres assignés au pikett",
+    "jokerMembers": "Membres de réserve",
+    "jokerHint": "Jamais assigné automatiquement à ce shift, mais sélectionnable à la main",
+    "jokerBadge": "Réserve"
   },
   "users": {
     "title": "Gestion des Utilisateurs & Équipes",
@@ -647,7 +652,7 @@
     "loginError": "Échec de la connexion avec Microsoft. Veuillez réessayer.",
     "credentialsError": "Échec de la connexion. Vérifiez vos identifiants.",
     "secureConnection": "Connexion sécurisée",
-    "copyright": "© 2026 ShiftPilot v2.1. Tous droits réservés.",
+    "copyright": "© 2026 ShiftPilot v2.3. Tous droits réservés.",
     "needHelp": "Besoin d'aide ?",
     "contactSupport": "Contactez le support"
   },
@@ -685,7 +690,7 @@
     "users": "utilisateurs",
     "shift": "Shift",
     "shifts": "shifts",
-    "historyTotal": "{count} dans l'historique",
+    "historyTotal": "{count} en {year} (tous shifts)",
     "assigned": "assignés",
     "today": "Aujourd'hui",
     "hideConfiguration": "Masquer la configuration",
@@ -832,6 +837,10 @@
     "ccJoker": "Joker",
     "ccWith": "avec",
     "ccInCopyWith": "En copie avec {names}",
-    "ccSearch": "Rechercher..."
+    "ccSearch": "Rechercher...",
+    "jokerForShift": "Réserve pour ce shift",
+    "breakdownThisRun": "Par shift",
+    "breakdownRun": "preview",
+    "collapseAll": "Tout replier"
   }
 }

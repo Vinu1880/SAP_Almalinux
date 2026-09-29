@@ -41,6 +41,7 @@ export async function PUT(
     if (input.avoidSupportSameWeek !== undefined) updateData.avoidSupportSameWeek = input.avoidSupportSameWeek;
     if (input.includedUserIds !== undefined) updateData.includedUserIds = input.includedUserIds;
     if (input.excludedUserIds !== undefined) updateData.excludedUserIds = input.excludedUserIds;
+    if (input.jokerUserIds !== undefined) updateData.jokerUserIds = input.jokerUserIds;
 
     const pikett = await prisma.pikett.update({
       where: { id },

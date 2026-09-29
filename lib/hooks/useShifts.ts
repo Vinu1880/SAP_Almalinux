@@ -23,6 +23,7 @@ export interface Shift {
   senderMailbox: string;
   includedUserIds: string[];
   excludedUserIds: string[];
+  jokerUserIds?: string[];
   usageCount: number;
   lastUsedAt: Date | null;
   createdAt: Date;

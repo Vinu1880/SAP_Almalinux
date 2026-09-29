@@ -65,6 +65,60 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Update an event that is already out.
+ *
+ * Used when a copied person declines: their name has to come off the subject,
+ * otherwise the shared calendar keeps showing them as involved and the team
+ * assumes they are busy when they are free.
+ */
+export async function PATCH(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  const rl = checkRateLimit(getClientIdentifier(request), RATE_LIMITS.write);
+  if (rl) return rl;
+
+  try {
+    const graphToken = getGraphToken(request);
+    if (!graphToken) {
+      return NextResponse.json({ error: 'Missing Graph access token' }, { status: 401 });
+    }
+
+    const { mailbox, eventId, changes } = await request.json();
+    if (!mailbox || !eventId || !changes) {
+      return NextResponse.json({ error: 'Missing mailbox, eventId or changes' }, { status: 400 });
+    }
+
+    const graphUrl = mailbox === 'me'
+      ? `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(eventId)}`
+      : `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/calendar/events/${encodeURIComponent(eventId)}`;
+
+    const outlookResponse = await fetch(graphUrl, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${graphToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(changes)
+    });
+
+    if (!outlookResponse.ok) {
+      const errorBody = await outlookResponse.json().catch(() => ({}));
+      return NextResponse.json(
+        {
+          error: 'Failed to update Outlook event',
+          graphError: errorBody?.error?.message || errorBody?.error?.code || `HTTP ${outlookResponse.status}`
+        },
+        { status: outlookResponse.status }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: 'Failed to update Outlook event' }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;

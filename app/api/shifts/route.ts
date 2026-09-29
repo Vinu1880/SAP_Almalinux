@@ -64,7 +64,8 @@ export async function POST(request: NextRequest) {
         color: validation.data.color || '#3b82f6',
         senderMailbox: validation.data.senderMailbox,
         includedUserIds: validation.data.includedUserIds || [],
-        excludedUserIds: validation.data.excludedUserIds || []
+        excludedUserIds: validation.data.excludedUserIds || [],
+        jokerUserIds: validation.data.jokerUserIds || []
       },
       include: {
         team: true

@@ -144,7 +144,7 @@ export function CcSelector({
                     {isJoker && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] bg-purple-50 border-purple-200 text-purple-700 px-1 py-0 flex-shrink-0"
+                        className="text-[10px] bg-amber-50 border-amber-300 text-amber-700 px-1 py-0 flex-shrink-0"
                       >
                         {jokerLabel}
                       </Badge>

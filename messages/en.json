@@ -41,7 +41,8 @@
     "inactive": "Inactive",
     "select": "Select",
     "selectDate": "Select a date",
-    "dataLoadError": "Unable to load data. Please check that the database is running and try refreshing the page."
+    "dataLoadError": "Unable to load data. Please check that the database is running and try refreshing the page.",
+    "datePlaceholder": "DD/MM/YYYY"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -219,7 +220,8 @@
     "ccWith": "with",
     "ccInCopyWith": "In copy with {names}",
     "splitEdit": "Edit the split",
-    "ccSearch": "Search..."
+    "ccSearch": "Search...",
+    "jokerForShift": "Reserve for this shift"
   },
   "shifts": {
     "title": "Shift Management",
@@ -333,7 +335,10 @@
     "searchMember": "Search a member...",
     "searchUser": "Search a user...",
     "noSearchResult": "No match",
-    "assignedMembersPikett": "Members assigned to the pikett"
+    "assignedMembersPikett": "Members assigned to the pikett",
+    "jokerMembers": "Reserve members",
+    "jokerHint": "Never auto-assigned to this shift, but can be picked by hand",
+    "jokerBadge": "Reserve"
   },
   "users": {
     "title": "User & Team Management",
@@ -647,7 +652,7 @@
     "loginError": "Microsoft login failed. Please try again.",
     "credentialsError": "Login failed. Check your credentials.",
     "secureConnection": "Secure connection",
-    "copyright": "© 2026 ShiftPilot v2.1. All rights reserved.",
+    "copyright": "© 2026 ShiftPilot v2.3. All rights reserved.",
     "needHelp": "Need help?",
     "contactSupport": "Contact support"
   },
@@ -685,7 +690,7 @@
     "users": "users",
     "shift": "Shift",
     "shifts": "shifts",
-    "historyTotal": "{count} in history",
+    "historyTotal": "{count} in {year} (all shifts)",
     "assigned": "assigned",
     "today": "Today",
     "hideConfiguration": "Hide configuration",
@@ -832,6 +837,10 @@
     "ccJoker": "Joker",
     "ccWith": "with",
     "ccInCopyWith": "In copy with {names}",
-    "ccSearch": "Search..."
+    "ccSearch": "Search...",
+    "jokerForShift": "Reserve for this shift",
+    "breakdownThisRun": "Per shift",
+    "breakdownRun": "run",
+    "collapseAll": "Collapse all"
   }
 }

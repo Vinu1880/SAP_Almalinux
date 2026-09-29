@@ -1,5 +1,6 @@
 'use client';
 
+import { subjectWithCc } from '@/lib/ccInvite';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
@@ -56,6 +57,47 @@ export const AutoSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
 
         const result = await res.json();
+
+        // A copied person who declined has just been dropped from the row.
+        // Their name still sits in the event subject on the shared calendar, so
+        // the team reads them as involved — rewrite it. Only the browser holds
+        // a delegated Graph token, which is why the server cannot do this.
+        if (graphToken && Array.isArray(result.ccDeclines) && result.ccDeclines.length > 0) {
+          for (const d of result.ccDeclines) {
+            try {
+              const holder = `${d.holder?.firstName || ''} ${d.holder?.lastName || ''}`.trim();
+              const base = `${d.itemName || ''} - ${holder}`.trim();
+              const subject = subjectWithCc(base, d.remainingCc || []);
+              const changes: any = { subject };
+
+              // The holder refused, so the copied people have to come off the
+              // event itself — a subject rewrite alone would leave the slot
+              // sitting in their calendar. Only the required attendee stays.
+              if (d.dropAttendees && d.holder?.email) {
+                changes.attendees = [{
+                  emailAddress: { address: d.holder.email, name: holder },
+                  type: 'required',
+                }];
+              }
+
+              await authFetch('/api/outlook/send-event', {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Graph-Token': graphToken,
+                },
+                body: JSON.stringify({
+                  mailbox: d.mailbox,
+                  eventId: d.outlookEventId,
+                  changes,
+                }),
+              });
+            } catch {
+              // Best effort: the row is already correct, only the calendar text lags.
+            }
+          }
+        }
+
         setSyncMessage({ type: 'success', text: `Sync: ${result.updated || 0} updated` });
         setTimeout(() => setSyncMessage(null), 5000);
 
