@@ -1245,10 +1245,19 @@ const processShiftAssignments = async () => {
     const pikettWeekSeenFromDb = new Set<string>();
     const lastPikettWeekIndexFromDb = new Map<string, Map<string, number>>();
     const pikettWeekMembersFromDb = new Set<string>();
-    // What a draft holds, for the reason shown to the admin: "pk|week|user"
-    // for a pikett week, "sd|date|user" for a shift that day. Real rows win.
+    // What a draft holds, for the reason shown to the admin: "pk|date|user"
+    // for a pikett day, "sd|date|user" for a shift that day.
     const draftHolds = new Map<string, string>();
-    const realPikettWeeks = new Set<string>();
+    // Pikett days that keep their holder off support shifts ("date|user" →
+    // what to show as the reason). Per day, not per week: a holder of the
+    // whole week is blocked all week anyway, and someone who only took one
+    // day over stays available on the others.
+    const pikettDayHolds = new Map<string, string>();
+    // Shifts already sent, whatever their date. The preview only holds the
+    // planned range, so without these the day before the start (or after the
+    // end) looks free and "no two days in a row" breaks at the boundary.
+    const sentShiftDays = new Set<string>();   // "date|shiftId|userId"
+    const sentWorkDays = new Set<string>();    // "date|userId"
     // Prevent same user on same shift twice in one ISO week
     const weeklyAssignmentsFromDb: { [weekKey: string]: { [shiftId: string]: Set<string> } } = {};
     // Shifts per person per week, all shifts together. The per-shift map above
@@ -1335,6 +1344,11 @@ const processShiftAssignments = async () => {
         const uid = a.userId;
         const sid = a.shiftId;
         if (!uid || !sid) continue;
+        if (!a._fromDraft) {
+          const day = normalizeDbDateStr(a.date);
+          sentShiftDays.add(`${day}|${sid}|${uid}`);
+          sentWorkDays.add(`${day}|${uid}`);
+        }
         if (!userShiftsTracking[uid]) userShiftsTracking[uid] = {};
         userShiftsTracking[uid][sid] = (userShiftsTracking[uid][sid] || 0) + 1;
         // Seed MAX_LOAD counter so an annual cap is respected across tranches.
@@ -1406,10 +1420,16 @@ const processShiftAssignments = async () => {
         const wk = isoWeekOfDate(dateStr);
         pikettWeekMemberSet.add(`${wk}|${uid}`);
         pikettWeekMembersFromDb.add(`${wk}|${uid}`);
-        if (!a._fromDraft) realPikettWeeks.add(`${wk}|${uid}`);
-        else if (!realPikettWeeks.has(`${wk}|${uid}`) && !draftHolds.has(`pk|${wk}|${uid}`)) {
-          const n = piketts.find((x: any) => x.id === pid)?.name || '';
-          draftHolds.set(`pk|${wk}|${uid}`, t('heldByDraft', { item: n, draft: a._draftName }));
+        const pikettRow = piketts.find((x: any) => x.id === pid) as any;
+        if (pikettRow?.avoidSupportSameWeek !== false) {
+          const dayKey = `${dateStr}|${uid}`;
+          if (!a._fromDraft) {
+            pikettDayHolds.set(dayKey, pikettRow?.name || '');
+          } else if (!pikettDayHolds.has(dayKey)) {
+            const label = t('heldByDraft', { item: pikettRow?.name || '', draft: a._draftName });
+            pikettDayHolds.set(dayKey, label);
+            draftHolds.set(`pk|${dayKey}`, label);
+          }
         }
         // Count each (pikett, user, week) once even if DB has 7 day-rows.
         const seenKey = `${pid}|${uid}|${wk}`;
@@ -1845,6 +1865,7 @@ const processShiftAssignments = async () => {
                 assignedAnyShiftSet.add(`${date}|${effectiveUser.id}`);
                 if (pikett.avoidSupportSameWeek !== false) {
                   pikettWeekMemberSet.add(`${weekKey}|${effectiveUser.id}`);
+                  pikettDayHolds.set(`${date}|${effectiveUser.id}`, pikett.name);
                 }
               }
 
@@ -2094,15 +2115,12 @@ const processShiftAssignments = async () => {
             }
           }
 
-          // Priority 2.7 — Block support shift if user is on a pikett this week
-          // (current run + DB history from a previous run).
-          const currentWk = getWeekKey(date);
-          if (pikettWeekMemberSet.has(`${currentWk}|${user.id}`) ||
-              pikettWeekMembersFromDb.has(`${currentWk}|${user.id}`)) {
-            const heldBy = draftHolds.get(`pk|${currentWk}|${user.id}`);
+          // Priority 2.7 — On pikett that day (this run, the DB or another draft).
+          const pikettToday = pikettDayHolds.get(`${date}|${user.id}`);
+          if (pikettToday !== undefined) {
             unavailableUsers.push({
               user,
-              reason: heldBy ? t('reasonPikettSameWeekNamed', { pikett: heldBy }) : t('reasonPikettSameWeek'),
+              reason: t('reasonPikettToday', { pikett: pikettToday }),
               conflictEvents: []
             });
             continue;
@@ -2142,10 +2160,11 @@ const processShiftAssignments = async () => {
           // Priority 5 — Consecutive shifts (minConsecutiveDays=1 → avoid same user on adjacent working days).
           if ((shift.minConsecutiveDays || 1) <= 1) {
             const adjacent = getAdjacent(date, shiftId);
-            const hasConsecutiveForThisShift = (
-              (adjacent.prev ? assignments.some(a => a.date === adjacent.prev && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id)) : false) ||
-              (adjacent.next ? assignments.some(a => a.date === adjacent.next && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id)) : false)
+            const workedOn = (d?: string) => !!d && (
+              sentShiftDays.has(`${d}|${shiftId}|${user.id}`) ||
+              assignments.some(a => a.date === d && a.shiftId === shiftId && a.assignedUsers.some((u: any) => u.id === user.id))
             );
+            const hasConsecutiveForThisShift = workedOn(adjacent.prev) || workedOn(adjacent.next);
 
             if (hasConsecutiveForThisShift) {
               unavailableUsers.push({
@@ -2258,9 +2277,17 @@ const processShiftAssignments = async () => {
 
             const isAdjacentAssigned = (userId: string): boolean => {
               const adj = dateAdjacentMap.get(date);
-              const prevAssigned = adj?.prev ? assignedNormalShiftSet.has(`${adj.prev}|${userId}`) : false;
-              const nextAssigned = adj?.next ? assignedNormalShiftSet.has(`${adj.next}|${userId}`) : false;
-              return prevAssigned || nextAssigned;
+              // Outside the range the neighbours are the calendar days, read
+              // from what was already sent.
+              const shiftDay = (n: number) => {
+                const d = new Date(`${date}T12:00:00Z`);
+                d.setUTCDate(d.getUTCDate() + n);
+                return d.toISOString().slice(0, 10);
+              };
+              const prev = adj?.prev || shiftDay(-1);
+              const next = adj?.next || shiftDay(1);
+              const busy = (d: string) => assignedNormalShiftSet.has(`${d}|${userId}`) || sentWorkDays.has(`${d}|${userId}`);
+              return busy(prev) || busy(next);
             };
             const totalAssignmentsFor = (userId: string): number =>
               Object.values(userShiftsTracking[userId] || {}).reduce((s: number, v: any) => s + (v as number), 0);
@@ -2472,9 +2499,112 @@ const processShiftAssignments = async () => {
             noAssignmentReason
           });
         }
+
+        // Same-day repair. Slots are filled one after another, so an early pick
+        // can strand a later one: Ann takes A, then B has nobody because the
+        // only other candidate, Bob, worked B yesterday — although Bob could
+        // have taken A and Ann B. When a slot is left empty, move the holder of
+        // another slot that day into it and give their slot to someone free,
+        // provided every rule still holds.
+        const dayRows = assignments.filter(a =>
+          a.date === date && !a.isPikett && !a.isRotationAssignment && !(a as any).isFromDb
+        );
+        for (const empty of dayRows.filter(a => a.assignedUsers.length === 0)) {
+          const emptyShift = shiftMap.get(empty.shiftId);
+          if (!emptyShift || (emptyShift.minConsecutiveDays || 1) > 1) continue;
+          for (const filled of dayRows) {
+            if (filled === empty || filled.assignedUsers.length !== 1) continue;
+            const filledShift = shiftMap.get(filled.shiftId);
+            if (!filledShift || (filledShift.minConsecutiveDays || 1) > 1) continue;
+            const holder = filled.assignedUsers[0];
+
+            // The holder must have been turned down for the empty slot only
+            // because they already work that day.
+            const busyReasons = [t('reasonAlreadyAssignedToday'), t('reasonAlreadyAssignedToShift', { shift: filledShift.name })];
+            const entry = empty.unavailableUsers.find(u => u.user.id === holder.id);
+            if (!entry || !busyReasons.includes(entry.reason)) continue;
+            if ((holder.rules || []).some((r: any) => r.type === 'DOUBLE_SHIFT' && r.enabled)) continue;
+
+            // Rules checked after "already assigned today", for the empty slot.
+            if (settings.checkCalendars) {
+              const av = isUserAvailable(holder, date, oofEvents, emptyShift);
+              if (!av.available && av.coversFullShift) continue;
+            }
+            const adj = getAdjacent(date, emptyShift.id);
+            const workedAdjacent = [adj.prev, adj.next].some(d => d && (
+              sentShiftDays.has(`${d}|${emptyShift.id}|${holder.id}`) ||
+              assignments.some(a => a.date === d && a.shiftId === emptyShift.id && a.assignedUsers.some((u: any) => u.id === holder.id))
+            ));
+            if (workedAdjacent) continue;
+            const maxRule = (holder.rules || []).find((r: any) => r.type === 'MAX_LOAD' && r.enabled && r.config.shiftId === emptyShift.id);
+            if (maxRule) {
+              const cap = Math.max(1, Math.ceil(getActiveDateCount(emptyShift.id) * (maxRule.config.maxPercentage / 100)));
+              if ((userCurrentRunTracking[holder.id]?.[emptyShift.id] || 0) >= cap) continue;
+            }
+
+            // Someone free who was already eligible for the filled slot.
+            const weekKey = getWeekKey(date);
+            const weekTotal = (uid: string) => weeklyTotalPerUser[weekKey]?.[uid] || 0;
+            const load = (uid: string) => Object.values(userShiftsTracking[uid] || {}).reduce((n: number, v: any) => n + (v as number), 0);
+            const replacement = (filled.availableUsers || [])
+              .filter((u: any) => u.id !== holder.id && !assignedNormalShiftSet.has(`${date}|${u.id}`) && !assignedPikettSet.has(`${date}|${u.id}`))
+              .sort((a: any, b: any) => (weekTotal(a.id) - weekTotal(b.id)) || (load(a.id) - load(b.id)))[0];
+            if (!replacement) continue;
+
+            // Move the holder: their count leaves the filled shift for the empty one.
+            const dow = dateDowMap.get(date);
+            const wkIdx = weekKeyToIdx(weekKey);
+            const move = (uid: string, from: string, to: string) => {
+              for (const tracker of [userShiftsTracking, userCurrentRunTracking]) {
+                if (!tracker[uid]) tracker[uid] = {};
+                tracker[uid][from] = Math.max(0, (tracker[uid][from] || 0) - 1);
+                tracker[uid][to] = (tracker[uid][to] || 0) + 1;
+              }
+              const fromHist = shiftDowHistory.get(`${from}|${uid}|${dow}`) || [];
+              const i = fromHist.lastIndexOf(wkIdx);
+              if (i >= 0) fromHist.splice(i, 1);
+              shiftDowHistory.set(`${to}|${uid}|${dow}`, [...(shiftDowHistory.get(`${to}|${uid}|${dow}`) || []), wkIdx]);
+              const stillOnFrom = assignments.some(a =>
+                a !== filled && a.shiftId === from && getWeekKey(a.date) === weekKey && a.assignedUsers.some((u: any) => u.id === uid)
+              );
+              if (!stillOnFrom) weeklyAssignments[weekKey]?.[from]?.delete(uid);
+              if (!weeklyAssignments[weekKey]) weeklyAssignments[weekKey] = {};
+              if (!weeklyAssignments[weekKey][to]) weeklyAssignments[weekKey][to] = new Set();
+              weeklyAssignments[weekKey][to].add(uid);
+            };
+            move(holder.id, filledShift.id, emptyShift.id);
+
+            // Book the replacement on the filled shift.
+            const rid = replacement.id;
+            for (const tracker of [userShiftsTracking, userCurrentRunTracking]) {
+              if (!tracker[rid]) tracker[rid] = {};
+              tracker[rid][filledShift.id] = (tracker[rid][filledShift.id] || 0) + 1;
+            }
+            if (!weeklyAssignments[weekKey]) weeklyAssignments[weekKey] = {};
+            if (!weeklyAssignments[weekKey][filledShift.id]) weeklyAssignments[weekKey][filledShift.id] = new Set();
+            weeklyAssignments[weekKey][filledShift.id].add(rid);
+            if (!weeklyTotalPerUser[weekKey]) weeklyTotalPerUser[weekKey] = {};
+            weeklyTotalPerUser[weekKey][rid] = weekTotal(rid) + 1;
+            shiftDowHistory.set(`${filledShift.id}|${rid}|${dow}`, [...(shiftDowHistory.get(`${filledShift.id}|${rid}|${dow}`) || []), wkIdx]);
+            userDowHistory.set(`${rid}|${dow}`, [...(userDowHistory.get(`${rid}|${dow}`) || []), wkIdx]);
+            assignedNormalShiftSet.add(`${date}|${rid}`);
+            assignedAnyShiftSet.add(`${date}|${rid}`);
+
+            filled.assignedUsers = [replacement];
+            filled.unavailableUsers = [
+              ...filled.unavailableUsers.filter(u => u.user.id !== holder.id),
+              { user: holder, reason: t('reasonAlreadyAssignedToShift', { shift: emptyShift.name }), conflictEvents: [] },
+            ];
+            empty.assignedUsers = [holder];
+            empty.availableUsers = [...(empty.availableUsers || []), holder];
+            empty.unavailableUsers = empty.unavailableUsers.filter(u => u.user.id !== holder.id);
+            empty.noAssignmentReason = undefined;
+            break;
+          }
+        }
       }
     }
-    
+
     // DOUBLE_SHIFT post-processing — supports chains (SEC→CDC, CDC→SEC).
     // Full-year lookback (Jan 1 → Dec 31) so any trigger already in DB fires,
     // even if it was sent months ago. DS never assigns past dates (the tryPickUser
@@ -3506,8 +3636,19 @@ useEffect(() => {
                                             continue;
                                           }
 
-                                          // 1. Check if already assigned to another shift today
+                                          // 1. Check if already assigned to another shift today.
+                                          //    A pikett that day is a constraint of its own for a
+                                          //    support shift, named so the admin sees why.
                                           const otherShifts = getOtherShiftsForUser(user.id);
+                                          const pikettsToday = assignment.isPikett ? [] : otherShifts.filter((s: any) =>
+                                            s.isPikett && (piketts.find(p => p.id === s.shiftId) as any)?.avoidSupportSameWeek !== false
+                                          );
+                                          if (pikettsToday.length > 0 && pikettsToday.length === otherShifts.length) {
+                                            const r = t('reasonPikettToday', { pikett: pikettsToday.map((s: any) => s.shift?.name).filter(Boolean).join(', ') });
+                                            addReason(user.id, r);
+                                            usersWithConsecutiveShifts.push({ user, reason: r, conflictEvents: [] });
+                                            continue;
+                                          }
                                           if (otherShifts.length > 0) {
                                             usersWithOtherShifts.push(user);
                                             continue; // Do not double-list this user under other constraint categories
@@ -3597,23 +3738,16 @@ useEffect(() => {
                                                 return y * 53 + w;
                                               });
                                             restWeeksViolated = otherPikettWeeks.some(wk => Math.abs(currentWkIdx - wk) <= minRest);
-                                          } else {
-                                            const conflictAssignment = tempShiftAssignments.find(a =>
-                                              a.isPikett &&
-                                              isoWk(a.date) === currentWk &&
-                                              a.assignedUsers.some((u: any) => u.id === user.id)
-                                            );
-                                            onPikettThisWeek = !!conflictAssignment;
-                                            if (conflictAssignment) {
-                                              const cp = piketts.find(p => p.id === conflictAssignment.shiftId);
-                                              conflictingPikettName = cp?.name || null;
-                                            }
                                           }
-                                          // Holds from other drafts, as the generation saw them.
-                                          const draftPikett = draftHoldsView[`pk|${currentWk}|${user.id}`];
-                                          if (!onPikettThisWeek && draftPikett) {
-                                            onPikettThisWeek = true;
-                                            conflictingPikettName = draftPikett;
+                                          // A pikett day held in another draft, as the generation saw it.
+                                          // (Real and preview pikett days are caught in step 1.)
+                                          const draftPikett = !assignment.isPikett ? draftHoldsView[`pk|${assignment.date}|${user.id}`] : undefined;
+                                          if (draftPikett) {
+                                            const r = t('reasonPikettToday', { pikett: draftPikett });
+                                            addReason(user.id, r);
+                                            if (!hasFullOOF && !notWorkingToday && !usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
+                                              usersWithConsecutiveShifts.push({ user, reason: r, conflictEvents: [] });
+                                            }
                                           }
                                           const draftSameDay = !assignment.isPikett ? draftHoldsView[`sd|${assignment.date}|${user.id}`] : undefined;
                                           if (draftSameDay) {
@@ -3745,7 +3879,7 @@ useEffect(() => {
                                           }
 
                                           // 6. If no constraint at all, user is truly available
-                                          if (!hasFullOOF && !notWorkingToday && !hasConsecutiveShift && !hasMaxLoadHit && !onPikettThisWeek && !restWeeksViolated && otherShifts.length === 0) {
+                                          if (!hasFullOOF && !notWorkingToday && !hasConsecutiveShift && !hasMaxLoadHit && !onPikettThisWeek && !restWeeksViolated && !draftPikett && !draftSameDay && otherShifts.length === 0) {
                                             available.push({ user, partialOOF: partialOOFEvents, refusedShiftNames });
                                           }
                                         }

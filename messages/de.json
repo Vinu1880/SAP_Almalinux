@@ -657,6 +657,7 @@
     "reasonAlreadyAssignedToShift": "Heute bereits auf {shift} zugewiesen",
     "reasonPikettSameWeek": "Diese Woche im Pikett",
     "reasonPikettSameWeekNamed": "Diese Woche im {pikett}",
+    "reasonPikettToday": "An diesem Tag im {pikett}",
     "heldByDraft": "{item} (Entwurf «{draft}»)",
     "reasonRestWeeksViolated": "Ruhewochen-Gesetz verletzt",
     "reasonOutOfOffice": "Abwesend",
