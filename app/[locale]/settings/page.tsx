@@ -531,8 +531,6 @@ const SettingsPage = () => {
     }
   };
 
-  const ALL_CANTONS = ['BE', 'ZH', 'VD'];
-
   const toggleCanton = (canton: string, isNewHoliday: boolean = true) => {
     const ALL_CANTONS = ['BE', 'ZH', 'VD'];
     const computeCantons = (prev: string[]) => {

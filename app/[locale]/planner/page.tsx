@@ -3,7 +3,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navigation from '@/components/Navigation';
 import {
@@ -34,6 +34,11 @@ import {
   Undo2,
   Sparkles,
   ChevronsDownUp,
+  Eraser,
+  FolderOpen,
+  FilePen,
+  Trash2,
+  History,
   X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -105,6 +110,9 @@ interface ShiftAssignment {
   // People copied on the invitation for this slot. Informational only: they
   // never count towards load, fairness or the same-day block.
   ccUserIds?: string[];
+  // Emptied on purpose by the planner (not "nobody was available"). Rendered
+  // as a neutral gap instead of a warning, and never sent.
+  leftEmpty?: boolean;
 }
 
 const PlannerPage = () => {
@@ -141,11 +149,39 @@ const PlannerPage = () => {
   // A set, not a single id: comparing two people's history side by side is the
   // whole point of expanding a card before reassigning by hand.
   const [expandedAssignmentUserIds, setExpandedAssignmentUserIds] = useState<Set<string>>(new Set());
+  // Which shift has its "other users" group unfolded, and the filter inside it.
+  // Assigning someone from outside the roster is a one-off, so the list stays
+  // closed until asked for.
+  const [outsidersOpenFor, setOutsidersOpenFor] = useState<string | null>(null);
+  // Pikett edits apply to the whole pikett week when this is on.
+  const [applyToWeek, setApplyToWeek] = useState(false);
+  // Draft holds from the last generation ("pk|week|user", "sd|date|user"), so
+  // the manual picker explains the same blocks the generation applied.
+  const [draftHoldsView, setDraftHoldsView] = useState<Record<string, string>>({});
+  const [outsiderSearch, setOutsiderSearch] = useState('');
   const [tempShiftAssignments, setTempShiftAssignments] = useState<ShiftAssignment[]>([]);
   const [dateError, setDateError] = useState<string>('');
   const [sendingInvitations, setSendingInvitations] = useState(false);
   const [sendProgress, setSendProgress] = useState({ current: 0, total: 0, success: 0, errors: 0 });
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+
+  // Planning drafts: a preview saved before sending, shared by every admin.
+  type DraftSummary = {
+    id: string; name: string; startDate: string; endDate: string;
+    shiftIds: string[]; pikettIds: string[]; rowCount: number;
+    updatedByName: string | null; updatedAt: string;
+  };
+  const [currentDraft, setCurrentDraft] = useState<{ id: string; name: string } | null>(null);
+  // Snapshot of the rows as last saved; the preview is "unsaved" when it differs.
+  const [draftSignature, setDraftSignature] = useState('');
+  const [draftList, setDraftList] = useState<DraftSummary[]>([]);
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [saveDraftOpen, setSaveDraftOpen] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [deletingDraft, setDeletingDraft] = useState<DraftSummary | null>(null);
+  const [draftNotice, setDraftNotice] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
   const [successMessage, setSuccessMessage] = useState<{
     outlookSuccess: number;
     outlookErrors: number;
@@ -154,7 +190,7 @@ const PlannerPage = () => {
   } | null>(null);
 
   // Auth
-  const { getAccessToken } = useAuth();
+  const { getAccessToken, account } = useAuth();
   const authFetch = useAuthFetch();
   const isAuthReady = useAuthReady();
 
@@ -165,7 +201,7 @@ const PlannerPage = () => {
   // Hooks
   const { shifts, loading: shiftsLoading } = useShifts();
   const { users, loading: usersLoading } = useUsers();
-  const { teams, loading: teamsLoading } = useTeams();
+  const { loading: teamsLoading } = useTeams();
 
   // Fetch existing DB shift + pikett assignments for the current month
   // Every year the planning range touches, plus the calendar's own. Deriving it
@@ -292,9 +328,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     return '';
   };
 
-  // Improved rotation function
   const getRotationShiftForUserOnDate = (
-    userId: string,
     date: string,
     user: any
   ): string | null => {
@@ -510,87 +544,94 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     setSelectedDayAssignments(prev => (prev ? restore(prev) : prev));
   };
 
-  const handleSaveAssignmentChange = (assignmentDate: string, assignmentShiftId: string) => {
-  if (tempAssignedUser === null) return;
+  // Rows are matched on date + shift + segment. Matching on date + shift alone
+  // rewrote every segment of a split slot with the same person.
+  const rowKey = (date: string, shiftId: string, segmentIndex?: number) =>
+    `${date}|${shiftId}|${segmentIndex ?? ''}`;
 
-  // "none" is the unassign option: clearing the slot is a real choice, so it
-  // must go through instead of being dropped by the lookup below.
-  const clearing = tempAssignedUser === 'none';
-  const selectedUser = clearing
-    ? undefined
-    : availableUsers.find(u => u.id === tempAssignedUser);
-  if (!clearing && !selectedUser) return;
-  
-  // Dialog view
-  const updatedDayAssignments = selectedDayAssignments?.map(a => {
-    if (a.date === assignmentDate && a.shiftId === assignmentShiftId) {
-      const originalAssignment = shiftAssignments.find(orig =>
-        orig.date === assignmentDate && orig.shiftId === assignmentShiftId
-      );
-      const originalConstraint = a.unavailableUsers.find(u =>
-        u.user.id === tempAssignedUser &&
-        u.reason !== t('reasonAlreadyAssignedToday')
-      );
-      const hasOtherShift = selectedDayAssignments.some(other =>
-        other.shiftId !== assignmentShiftId &&
-        other.assignedUsers.some(u => u.id === tempAssignedUser)
-      );
-      const originalUserId = originalAssignment?.assignedUsers[0]?.id;
-      const isChanged = originalUserId !== tempAssignedUser;
+  // Monday of the pikett week a date falls in. Piketts run Monday to Monday,
+  // and the preview stores one row per day, Monday through Sunday.
+  const pikettWeekStart = (date: string): string => {
+    const [y, m, d] = date.split('-').map(Number);
+    const dt = new Date(y, m - 1, d, 12);
+    dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
 
+  // Every preview row of the same pikett in the same week.
+  const pikettWeekRows = (date: string, pikettId: string): ShiftAssignment[] => {
+    const monday = pikettWeekStart(date);
+    return tempShiftAssignments.filter(a =>
+      a.isPikett && a.shiftId === pikettId && pikettWeekStart(a.date) === monday
+    );
+  };
+
+  // Set (or clear, with 'none') the holder of a set of rows, in the dialog view
+  // and in the list that "Validate" commits. Constraints and the "already on
+  // another shift that day" flag are worked out per row, since a week spans
+  // days with different absences.
+  const applyHolder = (keys: Set<string>, userId: string) => {
+    const clearing = userId === 'none';
+    const selectedUser = clearing ? undefined : availableUsers.find(u => u.id === userId);
+    if (!clearing && !selectedUser) return;
+
+    const update = (a: ShiftAssignment): ShiftAssignment => {
+      if (!keys.has(rowKey(a.date, a.shiftId, a.segmentIndex))) return a;
+      if (clearing) {
+        return {
+          ...a,
+          assignedUsers: [],
+          leftEmpty: true,
+          isManualOverride: true,
+          overrideReason: t('leftEmpty'),
+          noAssignmentReason: t('leftEmpty'),
+        };
+      }
+      const original = shiftAssignments.find(o =>
+        rowKey(o.date, o.shiftId, o.segmentIndex) === rowKey(a.date, a.shiftId, a.segmentIndex)
+      );
+      const constraint = a.unavailableUsers.find(u =>
+        u.user.id === userId && u.reason !== t('reasonAlreadyAssignedToday')
+      );
+      const hasOtherShift = tempShiftAssignments.some(other =>
+        other.date === a.date &&
+        other.shiftId !== a.shiftId &&
+        other.assignedUsers.some(u => u.id === userId)
+      );
+      const isChanged = original?.assignedUsers[0]?.id !== userId;
       return {
         ...a,
-        assignedUsers: selectedUser ? [selectedUser] : [],
-        isManualOverride: isChanged || originalConstraint || hasOtherShift ? true : false,
-        overrideReason: isChanged ? t('manualModification') :
-                       originalConstraint ? originalConstraint.reason :
-                       hasOtherShift ? t('alreadyAssignedToAnotherShift') :
-                       undefined,
-        unavailableUsers: a.unavailableUsers
+        assignedUsers: [selectedUser],
+        leftEmpty: false,
+        isManualOverride: !!(isChanged || constraint || hasOtherShift),
+        overrideReason: isChanged ? t('manualModification')
+          : constraint ? constraint.reason
+          : hasOtherShift ? t('alreadyAssignedToAnotherShift')
+          : undefined,
       };
-    }
-    return a;
-  });
+    };
 
-  // Persisted list (must handle both shifts and piketts).
-  const updatedTempAssignments = tempShiftAssignments.map(a => {
-    if (a.date === assignmentDate && a.shiftId === assignmentShiftId) {
-      const originalAssignment = shiftAssignments.find(orig =>
-        orig.date === assignmentDate && orig.shiftId === assignmentShiftId
-      );
-      const originalConstraint = a.unavailableUsers.find(u =>
-        u.user.id === tempAssignedUser &&
-        u.reason !== t('reasonAlreadyAssignedToday')
-      );
-      const hasOtherShift = updatedDayAssignments?.some(other =>
-        other.date === assignmentDate &&
-        other.shiftId !== assignmentShiftId &&
-        other.assignedUsers.some(u => u.id === tempAssignedUser)
-      );
-      const originalUserId = originalAssignment?.assignedUsers[0]?.id;
-      const isChanged = originalUserId !== tempAssignedUser;
+    setSelectedDayAssignments(prev => (prev ? prev.map(update) : prev));
+    setTempShiftAssignments(prev => prev.map(update));
+  };
 
-      return {
-        ...a,
-        assignedUsers: selectedUser ? [selectedUser] : [],
-        isManualOverride: isChanged || originalConstraint || hasOtherShift ? true : false,
-        overrideReason: isChanged ? t('manualModification') :
-                       originalConstraint ? originalConstraint.reason :
-                       hasOtherShift ? t('alreadyAssignedToAnotherShift') :
-                       undefined,
-        unavailableUsers: a.unavailableUsers,
-        isPikett: a.isPikett,
-        shift: a.shift
-      };
-    }
-    return a;
-  });
-  
-  setSelectedDayAssignments(updatedDayAssignments || []);
-  setTempShiftAssignments(updatedTempAssignments);
-  setEditingAssignment(null);
-  setTempAssignedUser(null);
-};
+  const handleSaveAssignmentChange = (
+    assignmentDate: string,
+    assignmentShiftId: string,
+    segmentIndex?: number,
+    isPikett?: boolean,
+  ) => {
+    if (tempAssignedUser === null) return;
+    const keys = new Set<string>(
+      isPikett && applyToWeek
+        ? pikettWeekRows(assignmentDate, assignmentShiftId).map(a => rowKey(a.date, a.shiftId, a.segmentIndex))
+        : [rowKey(assignmentDate, assignmentShiftId, segmentIndex)]
+    );
+    applyHolder(keys, tempAssignedUser);
+    setEditingAssignment(null);
+    setTempAssignedUser(null);
+    setApplyToWeek(false);
+  };
 
   const fetchOutOfOfficeForPeriod = async (): Promise<OutlookEvent[]> => {
     if (!startDate || !endDate) {
@@ -810,7 +851,19 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
   const WEEKLY_SHIFT_CAP = 3;
 
   // True absence for shifts: keyword, all-day, ≥24h, or long declared OOF.
+  // Invitations sent by this app ("SAP - Jane DOE", "SAP_1 - Jane DOE with ...")
+  // are assignments, already tracked in the DB with their own rules. A pikett
+  // week is a 7-day busy block and would otherwise read as a week of absence.
+  const isOwnPlanningEvent = (event: OutlookEvent): boolean => {
+    const cats = (event.categories || []).map(c => c.toLowerCase());
+    if (cats.includes('pikett') || cats.includes('shift')) return true;
+    const subject = (event.subject || '').toLowerCase();
+    if (!subject) return false;
+    return [...shifts, ...piketts].some((x: any) => x?.name && subject.startsWith(`${String(x.name).toLowerCase()} - `));
+  };
+
   const isTrueOOF = (event: OutlookEvent): boolean => {
+    if (isOwnPlanningEvent(event)) return false;
     const subject = (event.subject || '').toLowerCase();
     if (HOLIDAY_KEYWORDS.test(subject)) return true;
     const start = new Date(event.start.dateTime).getTime();
@@ -822,6 +875,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
 
   // Stricter filter for piketts (24/7): only real vacations / all-day count.
   const isTrueOOFForPikett = (event: OutlookEvent): boolean => {
+    if (isOwnPlanningEvent(event)) return false;
     const subject = (event.subject || '').toLowerCase();
     if (HOLIDAY_KEYWORDS.test(subject)) return true;
     const start = new Date(event.start.dateTime).getTime();
@@ -974,6 +1028,178 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     return memberIds;
   };
 
+  // ---- Planning drafts -----------------------------------------------------
+  // Rows are stored slim and rebuilt from the live users / shifts / piketts on
+  // load, so a renamed shift or an updated user shows up correctly.
+  const toDraftRows = (list: ShiftAssignment[]) => list.map(a => {
+    const r: any = { d: a.date, s: a.shiftId, u: a.assignedUsers.map((u: any) => u.id) };
+    if (a.isPikett) r.p = 1;
+    if (a.segmentGroupId) r.seg = { a: a.segmentStart, b: a.segmentEnd, g: a.segmentGroupId, i: a.segmentIndex };
+    if (a.ccUserIds?.length) r.cc = a.ccUserIds;
+    if (a.leftEmpty) r.e = 1;
+    if (a.isManualOverride) { r.m = 1; if (a.overrideReason) r.r = a.overrideReason; }
+    if (a.noAssignmentReason) r.n = a.noAssignmentReason;
+    if (a.isRotationAssignment) r.rot = 1;
+    if (a.isDoubleShift) r.ds = 1;
+    if ((a as any).isFromDb) r.db = 1;
+    if (a.unavailableUsers?.length) r.x = a.unavailableUsers.map(x => [x.user?.id, x.reason]);
+    return r;
+  });
+
+  const fromDraftRows = (rows: any[]): ShiftAssignment[] => rows.flatMap((r: any) => {
+    const isP = !!r.p;
+    const ref: any = isP ? piketts.find((x: any) => x.id === r.s) : shifts.find((x: any) => x.id === r.s);
+    if (!ref) return [];
+    const byId = (id: string) => users.find((u: any) => u.id === id);
+    const row: any = {
+      date: r.d,
+      shiftId: r.s,
+      shift: isP ? { ...ref, startTime: '00:00', endTime: '23:59' } : ref,
+      assignedUsers: (r.u || []).map(byId).filter(Boolean),
+      availableUsers: [],
+      unavailableUsers: (r.x || [])
+        .map(([id, reason]: [string, string]) => ({ user: byId(id), reason, conflictEvents: [] }))
+        .filter((x: any) => x.user),
+      isRotationAssignment: !!r.rot,
+      isDoubleShift: !!r.ds,
+      isManualOverride: !!r.m,
+      overrideReason: r.r,
+      noAssignmentReason: r.n,
+      leftEmpty: !!r.e,
+      ccUserIds: r.cc || [],
+    };
+    if (isP) row.isPikett = true;
+    if (r.db) row.isFromDb = true;
+    if (r.seg) Object.assign(row, {
+      segmentStart: r.seg.a, segmentEnd: r.seg.b, segmentGroupId: r.seg.g, segmentIndex: r.seg.i,
+    });
+    return [row as ShiftAssignment];
+  });
+
+  const signatureOf = (list: ShiftAssignment[]) => JSON.stringify(toDraftRows(list));
+  // Serialising the whole preview is not free; only redo it when it changed.
+  const draftDirty = useMemo(
+    () => shiftAssignments.length > 0 && signatureOf(shiftAssignments) !== draftSignature,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shiftAssignments, draftSignature]
+  );
+
+  const fmtDay = (iso: string) => {
+    const [y, m, d] = (iso || '').split('-');
+    return y && m && d ? `${d}/${m}/${y}` : iso;
+  };
+
+  // "Brouillon - Jane DOE - 21/10/2026": who made it and when. The shifts and
+  // the period already show on the draft card.
+  const defaultDraftName = () => {
+    const email = (account?.username || '').toLowerCase();
+    const me = users.find((u: any) => (u.email || '').toLowerCase() === email);
+    const who = me ? `${me.firstName} ${me.lastName}` : (account?.name || '');
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return [t('draft'), who, fmtDay(today)].filter(Boolean).join(' - ');
+  };
+
+  const refreshDrafts = async () => {
+    setDraftsLoading(true);
+    try {
+      const res = await authFetch('/api/planning-drafts');
+      if (res.ok) setDraftList(await res.json());
+    } catch {
+      // The list stays as it was; the dialog shows what it has.
+    } finally {
+      setDraftsLoading(false);
+    }
+  };
+
+  const draftPayload = (name: string) => ({
+    name,
+    startDate,
+    endDate,
+    shiftIds: selectedShifts,
+    pikettIds: selectedPiketts,
+    rows: toDraftRows(shiftAssignments),
+  });
+
+  // Overwrite the open draft, or create a new one under `name`.
+  const saveDraft = async (name?: string) => {
+    if (shiftAssignments.length === 0) return;
+    setSavingDraft(true);
+    try {
+      const updating = currentDraft && name === undefined;
+      const res = await authFetch(
+        updating ? `/api/planning-drafts/${currentDraft!.id}` : '/api/planning-drafts',
+        {
+          method: updating ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(draftPayload(updating ? currentDraft!.name : (name || defaultDraftName()))),
+        }
+      );
+      if (!res.ok) throw new Error(String(res.status));
+      const saved = await res.json();
+      setCurrentDraft({ id: saved.id, name: saved.name });
+      setDraftSignature(signatureOf(shiftAssignments));
+      setSaveDraftOpen(false);
+      setDraftNotice({ tone: 'ok', text: t('draftSaved', { name: saved.name }) });
+      refreshDrafts();
+    } catch {
+      setDraftNotice({ tone: 'warn', text: t('draftSaveError') });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const openDraft = async (id: string) => {
+    if (draftDirty && !window.confirm(t('draftDiscardConfirm'))) return;
+    try {
+      const res = await authFetch(`/api/planning-drafts/${id}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const d = await res.json();
+      const rows = fromDraftRows(Array.isArray(d.rows) ? d.rows : []);
+      setStartDate(d.startDate);
+      setEndDate(d.endDate);
+      setDateError('');
+      setSelectedShifts(d.shiftIds || []);
+      setSelectedPiketts(d.pikettIds || []);
+      setShiftAssignments(rows);
+      setTempShiftAssignments([]);
+      setCurrentDraft({ id: d.id, name: d.name });
+      setDraftSignature(signatureOf(rows));
+      const [y, m] = String(d.startDate).split('-').map(Number);
+      if (y && m) { setCalendarYear(y); setCalendarMonth(m - 1); }
+      setDraftsOpen(false);
+      setDraftNotice(null);
+    } catch {
+      setDraftNotice({ tone: 'warn', text: t('draftOpenError') });
+    }
+  };
+
+  const closeDraft = () => {
+    if (draftDirty && !window.confirm(t('draftDiscardConfirm'))) return;
+    setCurrentDraft(null);
+    setDraftSignature('');
+    setShiftAssignments([]);
+    setDraftNotice(null);
+  };
+
+  const deleteDraft = async (draft: DraftSummary) => {
+    try {
+      const res = await authFetch(`/api/planning-drafts/${draft.id}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 404) throw new Error(String(res.status));
+      if (currentDraft?.id === draft.id) { setCurrentDraft(null); setDraftSignature(''); }
+      setDraftList(list => list.filter(x => x.id !== draft.id));
+    } catch {
+      setDraftNotice({ tone: 'warn', text: t('draftDeleteError') });
+    } finally {
+      setDeletingDraft(null);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthReady) refreshDrafts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthReady]);
+
 const processShiftAssignments = async () => {
   if (selectedShifts.length === 0 && selectedPiketts.length === 0) {
     alert(t('selectAtLeastOneShift'));
@@ -1019,6 +1245,10 @@ const processShiftAssignments = async () => {
     const pikettWeekSeenFromDb = new Set<string>();
     const lastPikettWeekIndexFromDb = new Map<string, Map<string, number>>();
     const pikettWeekMembersFromDb = new Set<string>();
+    // What a draft holds, for the reason shown to the admin: "pk|week|user"
+    // for a pikett week, "sd|date|user" for a shift that day. Real rows win.
+    const draftHolds = new Map<string, string>();
+    const realPikettWeeks = new Set<string>();
     // Prevent same user on same shift twice in one ISO week
     const weeklyAssignmentsFromDb: { [weekKey: string]: { [shiftId: string]: Set<string> } } = {};
     // Shifts per person per week, all shifts together. The per-shift map above
@@ -1074,6 +1304,32 @@ const processShiftAssignments = async () => {
       ]);
       const pastShifts: any[] = pastShiftsResp.ok ? await pastShiftsResp.json() : [];
       const pastPiketts: any[] = pastPikettsResp.ok ? await pastPikettsResp.json() : [];
+      // Other drafts count as taken: someone already planned on SEC in a draft
+      // must not be booked on DEV the same day. They weigh on load, the weekly
+      // cap, the same-day block and pikett weeks, but never reserve a slot or
+      // show up in this preview. The open draft is skipped, being this plan.
+      try {
+        const draftsResp = await authFetch('/api/planning-drafts?withRows=1');
+        const drafts: any[] = draftsResp.ok ? await draftsResp.json() : [];
+        for (const d of drafts) {
+          if (currentDraft && d.id === currentDraft.id) continue;
+          for (const r of (Array.isArray(d.rows) ? d.rows : [])) {
+            if (r.db || r.e) continue;
+            // The same slot planned again is another version of this run, not
+            // a commitment elsewhere: this generation replaces it.
+            const regenerated = r.d >= startDate && r.d <= endDate &&
+              (r.p ? selectedPiketts : selectedShifts).includes(r.s);
+            if (regenerated) continue;
+            for (const uid of (r.u || [])) {
+              const row = { userId: uid, date: r.d, status: 'PENDING', _fromDraft: true, _draftName: d.name };
+              if (r.p) pastPiketts.push({ ...row, pikettId: r.s });
+              else pastShifts.push({ ...row, shiftId: r.s });
+            }
+          }
+        }
+      } catch {
+        // Without drafts the run still works, just blind to them.
+      }
       for (const a of pastShifts) {
         if (a.status === 'CANCELLED' || a.status === 'REFUSED') continue;
         const uid = a.userId;
@@ -1085,7 +1341,11 @@ const processShiftAssignments = async () => {
         if (!userCurrentRunTracking[uid]) userCurrentRunTracking[uid] = {};
         userCurrentRunTracking[uid][sid] = (userCurrentRunTracking[uid][sid] || 0) + 1;
         const dateStr = normalizeDbDateStr(a.date);
-        dbAlreadyAssigned.add(`${dateStr}|${sid}`);
+        if (!a._fromDraft) dbAlreadyAssigned.add(`${dateStr}|${sid}`);
+        else if (!draftHolds.has(`sd|${dateStr}|${uid}`)) {
+          const n = shifts.find((x: any) => x.id === sid)?.name || '';
+          draftHolds.set(`sd|${dateStr}|${uid}`, t('heldByDraft', { item: n, draft: a._draftName }));
+        }
         // Seed the fast-lookup sets so Priority 3 (already-assigned-today) blocks
         // this user from getting another shift on the same day.
         if (dateStr >= startDate && dateStr <= endDate) {
@@ -1109,7 +1369,7 @@ const processShiftAssignments = async () => {
         userList.push(weekKeyToIdx(wk));
         userDowHistory.set(userDowKey, userList);
         // Surface the DB row in the preview only for shifts that were selected this run.
-        if (dateStr >= startDate && dateStr <= endDate && selectedShifts.includes(sid)) {
+        if (!a._fromDraft && dateStr >= startDate && dateStr <= endDate && selectedShifts.includes(sid)) {
           const shiftRef = shifts.find((s: any) => s.id === sid);
           if (shiftRef) {
             const fullUser = users.find((u: any) => u.id === uid);
@@ -1136,7 +1396,7 @@ const processShiftAssignments = async () => {
         if (!userCurrentRunTracking[uid]) userCurrentRunTracking[uid] = {};
         userCurrentRunTracking[uid][pid] = (userCurrentRunTracking[uid][pid] || 0) + 1;
         const dateStr = normalizeDbDateStr(a.date);
-        dbAlreadyAssigned.add(`${dateStr}|${pid}`);
+        if (!a._fromDraft) dbAlreadyAssigned.add(`${dateStr}|${pid}`);
         // Seed pikett fast-lookup sets so both same-day (soft-block) and same-week
         // (avoid support shift) checks respect DB-loaded pikett assignments.
         if (dateStr >= startDate && dateStr <= endDate) {
@@ -1146,6 +1406,11 @@ const processShiftAssignments = async () => {
         const wk = isoWeekOfDate(dateStr);
         pikettWeekMemberSet.add(`${wk}|${uid}`);
         pikettWeekMembersFromDb.add(`${wk}|${uid}`);
+        if (!a._fromDraft) realPikettWeeks.add(`${wk}|${uid}`);
+        else if (!realPikettWeeks.has(`${wk}|${uid}`) && !draftHolds.has(`pk|${wk}|${uid}`)) {
+          const n = piketts.find((x: any) => x.id === pid)?.name || '';
+          draftHolds.set(`pk|${wk}|${uid}`, t('heldByDraft', { item: n, draft: a._draftName }));
+        }
         // Count each (pikett, user, week) once even if DB has 7 day-rows.
         const seenKey = `${pid}|${uid}|${wk}`;
         if (!pikettWeekSeenFromDb.has(seenKey)) {
@@ -1159,7 +1424,7 @@ const processShiftAssignments = async () => {
         const wkIdx = weekKeyToIdx(wk);
         if ((lwMap.get(uid) ?? -Infinity) < wkIdx) lwMap.set(uid, wkIdx);
         // Surface the DB row in the preview only for piketts selected this run.
-        if (dateStr >= startDate && dateStr <= endDate && selectedPiketts.includes(pid)) {
+        if (!a._fromDraft && dateStr >= startDate && dateStr <= endDate && selectedPiketts.includes(pid)) {
           const pikettRef = piketts.find((p: any) => p.id === pid);
           if (pikettRef) {
             const fullUser = users.find((u: any) => u.id === uid);
@@ -1177,6 +1442,7 @@ const processShiftAssignments = async () => {
           }
         }
       }
+      setDraftHoldsView(Object.fromEntries(draftHolds));
     } catch {
       // Non-blocking — fall back to per-run fairness only
     }
@@ -1634,11 +1900,7 @@ const processShiftAssignments = async () => {
       if (settings.enableRotations) {
         for (const date of dates) {
           for (const rotationUser of rotationUsers) {
-            const shiftId = getRotationShiftForUserOnDate(
-              rotationUser.id,
-              date,
-              rotationUser
-            );
+            const shiftId = getRotationShiftForUserOnDate(date, rotationUser);
 
             if (!shiftId) continue;
 
@@ -1837,9 +2099,10 @@ const processShiftAssignments = async () => {
           const currentWk = getWeekKey(date);
           if (pikettWeekMemberSet.has(`${currentWk}|${user.id}`) ||
               pikettWeekMembersFromDb.has(`${currentWk}|${user.id}`)) {
+            const heldBy = draftHolds.get(`pk|${currentWk}|${user.id}`);
             unavailableUsers.push({
               user,
-              reason: t('reasonPikettSameWeek'),
+              reason: heldBy ? t('reasonPikettSameWeekNamed', { pikett: heldBy }) : t('reasonPikettSameWeek'),
               conflictEvents: []
             });
             continue;
@@ -1851,7 +2114,8 @@ const processShiftAssignments = async () => {
             const otherAssignment = assignments.find(a =>
               a.date === date && a.shiftId !== shiftId && a.assignedUsers.some((u: any) => u.id === user.id)
             );
-            const otherShiftName = otherAssignment?.shift?.name || shiftMap.get(otherAssignment?.shiftId || '')?.name;
+            const otherShiftName = otherAssignment?.shift?.name || shiftMap.get(otherAssignment?.shiftId || '')?.name
+              || draftHolds.get(`sd|${date}|${user.id}`);
             unavailableUsers.push({
               user,
               reason: otherShiftName
@@ -2014,12 +2278,10 @@ const processShiftAssignments = async () => {
             };
             const shiftRatioFor = (userId: string): number =>
               (userShiftsTracking[userId]?.[shiftId] || 0) / (userAvailableDays[userId]?.[shiftId] || 1);
-            // "How many of the last 4 weeks did this user already do this shift
-            // on this same day-of-week?" — used to spread same-day repeats.
             const currentDow = dateDowMap.get(date)!;
-            // Counted over the year, like the cross-shift one: a four-week
-            // window forgets a pattern as soon as it drifts out, and nothing
-            // then pulls it back.
+            // How often this user did this shift on this weekday this year.
+            // Annual, not a recent window: a window forgets a pattern once it
+            // drifts out, and nothing then pulls it back.
             const sameDowRecentCount = (userId: string): number =>
               (shiftDowHistory.get(`${shiftId}|${userId}|${currentDow}`) || []).length;
 
@@ -2031,14 +2293,9 @@ const processShiftAssignments = async () => {
             const thisWkIdx = weekKeyToIdx(weekKey);
             const tookDowLastWeek = (userId: string): boolean =>
               (userDowHistory.get(`${userId}|${currentDow}`) || []).includes(thisWkIdx - 1);
-            // Same day-of-week across every shift. Without this, somebody
-            // eligible for several shifts collects the same weekday over and
-            // over — each shift on its own looks balanced.
-            // Counted over the whole year, not a 4-week window: a lopsided
-            // pattern that settles in — every Monday and Friday, say — stops
-            // being visible once it drifts past the window, and then nothing
-            // pulls it back. The goal is an even spread across weekdays, which
-            // is an annual property.
+            // Same weekday across every shift, over the year. Without it,
+            // somebody eligible for several shifts collects the same weekday
+            // over and over while each shift on its own looks balanced.
             const anyShiftDowCount = (userId: string): number =>
               (userDowHistory.get(`${userId}|${currentDow}`) || []).length;
 
@@ -2486,10 +2743,25 @@ const processShiftAssignments = async () => {
       return;
     }
 
-    // Skip assignments already saved to DB
-    const newAssignments = assignmentsWithUsers.filter(a => {
-      return getDateShiftStatus(a.date, a.shiftId) === null;
-    });
+    // Skip slots already in the DB, read fresh: a draft can be opened long
+    // after someone else sent part of it, and the cached list never had piketts.
+    const sentSlots = new Set<string>();
+    try {
+      const dates = assignmentsWithUsers.map(a => a.date).sort();
+      const range = `startDate=${dates[0]}&endDate=${dates[dates.length - 1]}`;
+      const [sResp, pResp] = await Promise.all([
+        authFetch(`/api/shift-assignments?${range}`),
+        authFetch(`/api/pikett-assignments?${range}`),
+      ]);
+      const live = (a: any) => a.status !== 'CANCELLED';
+      if (sResp.ok) for (const a of (await sResp.json()).filter(live)) sentSlots.add(`${normalizeDbDate(a.date)}|${a.shiftId}`);
+      if (pResp.ok) for (const a of (await pResp.json()).filter(live)) sentSlots.add(`${normalizeDbDate(a.date)}|${a.pikettId}`);
+    } catch {
+      // Fall back on the cached shift list below.
+    }
+    const newAssignments = assignmentsWithUsers.filter(a =>
+      !sentSlots.has(`${a.date}|${a.shiftId}`) && getDateShiftStatus(a.date, a.shiftId) === null
+    );
     const skippedCount = assignmentsWithUsers.length - newAssignments.length;
 
     if (newAssignments.length === 0) {
@@ -2651,7 +2923,11 @@ const processShiftAssignments = async () => {
           // Copied people ride along as optional attendees and land in the
           // subject, so every calendar shows who else is involved.
           const ccPeople = resolveCc(assignment.ccUserIds, availableUsers);
-          const baseSubject = `${assignment.shift.name} - ${user.displayName || `${user.firstName} ${user.lastName}`}${assignment.isPikett ? ' 🛡️ PIKETT' : ''}`;
+          // "<name as configured> - First LAST", the same for shifts and piketts.
+          // The name already says what it is (e.g. "NET Pikett"), so no suffix,
+          // and first/last are explicit because the Azure displayName comes in
+          // whichever order the tenant uses.
+          const baseSubject = `${assignment.shift.name} - ${user.firstName} ${user.lastName}`;
           const event = {
             subject: subjectWithCc(baseSubject, ccPeople),
             body: {
@@ -2684,7 +2960,12 @@ const processShiftAssignments = async () => {
             reminderMinutesBeforeStart: 1440,
             responseRequested: true,
             allowNewTimeProposals: false,
-            showAs: assignment.isPikett ? 'oof' : 'busy',
+            // Busy, not out-of-office, for piketts too. On-call means reachable
+            // and working, so an "out of office" block misread the person as away
+            // in every shared calendar. Availability does not depend on this flag:
+            // isOwnPlanningEvent keeps these events out of the absence checks,
+            // the DB rows carry the assignment rules instead.
+            showAs: 'busy',
             categories: [
               assignment.isPikett ? t('pikett').toUpperCase() : t('shift'),
               assignment.shift.name
@@ -2910,6 +3191,20 @@ const processShiftAssignments = async () => {
       setShowSuccessDialog(true);
       setSendingInvitations(false);
 
+      // A draft that went out in full has done its job. On any error it stays,
+      // so the failed part can be fixed and sent again from it.
+      if (currentDraft) {
+        if (outlookErrors === 0) {
+          try { await authFetch(`/api/planning-drafts/${currentDraft.id}`, { method: 'DELETE' }); } catch {}
+          setDraftNotice({ tone: 'ok', text: t('draftSentRemoved', { name: currentDraft.name }) });
+          setCurrentDraft(null);
+          setDraftSignature('');
+          refreshDrafts();
+        } else {
+          setDraftNotice({ tone: 'warn', text: t('draftKeptAfterErrors', { name: currentDraft.name }) });
+        }
+      }
+
     } catch (error) {
       setSendingInvitations(false);
       alert(`${t('errorSendingInvitations')}\n${error instanceof Error ? error.message : t('unknownError')}`);
@@ -3029,6 +3324,8 @@ const CalendarDay = ({ day }: { day: number | null }) => {
                       return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} title={t(`status${status.charAt(0) + status.slice(1).toLowerCase()}`)} />;
                     })()}
                   </>
+                ) : assignment.leftEmpty ? (
+                  <span className="text-slate-400 text-xs" title={t('leftEmptyNote')}>: —</span>
                 ) : (
                   <span className="text-orange-600 text-xs">: ⚠</span>
                 )}
@@ -3080,6 +3377,613 @@ useEffect(() => {
     );
   }
 
+  // Every candidate for a slot, grouped: free, already busy today, broken
+  // constraints, then people outside the roster. Shared by the edit of a
+  // filled slot and the assignment of an empty one.
+  const renderUserOptions = (assignment: ShiftAssignment) => (
+    <>
+                                      {/* Eligible users */}
+                                      <div className="py-2">
+                                        <p className="px-2 text-xs font-semibold text-slate-600 mb-1">{t('available')}</p>
+                                        {(() => {
+                                        // All shifts/piketts blocking this user today: current preview + DB rows
+                                        // (a PENDING/ACCEPTED/TENTATIVE assignment already saved must also block).
+                                        const getOtherShiftsForUser = (userId: string) => {
+                                          const fromPreview = (selectedDayAssignments?.filter(a =>
+                                            a.date === assignment.date &&
+                                            a.assignedUsers.some(u => u.id === userId) &&
+                                            a.shiftId !== assignment.shiftId
+                                          ) || []).map(a => {
+                                            const dbMatch = (a as any).isPikett
+                                              ? dbPikettAssignments.find((db: any) => db.userId === userId && db.pikettId === a.shiftId && normalizeDbDate(db.date) === a.date)
+                                              : dbAssignments.find((db: any) => db.userId === userId && db.shiftId === a.shiftId && normalizeDbDate(db.date) === a.date);
+                                            return { ...a, _dbStatus: dbMatch?.status as string | undefined };
+                                          }).filter(a => {
+                                            // Ignore REFUSED / CANCELLED — the user is free again.
+                                            const s = (a as any)._dbStatus;
+                                            return !s || (s !== 'REFUSED' && s !== 'CANCELLED');
+                                          });
+                                          const previewShiftIds = new Set(fromPreview.map(a => a.shiftId));
+                                          const activeStatuses = new Set(['PENDING', 'TENTATIVE', 'ACCEPTED']);
+                                          const fromDbShifts = dbAssignments.filter((a: any) =>
+                                            a.userId === userId &&
+                                            a.shiftId !== assignment.shiftId &&
+                                            normalizeDbDate(a.date) === assignment.date &&
+                                            activeStatuses.has(a.status) &&
+                                            !previewShiftIds.has(a.shiftId)
+                                          ).map((a: any) => ({
+                                            date: assignment.date,
+                                            shiftId: a.shiftId,
+                                            shift: a.shift,
+                                            assignedUsers: [{ id: userId }],
+                                            isPikett: false,
+                                            _dbStatus: a.status,
+                                          }));
+                                          const fromDbPiketts = dbPikettAssignments.filter((a: any) =>
+                                            a.userId === userId &&
+                                            a.pikettId !== assignment.shiftId &&
+                                            normalizeDbDate(a.date) === assignment.date &&
+                                            activeStatuses.has(a.status) &&
+                                            !previewShiftIds.has(a.pikettId)
+                                          ).map((a: any) => ({
+                                            date: assignment.date,
+                                            shiftId: a.pikettId,
+                                            shift: a.pikett,
+                                            assignedUsers: [{ id: userId }],
+                                            isPikett: true,
+                                            _dbStatus: a.status,
+                                          }));
+                                          return [...fromPreview, ...fromDbShifts, ...fromDbPiketts];
+                                        };
+                                        
+                                        // Eligible users for this shift/pikett — no `worksThisDay` filter here so that
+                                        // users off that day can still be manually assigned; they will appear in the
+                                        // "Constraints broken" list with a "Not working today" badge.
+                                        const eligibleUsers = assignment.isPikett
+                                          ? availableUsers.filter(u => {
+                                              if (u.status !== 'ACTIVE' && u.status !== 'active') return false;
+                                              const pikett = piketts.find(p => p.id === assignment.shiftId);
+                                              if (!pikett) return false;
+                                              const inTeam = u.teamId === pikett.teamId;
+                                              const included = (pikett as any).includedUserIds?.includes(u.id);
+                                              const excluded = (pikett as any).excludedUserIds?.includes(u.id);
+                                              return (inTeam && !excluded) || included;
+                                            })
+                                          : availableUsers.filter(u => {
+                                              if (u.status !== 'ACTIVE' && u.status !== 'active') return false;
+                                              const shift = shifts.find(s => s.id === assignment.shiftId);
+                                              if (!shift) return false;
+                                              const inTeam = u.teamId === shift.teamId;
+                                              const included = (shift as any).includedUserIds?.includes(u.id);
+                                              const excluded = (shift as any).excludedUserIds?.includes(u.id);
+                                              return (inTeam && !excluded) || included;
+                                            });
+
+                                        // Recalculate unavailableUsers in real time
+                                        // For OOF, we need to recalculate with shift hours
+                                        const shift = shifts.find(s => s.id === assignment.shiftId);
+                                        const pikett = piketts.find(p => p.id === assignment.shiftId);
+                                        const currentShift = shift || pikett;
+
+                                        // Adjacent = previous/next WORKING day of THIS shift (Friday↔Monday).
+                                        const [ay, am, ad] = String(assignment.date).split('-').map(Number);
+                                        const assignmentDate = new Date(ay, (am || 1) - 1, ad || 1, 12);
+                                        const localDateStr = (d: Date) =>
+                                          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                        const shiftForAdj = assignment.isPikett
+                                          ? piketts.find(p => p.id === assignment.shiftId)
+                                          : shifts.find(s => s.id === assignment.shiftId);
+                                        const allowedDows: number[] | null = (shiftForAdj as any)?.daysOfWeek || null;
+                                        const isWorkDay = (d: Date) => !allowedDows || allowedDows.includes(d.getDay());
+                                        const walk = (dir: 1 | -1): string | undefined => {
+                                          const d = new Date(assignmentDate);
+                                          for (let i = 0; i < 7; i++) {
+                                            d.setDate(d.getDate() + dir);
+                                            if (isWorkDay(d)) return localDateStr(d);
+                                          }
+                                          return undefined;
+                                        };
+                                        const prevDateStr = walk(-1) || '';
+                                        const nextDateStr = walk(1) || '';
+
+                                        // Categorize each eligible user (accumulate ALL reasons per user rather than the first)
+                                        const usersWithOtherShifts: any[] = [];
+                                        const usersWithOOF: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
+                                        const usersWithConsecutiveShifts: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
+                                        const usersNotWorkingToday: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
+                                        const available: any[] = [];
+                                        // Collect ALL reasons per user so the badge shows the full picture
+                                        const userExtraReasons = new Map<string, string[]>();
+                                        const addReason = (uid: string, reason: string) => {
+                                          if (!userExtraReasons.has(uid)) userExtraReasons.set(uid, []);
+                                          userExtraReasons.get(uid)!.push(reason);
+                                        };
+
+                                        for (const user of eligibleUsers) {
+                                          // The current holder is not a candidate.
+                                          if (assignment.assignedUsers.length > 0 &&
+                                              assignment.assignedUsers[0].id === user.id) {
+                                            continue;
+                                          }
+
+                                          // 1. Check if already assigned to another shift today
+                                          const otherShifts = getOtherShiftsForUser(user.id);
+                                          if (otherShifts.length > 0) {
+                                            usersWithOtherShifts.push(user);
+                                            continue; // Do not double-list this user under other constraint categories
+                                          }
+
+                                          // 2. Check Out of Office
+                                          let partialOOFEvents: OutlookEvent[] | null = null;
+                                          let hasFullOOF = false;
+                                          if (currentShift) {
+                                            const availability = isUserAvailable(user, assignment.date, outOfOfficeEvents, currentShift);
+                                            if (!availability.available) {
+                                              if (availability.coversFullShift) {
+                                                hasFullOOF = true;
+                                                addReason(user.id, t('reasonOutOfOffice'));
+                                                if (!usersWithOOF.find(u => u.user.id === user.id)) {
+                                                  usersWithOOF.push({
+                                                    user,
+                                                    reason: t('reasonOutOfOffice'),
+                                                    conflictEvents: availability.conflictEvents || []
+                                                  });
+                                                }
+                                              } else {
+                                                partialOOFEvents = availability.conflictEvents || [];
+                                              }
+                                            }
+                                          }
+
+                                          // 3. Check if not working this day
+                                          const worksThisDay = isUserWorkingOnDay(user, assignment.date, shift?.startTime, shift?.endTime);
+                                          let notWorkingToday = false;
+                                          if (!worksThisDay) {
+                                            const isJoker = (user.workPercent ?? 100) === 0;
+                                            const r = isJoker ? t('joker') : t('reasonNotWorkingToday');
+                                            addReason(user.id, r);
+                                            notWorkingToday = true;
+                                            if (!hasFullOOF && !usersNotWorkingToday.find(u => u.user.id === user.id)) {
+                                              usersNotWorkingToday.push({
+                                                user,
+                                                reason: r,
+                                                conflictEvents: []
+                                              });
+                                            }
+                                          }
+
+                                          // 3.5 Check "on pikett this week" and "rest-weeks law"
+                                          //     (matches PRIORITY 2.7 of auto-assign; also warns for pikett↔pikett same-week
+                                          //     and cross-pikett rest-week violations — the user is still selectable)
+                                          const isoWk = (d: string) => {
+                                            const [y, m, dd] = d.split('-').map(Number);
+                                            const tmp = new Date(Date.UTC(y, (m || 1) - 1, dd || 1));
+                                            const dn = tmp.getUTCDay() || 7;
+                                            tmp.setUTCDate(tmp.getUTCDate() + 4 - dn);
+                                            const ys = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+                                            const wn = Math.ceil((((tmp.getTime() - ys.getTime()) / 86400000) + 1) / 7);
+                                            return `${tmp.getUTCFullYear()}-W${String(wn).padStart(2, '0')}`;
+                                          };
+                                          const currentWk = isoWk(assignment.date);
+                                          let onPikettThisWeek = false;
+                                          let conflictingPikettName: string | null = null;
+                                          let restWeeksViolated = false;
+                                          if (assignment.isPikett) {
+                                            // Manual pikett assignment: warn but do not block.
+                                            //  a) User is already on ANOTHER pikett this same week
+                                            const conflictAssignment = tempShiftAssignments.find(a =>
+                                              a.isPikett &&
+                                              a.shiftId !== assignment.shiftId &&
+                                              isoWk(a.date) === currentWk &&
+                                              a.assignedUsers.some((u: any) => u.id === user.id)
+                                            );
+                                            onPikettThisWeek = !!conflictAssignment;
+                                            if (conflictAssignment) {
+                                              const cp = piketts.find(p => p.id === conflictAssignment.shiftId);
+                                              conflictingPikettName = cp?.name || null;
+                                            }
+                                            //  b) Rest-weeks law (default 3): user did any pikett too recently
+                                            const currentPikett = piketts.find(p => p.id === assignment.shiftId) as any;
+                                            const minRest = currentPikett?.minRestWeeks ?? 3;
+                                            const currentWkIdx = ((): number => {
+                                              const [y, w] = currentWk.split('-W').map(Number);
+                                              return y * 53 + w;
+                                            })();
+                                            const otherPikettWeeks = tempShiftAssignments
+                                              .filter(a => a.isPikett && isoWk(a.date) !== currentWk && a.assignedUsers.some((u: any) => u.id === user.id))
+                                              .map(a => {
+                                                const wk = isoWk(a.date);
+                                                const [y, w] = wk.split('-W').map(Number);
+                                                return y * 53 + w;
+                                              });
+                                            restWeeksViolated = otherPikettWeeks.some(wk => Math.abs(currentWkIdx - wk) <= minRest);
+                                          } else {
+                                            const conflictAssignment = tempShiftAssignments.find(a =>
+                                              a.isPikett &&
+                                              isoWk(a.date) === currentWk &&
+                                              a.assignedUsers.some((u: any) => u.id === user.id)
+                                            );
+                                            onPikettThisWeek = !!conflictAssignment;
+                                            if (conflictAssignment) {
+                                              const cp = piketts.find(p => p.id === conflictAssignment.shiftId);
+                                              conflictingPikettName = cp?.name || null;
+                                            }
+                                          }
+                                          // Holds from other drafts, as the generation saw them.
+                                          const draftPikett = draftHoldsView[`pk|${currentWk}|${user.id}`];
+                                          if (!onPikettThisWeek && draftPikett) {
+                                            onPikettThisWeek = true;
+                                            conflictingPikettName = draftPikett;
+                                          }
+                                          const draftSameDay = !assignment.isPikett ? draftHoldsView[`sd|${assignment.date}|${user.id}`] : undefined;
+                                          if (draftSameDay) {
+                                            const r = t('reasonAlreadyAssignedToShift', { shift: draftSameDay });
+                                            addReason(user.id, r);
+                                            if (!hasFullOOF && !notWorkingToday && !usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
+                                              usersWithConsecutiveShifts.push({ user, reason: r, conflictEvents: [] });
+                                            }
+                                          }
+                                          if (restWeeksViolated) {
+                                            addReason(user.id, t('reasonRestWeeksViolated'));
+                                            if (!hasFullOOF && !notWorkingToday) {
+                                              if (!usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
+                                                usersWithConsecutiveShifts.push({
+                                                  user,
+                                                  reason: t('reasonRestWeeksViolated'),
+                                                  conflictEvents: []
+                                                });
+                                              }
+                                            }
+                                          }
+                                          if (onPikettThisWeek) {
+                                            const pikettReason = conflictingPikettName
+                                              ? t('reasonPikettSameWeekNamed', { pikett: conflictingPikettName })
+                                              : t('reasonPikettSameWeek');
+                                            addReason(user.id, pikettReason);
+                                            if (!hasFullOOF && !notWorkingToday) {
+                                              if (!usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
+                                                usersWithConsecutiveShifts.push({
+                                                  user,
+                                                  reason: pikettReason,
+                                                  conflictEvents: []
+                                                });
+                                              }
+                                            }
+                                          }
+
+                                          // 4. Check consecutive shifts
+                                          const hasConsecutiveShift = tempShiftAssignments.some(a => {
+                                            return (a.date === prevDateStr || a.date === nextDateStr) &&
+                                                  a.assignedUsers.some(u => u.id === user.id);
+                                          });
+
+                                          if (hasConsecutiveShift) {
+                                            addReason(user.id, t('reasonConsecutiveShifts'));
+                                            if (!hasFullOOF && !notWorkingToday && !usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
+                                              usersWithConsecutiveShifts.push({
+                                                user,
+                                                reason: t('reasonConsecutiveShifts'),
+                                                conflictEvents: []
+                                              });
+                                            }
+                                          }
+
+                                          // 5. Check MAX_LOAD user rule — annual (DB + preview).
+                                          let hasMaxLoadHit = false;
+                                          const maxLoadRules = (user.rules || []).filter(
+                                            (r: any) => r.type === 'MAX_LOAD' && r.enabled && r.config.shiftId === assignment.shiftId
+                                          );
+                                          if (maxLoadRules.length > 0) {
+                                            const rule = maxLoadRules[0];
+                                            const pct = rule.config.maxPercentage;
+                                            const activeStatuses = new Set(['PENDING', 'TENTATIVE', 'ACCEPTED']);
+                                            const [ay] = String(assignment.date).split('-').map(Number);
+                                            // Piketts live in their own table and cover every day of the week.
+                                            const isPikettRule = !!assignment.isPikett;
+                                            const dbRows: any[] = isPikettRule ? dbPikettAssignments : dbAssignments;
+                                            const idField = isPikettRule ? 'pikettId' : 'shiftId';
+                                            const dbCount = dbRows.filter((a: any) =>
+                                              a.userId === user.id &&
+                                              a[idField] === assignment.shiftId &&
+                                              activeStatuses.has(a.status) &&
+                                              new Date(a.date).getFullYear() === ay
+                                            ).length;
+                                            // Preview rows (avoid double-counting: skip if already covered by DB)
+                                            const dbKeys = new Set(dbRows
+                                              .filter((a: any) => a.userId === user.id && a[idField] === assignment.shiftId && activeStatuses.has(a.status))
+                                              .map((a: any) => normalizeDbDate(a.date)));
+                                            const previewCount = tempShiftAssignments.filter(a =>
+                                              a.shiftId === assignment.shiftId &&
+                                              a.date !== assignment.date &&
+                                              a.assignedUsers.some((u: any) => u.id === user.id) &&
+                                              !dbKeys.has(a.date)
+                                            ).length;
+                                            const currentCount = dbCount + previewCount;
+                                            // Denominator = active days of this shift/pikett in the whole year
+                                            const itemRef = isPikettRule
+                                              ? piketts.find(p => p.id === assignment.shiftId)
+                                              : shifts.find(s => s.id === assignment.shiftId);
+                                            const allowedDows: number[] | null = (itemRef as any)?.daysOfWeek || null;
+                                            const yearStart = new Date(ay, 0, 1);
+                                            const yearEnd = new Date(ay, 11, 31);
+                                            let activeCount = 0;
+                                            for (let d = new Date(yearStart); d.getTime() <= yearEnd.getTime(); d.setDate(d.getDate() + 1)) {
+                                              if (!allowedDows || allowedDows.includes(d.getDay())) activeCount++;
+                                            }
+                                            const maxAllowed = Math.max(1, Math.ceil(activeCount * (pct / 100)));
+                                            if (currentCount >= maxAllowed) {
+                                              hasMaxLoadHit = true;
+                                              const reasonLabel = t('reasonMaxLoad', { pct });
+                                              addReason(user.id, reasonLabel);
+                                              if (!hasFullOOF && !notWorkingToday && !hasConsecutiveShift) {
+                                                if (!usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
+                                                  usersWithConsecutiveShifts.push({
+                                                    user,
+                                                    reason: reasonLabel,
+                                                    conflictEvents: []
+                                                  });
+                                                }
+                                              }
+                                            }
+                                          }
+
+                                          // Warn if this user already refused ANY shift/pikett on this date —
+                                          // a refusal may signal an unplanned issue that day. Admin stays free
+                                          // to assign, but must see the history.
+                                          const refusedShiftNames: string[] = [];
+                                          for (const a of dbAssignments as any[]) {
+                                            if (a.userId === user.id && normalizeDbDate(a.date) === assignment.date && a.status === 'REFUSED') {
+                                              const n = a.shift?.name || shifts.find(s => s.id === a.shiftId)?.name;
+                                              if (n && !refusedShiftNames.includes(n)) refusedShiftNames.push(n);
+                                            }
+                                          }
+                                          for (const a of dbPikettAssignments as any[]) {
+                                            if (a.userId === user.id && normalizeDbDate(a.date) === assignment.date && a.status === 'REFUSED') {
+                                              const n = a.pikett?.name || piketts.find(p => p.id === a.pikettId)?.name;
+                                              if (n && !refusedShiftNames.includes(n)) refusedShiftNames.push(n);
+                                            }
+                                          }
+
+                                          // 6. If no constraint at all, user is truly available
+                                          if (!hasFullOOF && !notWorkingToday && !hasConsecutiveShift && !hasMaxLoadHit && !onPikettThisWeek && !restWeeksViolated && otherShifts.length === 0) {
+                                            available.push({ user, partialOOF: partialOOFEvents, refusedShiftNames });
+                                          }
+                                        }
+
+                                        // Combine all constraints for display
+                                        const currentlyUnavailable = [
+                                          ...usersWithOOF,
+                                          ...usersWithConsecutiveShifts,
+                                          ...usersNotWorkingToday
+                                        ];
+
+                                        return (
+                                          <>
+                                            {/* Available users */}
+                                            {available.map(({ user, partialOOF, refusedShiftNames }: any) => {
+                                              const fmtHM = (d: Date) =>
+                                                `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                                              const partialEvents = (partialOOF || []) as OutlookEvent[];
+                                              const partialOOFOnly = partialEvents.filter(e => isTrueOOF(e));
+                                              const oofText = partialOOFOnly.length > 0
+                                                ? partialOOFOnly.map(e => {
+                                                    const s = new Date(e.start.dateTime);
+                                                    const en = e.isAllDay
+                                                      ? new Date(new Date(e.end.dateTime).getTime() - 1000)
+                                                      : new Date(e.end.dateTime);
+                                                    return `${fmtHM(s)}-${fmtHM(en)}`;
+                                                  }).join(', ')
+                                                : null;
+                                              return (
+                                                <SelectItem key={user.id} value={user.id} className="min-w-max">
+                                                  <div className="flex items-center justify-between gap-3 w-full min-w-[280px]">
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                      <Avatar className="w-6 h-6 flex-shrink-0">
+                                                        <AvatarFallback className="text-xs">
+                                                          {user.firstName?.[0]}{user.lastName?.[0]}
+                                                        </AvatarFallback>
+                                                      </Avatar>
+                                                      <span>{user.firstName} {user.lastName}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
+                                                      {/* Reserve for this shift: still selectable, but the
+                                                          admin has to see they were held back on purpose. */}
+                                                      {((currentShift as any)?.jokerUserIds || []).includes(user.id) && (
+                                                        <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300 text-amber-700 whitespace-nowrap gap-1">
+                                                          <Sparkles className="w-3 h-3" />
+                                                          {t('jokerForShift')}
+                                                        </Badge>
+                                                      )}
+                                                      {(refusedShiftNames as string[])?.map((name, i) => (
+                                                        <Badge key={`ref-${i}`} variant="outline" className="text-xs bg-red-50 border-red-200 text-red-700 whitespace-nowrap">
+                                                          ⛔ {t('refusedShiftToday', { shift: name })}
+                                                        </Badge>
+                                                      ))}
+                                                      {oofText && (
+                                                        <Badge variant="outline" className="text-xs bg-yellow-50 border-yellow-300 text-yellow-800 whitespace-nowrap">
+                                                          {t('reasonOutOfOffice')} {oofText}
+                                                        </Badge>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </SelectItem>
+                                              );
+                                            })}
+                                            
+                                            {/* Users already assigned to another shift today */}
+                                            {usersWithOtherShifts.length > 0 && (
+                                              <>
+                                                <div className="px-2 py-1 mt-2 border-t">
+                                                  <p className="text-xs font-semibold text-orange-600">
+                                                    ⚠️ {t('alreadyAssignedToday')}
+                                                  </p>
+                                                </div>
+                                                {usersWithOtherShifts.map(user => {
+                                                  const otherShifts = getOtherShiftsForUser(user.id);
+                                                  return (
+                                                    <SelectItem key={`busy-${user.id}`} value={user.id} className="min-w-max">
+                                                      <div className="flex items-center justify-between gap-3 w-full min-w-[400px]">
+                                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                                          <Avatar className="w-6 h-6 flex-shrink-0">
+                                                            <AvatarFallback className="text-xs">
+                                                              {user.firstName?.[0]}{user.lastName?.[0]}
+                                                            </AvatarFallback>
+                                                          </Avatar>
+                                                          <span className="whitespace-nowrap">{user.firstName} {user.lastName}</span>
+                                                        </div>
+                                                        <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                                                          {otherShifts.map((s: any, idx) => {
+                                                            const status = s._dbStatus;
+                                                            const isPending = status === 'PENDING' || status === 'TENTATIVE';
+                                                            const cls = isPending
+                                                              ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                              : 'bg-orange-50 border-orange-200 text-orange-700';
+                                                            const label = isPending
+                                                              ? t('pendingOnShift', { shift: s.shift?.name || 'Shift' })
+                                                              : (s.shift?.name || 'Shift');
+                                                            return (
+                                                              <Badge key={idx} variant="outline" className={`text-xs whitespace-nowrap ${cls}`}>
+                                                                {label}
+                                                              </Badge>
+                                                            );
+                                                          })}
+                                                        </div>
+                                                      </div>
+                                                    </SelectItem>
+                                                  );
+                                                })}
+                                              </>
+                                            )}
+                                            
+                                            {/* Users with original constraints (OOF, etc.) */}
+                                            {currentlyUnavailable.length > 0 && (
+                                              <>
+                                                <div className="px-2 py-1 mt-2 border-t">
+                                                  <p className="text-xs font-semibold text-orange-600">
+                                                    ⚠️ {t('constraintsBroken')}
+                                                  </p>
+                                                </div>
+                                                {currentlyUnavailable.map(item => {
+                                                  // Show ALL accumulated reasons instead of only the first
+                                                  const allReasons = userExtraReasons.get(item.user.id) || [item.reason];
+                                                  const uniqueReasons = Array.from(new Set(allReasons));
+                                                  return (
+                                                    <SelectItem key={`unavailable-${item.user.id}`} value={item.user.id} className="min-w-max">
+                                                      <div className="flex items-center justify-between gap-3 w-full min-w-[400px]">
+                                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                                          <Avatar className="w-6 h-6 flex-shrink-0">
+                                                            <AvatarFallback className="text-xs">
+                                                              {item.user.firstName?.[0]}{item.user.lastName?.[0]}
+                                                            </AvatarFallback>
+                                                          </Avatar>
+                                                          <span className="whitespace-nowrap">{item.user.firstName} {item.user.lastName}</span>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-1 justify-end">
+                                                          {uniqueReasons.map((r, i) => (
+                                                            <Badge key={i} variant="outline" className="text-xs bg-red-50 border-red-200 whitespace-nowrap">
+                                                              {r}
+                                                            </Badge>
+                                                          ))}
+                                                        </div>
+                                                      </div>
+                                                    </SelectItem>
+                                                  );
+                                                })}
+                                              </>
+                                            )}
+
+                                            {/* Everyone else, for one-off cases.
+                                                Folded away by default: assigning
+                                                outside the roster is the exception,
+                                                and it must not require editing the
+                                                shift members, which would then have
+                                                to be undone before the next run. */}
+                                            {(() => {
+                                              const rosterIds = new Set(eligibleUsers.map((u: any) => u.id));
+                                              const outsiders = availableUsers.filter((u: any) =>
+                                                (u.status === 'ACTIVE' || u.status === 'active') && !rosterIds.has(u.id)
+                                              );
+                                              if (outsiders.length === 0) return null;
+                                              const isOpen = outsidersOpenFor === assignment.shiftId;
+                                              const needle = outsiderSearch.trim().toLowerCase();
+                                              const shown = needle
+                                                ? outsiders.filter((u: any) =>
+                                                    `${u.firstName} ${u.lastName} ${u.email || ''} ${u.team?.name || ''}`
+                                                      .toLowerCase().includes(needle))
+                                                : outsiders;
+                                              return (
+                                                <>
+                                                  <div
+                                                    className="px-2 py-1.5 mt-2 border-t cursor-pointer hover:bg-slate-50 transition-colors"
+                                                    onPointerDown={(e) => {
+                                                      // The Select would swallow a plain click.
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      setOutsidersOpenFor(isOpen ? null : assignment.shiftId);
+                                                      setOutsiderSearch('');
+                                                    }}
+                                                  >
+                                                    <p className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                                                      <ChevronRight className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                                                      {t('otherUsers')} ({outsiders.length})
+                                                    </p>
+                                                  </div>
+                                                  {isOpen && outsiders.length > 5 && (
+                                                    <div
+                                                      className="px-2 pb-1"
+                                                      onPointerDown={(e) => e.stopPropagation()}
+                                                      onKeyDown={(e) => e.stopPropagation()}
+                                                    >
+                                                      <Input
+                                                        value={outsiderSearch}
+                                                        onChange={(e) => setOutsiderSearch(e.target.value)}
+                                                        placeholder={t('ccSearch')}
+                                                        className="h-7 text-xs"
+                                                      />
+                                                    </div>
+                                                  )}
+                                                  {isOpen && shown.map((u: any) => {
+                                                    const constraint = assignment.unavailableUsers.find(x => x.user.id === u.id);
+                                                    return (
+                                                      <SelectItem key={`outsider-${u.id}`} value={u.id} className="min-w-max">
+                                                        <div className="flex items-center justify-between gap-3 w-full min-w-[400px]">
+                                                          <div className="flex items-center gap-2 flex-shrink-0">
+                                                            <Avatar className="w-6 h-6 flex-shrink-0">
+                                                              <AvatarFallback className="text-xs bg-slate-100 text-slate-600">
+                                                                {u.firstName?.[0]}{u.lastName?.[0]}
+                                                              </AvatarFallback>
+                                                            </Avatar>
+                                                            <span className="whitespace-nowrap">{u.firstName} {u.lastName}</span>
+                                                          </div>
+                                                          <div className="flex flex-wrap gap-1 justify-end">
+                                                            <Badge variant="outline" className="text-xs bg-slate-50 border-slate-200 text-slate-600 whitespace-nowrap">
+                                                              {u.team?.name || t('otherTeam')}
+                                                            </Badge>
+                                                            {constraint && (
+                                                              <Badge variant="outline" className="text-xs bg-red-50 border-red-200 whitespace-nowrap">
+                                                                {constraint.reason}
+                                                              </Badge>
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                      </SelectItem>
+                                                    );
+                                                  })}
+                                                  {isOpen && shown.length === 0 && (
+                                                    <p className="px-2 py-2 text-xs text-slate-400 text-center">
+                                                      {t('noSearchResult')}
+                                                    </p>
+                                                  )}
+                                                </>
+                                              );
+                                            })()}
+                                          </>
+                                        );
+                                      })()}
+                                      </div>                                        
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
@@ -3089,8 +3993,67 @@ useEffect(() => {
           <div>
             <h1 className="text-3xl font-bold text-slate-800">{t('title')}</h1>
           </div>
-          
+          <Button
+            variant="outline"
+            onClick={() => { setDraftsOpen(true); refreshDrafts(); }}
+            className="self-start md:self-auto border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 hover:border-indigo-300 transition-colors"
+          >
+            <FolderOpen className="w-4 h-4 mr-2" />
+            {t('drafts')}
+            {draftList.length > 0 && (
+              <span className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-indigo-600 px-1.5 text-xs font-semibold text-white tabular-nums">
+                {draftList.length}
+              </span>
+            )}
+          </Button>
         </div>
+
+        {/* The open draft stays in sight while scrolling through the preview. */}
+        {currentDraft && (() => {
+          const meta = draftList.find(d => d.id === currentDraft.id);
+          return (
+            <div className="sticky top-2 z-20 rounded-xl border border-indigo-200 bg-indigo-50/95 backdrop-blur px-4 py-3 shadow-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="rounded-lg bg-indigo-100 p-2 flex-shrink-0">
+                    <FilePen className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-500">{t('draft')}</p>
+                    <p className="font-semibold text-indigo-900 truncate" title={currentDraft.name}>{currentDraft.name}</p>
+                    <p className="text-xs text-indigo-700 tabular-nums">
+                      {startDate && endDate ? `${fmtDay(startDate)} → ${fmtDay(endDate)}` : ''}
+                      {meta?.updatedByName ? ` · ${meta.updatedByName}` : ''}
+                    </p>
+                  </div>
+                </div>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${draftDirty ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                  {draftDirty ? t('draftUnsaved') : t('draftUpToDate')}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => saveDraft()}
+                    disabled={savingDraft || sendingInvitations || !draftDirty}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    {savingDraft ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    {t('draftUpdate')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={closeDraft}
+                    className="border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-100 transition-colors"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    {t('draftClose')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Configuration and Calendar in the same view */}
         <div className={`grid grid-cols-1 gap-6 ${showConfiguration ? 'xl:grid-cols-4' : ''}`}>
@@ -3325,6 +4288,40 @@ useEffect(() => {
                             </>
                           )}
                         </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            disabled={savingDraft || sendingInvitations || (!!currentDraft && !draftDirty)}
+                            onClick={() => {
+                              if (currentDraft) { saveDraft(); return; }
+                              setDraftName(defaultDraftName());
+                              setSaveDraftOpen(true);
+                            }}
+                            className="flex-1 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
+                          >
+                            {savingDraft
+                              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              : <FilePen className="w-4 h-4 mr-2" />}
+                            {currentDraft ? t('draftUpdate') : t('draftSave')}
+                          </Button>
+                          {currentDraft && (
+                            <Button
+                              variant="outline"
+                              disabled={savingDraft || sendingInvitations}
+                              onClick={() => { setDraftName(`${currentDraft.name} (2)`); setSaveDraftOpen(true); }}
+                              title={t('draftSaveAsNew')}
+                              aria-label={t('draftSaveAsNew')}
+                              className="px-3 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
+                            >
+                              <Save className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                        {draftNotice && (
+                          <p className={`text-xs text-center ${draftNotice.tone === 'ok' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {draftNotice.text}
+                          </p>
+                        )}
                         {alreadySentCount > 0 && (
                           <p className="text-xs text-slate-500 text-center">
                             {newCount > 0
@@ -3363,7 +4360,7 @@ useEffect(() => {
                         a.shiftId === shiftId && !a.isPikett && a.isRotationAssignment
                       ).length;
                       const emptyCount = shiftAssignments.filter(a =>
-                        a.shiftId === shiftId && !a.isPikett && a.assignedUsers.length === 0
+                        a.shiftId === shiftId && !a.isPikett && a.assignedUsers.length === 0 && !a.leftEmpty
                       ).length;
 
                       return (
@@ -3407,7 +4404,7 @@ useEffect(() => {
                         a.shiftId === pikettId && a.isPikett && a.isRotationAssignment
                       ).length;
                       const emptyCount = shiftAssignments.filter(a =>
-                        a.shiftId === pikettId && a.isPikett && a.assignedUsers.length === 0
+                        a.shiftId === pikettId && a.isPikett && a.assignedUsers.length === 0 && !a.leftEmpty
                       ).length;
 
                       return (
@@ -3818,9 +4815,7 @@ useEffect(() => {
                   {generateCalendarDays().map((day, index) => {
                     if (!showWeekendDays) {
                       if (day === null) {
-                        // For empty cells, determine if it's a weekend
-                        const firstDay = getFirstDayOfMonth(calendarMonth, calendarYear);
-                        const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
+                        // Empty cell: weekend columns are 5 and 6 in the Mon-Sun grid.
                         const dayOfWeek = (index % 7);
                         // 5 = Saturday, 6 = Sunday (in our Mon-Sun view)
                         if (dayOfWeek === 5 || dayOfWeek === 6) {
@@ -4136,10 +5131,13 @@ useEffect(() => {
                               ? new Date(new Date(evt.end.dateTime).getTime() - 1000)
                               : new Date(evt.end.dateTime);
                             const reason = evt.showAs === 'oof' ? t('reasonOutOfOffice') : (evt.subject || t('absence'));
-                            const timeKey = !evt.isAllDay
+                            // A timed absence spanning days ("Mon 08:00 → next Mon 08:00")
+                            // is a period: shown as a date range, not its first day.
+                            const spansDays = !evt.isAllDay && evtEnd.getTime() - evtStart.getTime() >= 86400000;
+                            const timeKey = !evt.isAllDay && !spansDays
                               ? `${fmtTime(evtStart)}-${fmtTime(evtEnd)}`
                               : undefined;
-                            return { isAllDay: evt.isAllDay, start: evtStart, end: evtEnd, timeKey, reason, isTrue: isTrueOOF(evt) };
+                            return { isAllDay: evt.isAllDay || spansDays, start: evtStart, end: evtEnd, timeKey, reason, isTrue: isTrueOOF(evt) };
                           });
 
                           // Merge full-day contiguous ranges (adjacent within 1 day)
@@ -4367,7 +5365,7 @@ useEffect(() => {
               setIsDetailDialogOpen(open);
             }}
           >
-          <DialogContent className="sm:max-w-3xl max-h-[80vh] overflow-y-auto [&>button]:hidden">
+          <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto overflow-x-hidden [&>button]:hidden">
             <DialogHeader>
               <DialogTitle>
                 {selectedDayAssignments && selectedDayAssignments[0] && (
@@ -4428,17 +5426,20 @@ useEffect(() => {
 
                         {assignment.assignedUsers.length > 0 ? (
                           <div className="bg-green-50 rounded-lg p-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex items-center gap-4 min-w-0 flex-1">
                                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
                                 {editingAssignment === `${assignment.date}-${index}` ? (
                                   <Select
                                     value={tempAssignedUser || assignment.assignedUsers[0]?.id}
                                     onValueChange={setTempAssignedUser}
                                   >
-                                    <SelectTrigger className="w-auto min-w-64 hover:bg-secondary/20 transition-colors">
+                                    <SelectTrigger className="w-full sm:w-auto sm:min-w-64 max-w-full hover:bg-secondary/20 transition-colors">
                                       {(() => {
                                         const selectedUserId = tempAssignedUser || assignment.assignedUsers[0]?.id;
+                                        if (selectedUserId === 'none') {
+                                          return <span className="text-slate-500">{t('unassigned')}</span>;
+                                        }
                                         const selectedUser = availableUsers.find(u => u.id === selectedUserId);
                                         const constraint = assignment.unavailableUsers.find(u =>
                                           u.user.id === selectedUserId &&
@@ -4467,506 +5468,7 @@ useEffect(() => {
                                         <span className="text-slate-400">{t('unassigned')}</span>
                                       </SelectItem>
                                       
-                                      {/* Eligible users */}
-                                      <div className="py-2">
-                                        <p className="px-2 text-xs font-semibold text-slate-600 mb-1">{t('available')}</p>
-                                        {(() => {
-                                        // All shifts/piketts blocking this user today: current preview + DB rows
-                                        // (a PENDING/ACCEPTED/TENTATIVE assignment already saved must also block).
-                                        const getOtherShiftsForUser = (userId: string) => {
-                                          const fromPreview = (selectedDayAssignments?.filter(a =>
-                                            a.date === assignment.date &&
-                                            a.assignedUsers.some(u => u.id === userId) &&
-                                            a.shiftId !== assignment.shiftId
-                                          ) || []).map(a => {
-                                            const dbMatch = (a as any).isPikett
-                                              ? dbPikettAssignments.find((db: any) => db.userId === userId && db.pikettId === a.shiftId && normalizeDbDate(db.date) === a.date)
-                                              : dbAssignments.find((db: any) => db.userId === userId && db.shiftId === a.shiftId && normalizeDbDate(db.date) === a.date);
-                                            return { ...a, _dbStatus: dbMatch?.status as string | undefined };
-                                          }).filter(a => {
-                                            // Ignore REFUSED / CANCELLED — the user is free again.
-                                            const s = (a as any)._dbStatus;
-                                            return !s || (s !== 'REFUSED' && s !== 'CANCELLED');
-                                          });
-                                          const previewShiftIds = new Set(fromPreview.map(a => a.shiftId));
-                                          const activeStatuses = new Set(['PENDING', 'TENTATIVE', 'ACCEPTED']);
-                                          const fromDbShifts = dbAssignments.filter((a: any) =>
-                                            a.userId === userId &&
-                                            a.shiftId !== assignment.shiftId &&
-                                            normalizeDbDate(a.date) === assignment.date &&
-                                            activeStatuses.has(a.status) &&
-                                            !previewShiftIds.has(a.shiftId)
-                                          ).map((a: any) => ({
-                                            date: assignment.date,
-                                            shiftId: a.shiftId,
-                                            shift: a.shift,
-                                            assignedUsers: [{ id: userId }],
-                                            isPikett: false,
-                                            _dbStatus: a.status,
-                                          }));
-                                          const fromDbPiketts = dbPikettAssignments.filter((a: any) =>
-                                            a.userId === userId &&
-                                            a.pikettId !== assignment.shiftId &&
-                                            normalizeDbDate(a.date) === assignment.date &&
-                                            activeStatuses.has(a.status) &&
-                                            !previewShiftIds.has(a.pikettId)
-                                          ).map((a: any) => ({
-                                            date: assignment.date,
-                                            shiftId: a.pikettId,
-                                            shift: a.pikett,
-                                            assignedUsers: [{ id: userId }],
-                                            isPikett: true,
-                                            _dbStatus: a.status,
-                                          }));
-                                          return [...fromPreview, ...fromDbShifts, ...fromDbPiketts];
-                                        };
-                                        
-                                        // Eligible users for this shift/pikett — no `worksThisDay` filter here so that
-                                        // users off that day can still be manually assigned; they will appear in the
-                                        // "Constraints broken" list with a "Not working today" badge.
-                                        const eligibleUsers = assignment.isPikett
-                                          ? availableUsers.filter(u => {
-                                              if (u.status !== 'ACTIVE' && u.status !== 'active') return false;
-                                              const pikett = piketts.find(p => p.id === assignment.shiftId);
-                                              if (!pikett) return false;
-                                              const inTeam = u.teamId === pikett.teamId;
-                                              const included = (pikett as any).includedUserIds?.includes(u.id);
-                                              const excluded = (pikett as any).excludedUserIds?.includes(u.id);
-                                              return (inTeam && !excluded) || included;
-                                            })
-                                          : availableUsers.filter(u => {
-                                              if (u.status !== 'ACTIVE' && u.status !== 'active') return false;
-                                              const shift = shifts.find(s => s.id === assignment.shiftId);
-                                              if (!shift) return false;
-                                              const inTeam = u.teamId === shift.teamId;
-                                              const included = (shift as any).includedUserIds?.includes(u.id);
-                                              const excluded = (shift as any).excludedUserIds?.includes(u.id);
-                                              return (inTeam && !excluded) || included;
-                                            });
-
-                                        // Recalculate unavailableUsers in real time
-                                        // For OOF, we need to recalculate with shift hours
-                                        const shift = shifts.find(s => s.id === assignment.shiftId);
-                                        const pikett = piketts.find(p => p.id === assignment.shiftId);
-                                        const currentShift = shift || pikett;
-
-                                        // Adjacent = previous/next WORKING day of THIS shift (Friday↔Monday).
-                                        const [ay, am, ad] = String(assignment.date).split('-').map(Number);
-                                        const assignmentDate = new Date(ay, (am || 1) - 1, ad || 1, 12);
-                                        const localDateStr = (d: Date) =>
-                                          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                        const shiftForAdj = assignment.isPikett
-                                          ? piketts.find(p => p.id === assignment.shiftId)
-                                          : shifts.find(s => s.id === assignment.shiftId);
-                                        const allowedDows: number[] | null = (shiftForAdj as any)?.daysOfWeek || null;
-                                        const isWorkDay = (d: Date) => !allowedDows || allowedDows.includes(d.getDay());
-                                        const walk = (dir: 1 | -1): string | undefined => {
-                                          const d = new Date(assignmentDate);
-                                          for (let i = 0; i < 7; i++) {
-                                            d.setDate(d.getDate() + dir);
-                                            if (isWorkDay(d)) return localDateStr(d);
-                                          }
-                                          return undefined;
-                                        };
-                                        const prevDateStr = walk(-1) || '';
-                                        const nextDateStr = walk(1) || '';
-
-                                        // Categorize each eligible user (accumulate ALL reasons per user rather than the first)
-                                        const usersWithOtherShifts: any[] = [];
-                                        const usersWithOOF: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
-                                        const usersWithConsecutiveShifts: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
-                                        const usersNotWorkingToday: Array<{user: any; reason: string; conflictEvents: OutlookEvent[]}> = [];
-                                        const available: any[] = [];
-                                        // Collect ALL reasons per user so the badge shows the full picture
-                                        const userExtraReasons = new Map<string, string[]>();
-                                        const addReason = (uid: string, reason: string) => {
-                                          if (!userExtraReasons.has(uid)) userExtraReasons.set(uid, []);
-                                          userExtraReasons.get(uid)!.push(reason);
-                                        };
-
-                                        for (const user of eligibleUsers) {
-                                          // Do not process the currently assigned user
-                                          if (assignment.assignedUsers.length > 0 &&
-                                              assignment.assignedUsers[0].id === user.id) {
-                                            continue;
-                                          }
-
-                                          // 1. Check if already assigned to another shift today
-                                          const otherShifts = getOtherShiftsForUser(user.id);
-                                          if (otherShifts.length > 0) {
-                                            usersWithOtherShifts.push(user);
-                                            continue; // Do not double-list this user under other constraint categories
-                                          }
-
-                                          // 2. Check Out of Office
-                                          let partialOOFEvents: OutlookEvent[] | null = null;
-                                          let hasFullOOF = false;
-                                          if (currentShift) {
-                                            const availability = isUserAvailable(user, assignment.date, outOfOfficeEvents, currentShift);
-                                            if (!availability.available) {
-                                              if (availability.coversFullShift) {
-                                                hasFullOOF = true;
-                                                addReason(user.id, t('reasonOutOfOffice'));
-                                                if (!usersWithOOF.find(u => u.user.id === user.id)) {
-                                                  usersWithOOF.push({
-                                                    user,
-                                                    reason: t('reasonOutOfOffice'),
-                                                    conflictEvents: availability.conflictEvents || []
-                                                  });
-                                                }
-                                              } else {
-                                                partialOOFEvents = availability.conflictEvents || [];
-                                              }
-                                            }
-                                          }
-
-                                          // 3. Check if not working this day
-                                          const worksThisDay = isUserWorkingOnDay(user, assignment.date, shift?.startTime, shift?.endTime);
-                                          let notWorkingToday = false;
-                                          if (!worksThisDay) {
-                                            const isJoker = (user.workPercent ?? 100) === 0;
-                                            const r = isJoker ? t('joker') : t('reasonNotWorkingToday');
-                                            addReason(user.id, r);
-                                            notWorkingToday = true;
-                                            if (!hasFullOOF && !usersNotWorkingToday.find(u => u.user.id === user.id)) {
-                                              usersNotWorkingToday.push({
-                                                user,
-                                                reason: r,
-                                                conflictEvents: []
-                                              });
-                                            }
-                                          }
-
-                                          // 3.5 Check "on pikett this week" and "rest-weeks law"
-                                          //     (matches PRIORITY 2.7 of auto-assign; also warns for pikett↔pikett same-week
-                                          //     and cross-pikett rest-week violations — the user is still selectable)
-                                          const isoWk = (d: string) => {
-                                            const [y, m, dd] = d.split('-').map(Number);
-                                            const tmp = new Date(Date.UTC(y, (m || 1) - 1, dd || 1));
-                                            const dn = tmp.getUTCDay() || 7;
-                                            tmp.setUTCDate(tmp.getUTCDate() + 4 - dn);
-                                            const ys = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-                                            const wn = Math.ceil((((tmp.getTime() - ys.getTime()) / 86400000) + 1) / 7);
-                                            return `${tmp.getUTCFullYear()}-W${String(wn).padStart(2, '0')}`;
-                                          };
-                                          const currentWk = isoWk(assignment.date);
-                                          let onPikettThisWeek = false;
-                                          let conflictingPikettName: string | null = null;
-                                          let restWeeksViolated = false;
-                                          if (assignment.isPikett) {
-                                            // Manual pikett assignment: warn but do not block.
-                                            //  a) User is already on ANOTHER pikett this same week
-                                            const conflictAssignment = tempShiftAssignments.find(a =>
-                                              a.isPikett &&
-                                              a.shiftId !== assignment.shiftId &&
-                                              isoWk(a.date) === currentWk &&
-                                              a.assignedUsers.some((u: any) => u.id === user.id)
-                                            );
-                                            onPikettThisWeek = !!conflictAssignment;
-                                            if (conflictAssignment) {
-                                              const cp = piketts.find(p => p.id === conflictAssignment.shiftId);
-                                              conflictingPikettName = cp?.name || null;
-                                            }
-                                            //  b) Rest-weeks law (default 3): user did any pikett too recently
-                                            const currentPikett = piketts.find(p => p.id === assignment.shiftId) as any;
-                                            const minRest = currentPikett?.minRestWeeks ?? 3;
-                                            const currentWkIdx = ((): number => {
-                                              const [y, w] = currentWk.split('-W').map(Number);
-                                              return y * 53 + w;
-                                            })();
-                                            const otherPikettWeeks = tempShiftAssignments
-                                              .filter(a => a.isPikett && isoWk(a.date) !== currentWk && a.assignedUsers.some((u: any) => u.id === user.id))
-                                              .map(a => {
-                                                const wk = isoWk(a.date);
-                                                const [y, w] = wk.split('-W').map(Number);
-                                                return y * 53 + w;
-                                              });
-                                            restWeeksViolated = otherPikettWeeks.some(wk => Math.abs(currentWkIdx - wk) <= minRest);
-                                          } else {
-                                            const conflictAssignment = tempShiftAssignments.find(a =>
-                                              a.isPikett &&
-                                              isoWk(a.date) === currentWk &&
-                                              a.assignedUsers.some((u: any) => u.id === user.id)
-                                            );
-                                            onPikettThisWeek = !!conflictAssignment;
-                                            if (conflictAssignment) {
-                                              const cp = piketts.find(p => p.id === conflictAssignment.shiftId);
-                                              conflictingPikettName = cp?.name || null;
-                                            }
-                                          }
-                                          if (restWeeksViolated) {
-                                            addReason(user.id, t('reasonRestWeeksViolated'));
-                                            if (!hasFullOOF && !notWorkingToday) {
-                                              if (!usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
-                                                usersWithConsecutiveShifts.push({
-                                                  user,
-                                                  reason: t('reasonRestWeeksViolated'),
-                                                  conflictEvents: []
-                                                });
-                                              }
-                                            }
-                                          }
-                                          if (onPikettThisWeek) {
-                                            const pikettReason = conflictingPikettName
-                                              ? t('reasonPikettSameWeekNamed', { pikett: conflictingPikettName })
-                                              : t('reasonPikettSameWeek');
-                                            addReason(user.id, pikettReason);
-                                            if (!hasFullOOF && !notWorkingToday) {
-                                              if (!usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
-                                                usersWithConsecutiveShifts.push({
-                                                  user,
-                                                  reason: pikettReason,
-                                                  conflictEvents: []
-                                                });
-                                              }
-                                            }
-                                          }
-
-                                          // 4. Check consecutive shifts
-                                          const hasConsecutiveShift = tempShiftAssignments.some(a => {
-                                            return (a.date === prevDateStr || a.date === nextDateStr) &&
-                                                  a.assignedUsers.some(u => u.id === user.id);
-                                          });
-
-                                          if (hasConsecutiveShift) {
-                                            addReason(user.id, t('reasonConsecutiveShifts'));
-                                            if (!hasFullOOF && !notWorkingToday && !usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
-                                              usersWithConsecutiveShifts.push({
-                                                user,
-                                                reason: t('reasonConsecutiveShifts'),
-                                                conflictEvents: []
-                                              });
-                                            }
-                                          }
-
-                                          // 5. Check MAX_LOAD user rule — annual (DB + preview).
-                                          let hasMaxLoadHit = false;
-                                          const maxLoadRules = (user.rules || []).filter(
-                                            (r: any) => r.type === 'MAX_LOAD' && r.enabled && r.config.shiftId === assignment.shiftId
-                                          );
-                                          if (maxLoadRules.length > 0) {
-                                            const rule = maxLoadRules[0];
-                                            const pct = rule.config.maxPercentage;
-                                            const activeStatuses = new Set(['PENDING', 'TENTATIVE', 'ACCEPTED']);
-                                            const [ay] = String(assignment.date).split('-').map(Number);
-                                            // Piketts live in their own table and cover every day of the week.
-                                            const isPikettRule = !!assignment.isPikett;
-                                            const dbRows: any[] = isPikettRule ? dbPikettAssignments : dbAssignments;
-                                            const idField = isPikettRule ? 'pikettId' : 'shiftId';
-                                            const dbCount = dbRows.filter((a: any) =>
-                                              a.userId === user.id &&
-                                              a[idField] === assignment.shiftId &&
-                                              activeStatuses.has(a.status) &&
-                                              new Date(a.date).getFullYear() === ay
-                                            ).length;
-                                            // Preview rows (avoid double-counting: skip if already covered by DB)
-                                            const dbKeys = new Set(dbRows
-                                              .filter((a: any) => a.userId === user.id && a[idField] === assignment.shiftId && activeStatuses.has(a.status))
-                                              .map((a: any) => normalizeDbDate(a.date)));
-                                            const previewCount = tempShiftAssignments.filter(a =>
-                                              a.shiftId === assignment.shiftId &&
-                                              a.date !== assignment.date &&
-                                              a.assignedUsers.some((u: any) => u.id === user.id) &&
-                                              !dbKeys.has(a.date)
-                                            ).length;
-                                            const currentCount = dbCount + previewCount;
-                                            // Denominator = active days of this shift/pikett in the whole year
-                                            const itemRef = isPikettRule
-                                              ? piketts.find(p => p.id === assignment.shiftId)
-                                              : shifts.find(s => s.id === assignment.shiftId);
-                                            const allowedDows: number[] | null = (itemRef as any)?.daysOfWeek || null;
-                                            const yearStart = new Date(ay, 0, 1);
-                                            const yearEnd = new Date(ay, 11, 31);
-                                            let activeCount = 0;
-                                            for (let d = new Date(yearStart); d.getTime() <= yearEnd.getTime(); d.setDate(d.getDate() + 1)) {
-                                              if (!allowedDows || allowedDows.includes(d.getDay())) activeCount++;
-                                            }
-                                            const maxAllowed = Math.max(1, Math.ceil(activeCount * (pct / 100)));
-                                            if (currentCount >= maxAllowed) {
-                                              hasMaxLoadHit = true;
-                                              const reasonLabel = t('reasonMaxLoad', { pct });
-                                              addReason(user.id, reasonLabel);
-                                              if (!hasFullOOF && !notWorkingToday && !hasConsecutiveShift) {
-                                                if (!usersWithConsecutiveShifts.find(u => u.user.id === user.id)) {
-                                                  usersWithConsecutiveShifts.push({
-                                                    user,
-                                                    reason: reasonLabel,
-                                                    conflictEvents: []
-                                                  });
-                                                }
-                                              }
-                                            }
-                                          }
-
-                                          // Warn if this user already refused ANY shift/pikett on this date —
-                                          // a refusal may signal an unplanned issue that day. Admin stays free
-                                          // to assign, but must see the history.
-                                          const refusedShiftNames: string[] = [];
-                                          for (const a of dbAssignments as any[]) {
-                                            if (a.userId === user.id && normalizeDbDate(a.date) === assignment.date && a.status === 'REFUSED') {
-                                              const n = a.shift?.name || shifts.find(s => s.id === a.shiftId)?.name;
-                                              if (n && !refusedShiftNames.includes(n)) refusedShiftNames.push(n);
-                                            }
-                                          }
-                                          for (const a of dbPikettAssignments as any[]) {
-                                            if (a.userId === user.id && normalizeDbDate(a.date) === assignment.date && a.status === 'REFUSED') {
-                                              const n = a.pikett?.name || piketts.find(p => p.id === a.pikettId)?.name;
-                                              if (n && !refusedShiftNames.includes(n)) refusedShiftNames.push(n);
-                                            }
-                                          }
-
-                                          // 6. If no constraint at all, user is truly available
-                                          if (!hasFullOOF && !notWorkingToday && !hasConsecutiveShift && !hasMaxLoadHit && !onPikettThisWeek && !restWeeksViolated && otherShifts.length === 0) {
-                                            available.push({ user, partialOOF: partialOOFEvents, refusedShiftNames });
-                                          }
-                                        }
-
-                                        // Combine all constraints for display
-                                        const currentlyUnavailable = [
-                                          ...usersWithOOF,
-                                          ...usersWithConsecutiveShifts,
-                                          ...usersNotWorkingToday
-                                        ];
-
-                                        return (
-                                          <>
-                                            {/* Available users */}
-                                            {available.map(({ user, partialOOF, refusedShiftNames }: any) => {
-                                              const fmtHM = (d: Date) =>
-                                                `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                                              const partialEvents = (partialOOF || []) as OutlookEvent[];
-                                              const partialOOFOnly = partialEvents.filter(e => isTrueOOF(e));
-                                              const oofText = partialOOFOnly.length > 0
-                                                ? partialOOFOnly.map(e => {
-                                                    const s = new Date(e.start.dateTime);
-                                                    const en = e.isAllDay
-                                                      ? new Date(new Date(e.end.dateTime).getTime() - 1000)
-                                                      : new Date(e.end.dateTime);
-                                                    return `${fmtHM(s)}-${fmtHM(en)}`;
-                                                  }).join(', ')
-                                                : null;
-                                              return (
-                                                <SelectItem key={user.id} value={user.id} className="min-w-max">
-                                                  <div className="flex items-center justify-between gap-3 w-full min-w-[280px]">
-                                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                                      <Avatar className="w-6 h-6 flex-shrink-0">
-                                                        <AvatarFallback className="text-xs">
-                                                          {user.firstName?.[0]}{user.lastName?.[0]}
-                                                        </AvatarFallback>
-                                                      </Avatar>
-                                                      <span>{user.firstName} {user.lastName}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
-                                                      {/* Reserve for this shift: still selectable, but the
-                                                          admin has to see they were held back on purpose. */}
-                                                      {((currentShift as any)?.jokerUserIds || []).includes(user.id) && (
-                                                        <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300 text-amber-700 whitespace-nowrap gap-1">
-                                                          <Sparkles className="w-3 h-3" />
-                                                          {t('jokerForShift')}
-                                                        </Badge>
-                                                      )}
-                                                      {(refusedShiftNames as string[])?.map((name, i) => (
-                                                        <Badge key={`ref-${i}`} variant="outline" className="text-xs bg-red-50 border-red-200 text-red-700 whitespace-nowrap">
-                                                          ⛔ {t('refusedShiftToday', { shift: name })}
-                                                        </Badge>
-                                                      ))}
-                                                      {oofText && (
-                                                        <Badge variant="outline" className="text-xs bg-yellow-50 border-yellow-300 text-yellow-800 whitespace-nowrap">
-                                                          {t('reasonOutOfOffice')} {oofText}
-                                                        </Badge>
-                                                      )}
-                                                    </div>
-                                                  </div>
-                                                </SelectItem>
-                                              );
-                                            })}
-                                            
-                                            {/* Users already assigned to another shift today */}
-                                            {usersWithOtherShifts.length > 0 && (
-                                              <>
-                                                <div className="px-2 py-1 mt-2 border-t">
-                                                  <p className="text-xs font-semibold text-orange-600">
-                                                    ⚠️ {t('alreadyAssignedToday')}
-                                                  </p>
-                                                </div>
-                                                {usersWithOtherShifts.map(user => {
-                                                  const otherShifts = getOtherShiftsForUser(user.id);
-                                                  return (
-                                                    <SelectItem key={`busy-${user.id}`} value={user.id} className="min-w-max">
-                                                      <div className="flex items-center justify-between gap-3 w-full min-w-[400px]">
-                                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                                          <Avatar className="w-6 h-6 flex-shrink-0">
-                                                            <AvatarFallback className="text-xs">
-                                                              {user.firstName?.[0]}{user.lastName?.[0]}
-                                                            </AvatarFallback>
-                                                          </Avatar>
-                                                          <span className="whitespace-nowrap">{user.firstName} {user.lastName}</span>
-                                                        </div>
-                                                        <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
-                                                          {otherShifts.map((s: any, idx) => {
-                                                            const status = s._dbStatus;
-                                                            const isPending = status === 'PENDING' || status === 'TENTATIVE';
-                                                            const cls = isPending
-                                                              ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                                              : 'bg-orange-50 border-orange-200 text-orange-700';
-                                                            const label = isPending
-                                                              ? t('pendingOnShift', { shift: s.shift?.name || 'Shift' })
-                                                              : (s.shift?.name || 'Shift');
-                                                            return (
-                                                              <Badge key={idx} variant="outline" className={`text-xs whitespace-nowrap ${cls}`}>
-                                                                {label}
-                                                              </Badge>
-                                                            );
-                                                          })}
-                                                        </div>
-                                                      </div>
-                                                    </SelectItem>
-                                                  );
-                                                })}
-                                              </>
-                                            )}
-                                            
-                                            {/* Users with original constraints (OOF, etc.) */}
-                                            {/* Users with original constraints (OOF, etc.) */}
-                                            {currentlyUnavailable.length > 0 && (
-                                              <>
-                                                <div className="px-2 py-1 mt-2 border-t">
-                                                  <p className="text-xs font-semibold text-orange-600">
-                                                    ⚠️ {t('constraintsBroken')}
-                                                  </p>
-                                                </div>
-                                                {currentlyUnavailable.map(item => {
-                                                  // Show ALL accumulated reasons instead of only the first
-                                                  const allReasons = userExtraReasons.get(item.user.id) || [item.reason];
-                                                  const uniqueReasons = Array.from(new Set(allReasons));
-                                                  return (
-                                                    <SelectItem key={`unavailable-${item.user.id}`} value={item.user.id} className="min-w-max">
-                                                      <div className="flex items-center justify-between gap-3 w-full min-w-[400px]">
-                                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                                          <Avatar className="w-6 h-6 flex-shrink-0">
-                                                            <AvatarFallback className="text-xs">
-                                                              {item.user.firstName?.[0]}{item.user.lastName?.[0]}
-                                                            </AvatarFallback>
-                                                          </Avatar>
-                                                          <span className="whitespace-nowrap">{item.user.firstName} {item.user.lastName}</span>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-1 justify-end">
-                                                          {uniqueReasons.map((r, i) => (
-                                                            <Badge key={i} variant="outline" className="text-xs bg-red-50 border-red-200 whitespace-nowrap">
-                                                              {r}
-                                                            </Badge>
-                                                          ))}
-                                                        </div>
-                                                      </div>
-                                                    </SelectItem>
-                                                  );
-                                                })}
-                                              </>
-                                            )}
-                                          </>
-                                        );
-                                      })()}
-                                      </div>                                        
+                                      {renderUserOptions(assignment)}
                                     </SelectContent>
                                   </Select>
                                 ) : (
@@ -4981,7 +5483,7 @@ useEffect(() => {
                                             <p className="font-semibold text-base text-slate-900">
                                               {assignment.assignedUsers[0].firstName} {assignment.assignedUsers[0].lastName}
                                             </p>
-                                            <p className="text-sm text-slate-500">
+                                            <p className="text-sm text-slate-500 break-all">
                                               {assignment.assignedUsers[0].email}
                                             </p>
                                             {assignment.isManualOverride && (
@@ -5020,7 +5522,7 @@ useEffect(() => {
                                       )}
                                     </div>
 
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
                                 {assignment.isRotationAssignment && !editingAssignment && (
                                   <Badge className="text-xs border-0 bg-orange-100 text-orange-700">
                                     <RotateCw className="w-3 h-3 mr-1" />
@@ -5029,12 +5531,31 @@ useEffect(() => {
                                 )}
                                 
                                 {editingAssignment === `${assignment.date}-${index}` ? (
-                                  <div className="flex gap-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    {assignment.isPikett && (() => {
+                                      const days = pikettWeekRows(assignment.date, assignment.shiftId).length;
+                                      if (days < 2) return null;
+                                      return (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          aria-pressed={applyToWeek}
+                                          onClick={() => setApplyToWeek(v => !v)}
+                                          title={t('applyToWeekHint')}
+                                          className={applyToWeek
+                                            ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100 transition-colors'
+                                            : 'text-slate-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition-colors'}
+                                        >
+                                          <CalendarRange className="w-3 h-3 mr-1" />
+                                          {t('applyToWeek', { count: days })}
+                                        </Button>
+                                      );
+                                    })()}
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       onClick={() => {
-                                        handleSaveAssignmentChange(assignment.date, assignment.shiftId);
+                                        handleSaveAssignmentChange(assignment.date, assignment.shiftId, assignment.segmentIndex, assignment.isPikett);
                                       }}
                                       className="hover:bg-orange-600/10 hover:text-orange-600 hover:border-orange-600 transition-colors"
                                     >
@@ -5045,6 +5566,7 @@ useEffect(() => {
                                       onClick={() => {
                                         setEditingAssignment(null);
                                         setTempAssignedUser(null);
+                                        setApplyToWeek(false);
                                       }}
                                       className="bg-red-600 hover:bg-red-700 text-white transition-colors"
                                     >
@@ -5052,7 +5574,7 @@ useEffect(() => {
                                     </Button>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -5064,6 +5586,19 @@ useEffect(() => {
                                     >
                                       <Edit className="w-3 h-3 mr-1" />
                                       {tCommon("edit")}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => applyHolder(
+                                        new Set([rowKey(assignment.date, assignment.shiftId, assignment.segmentIndex)]),
+                                        'none'
+                                      )}
+                                      title={t('leaveEmptyHint')}
+                                      className="text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-colors"
+                                    >
+                                      <Eraser className="w-3 h-3 mr-1" />
+                                      {t('leaveEmpty')}
                                     </Button>
                                     {!assignment.isPikett && (
                                       assignment.segmentGroupId ? (
@@ -5112,66 +5647,55 @@ useEffect(() => {
                           </div>
                         ) : editingAssignment === `${assignment.date}-${index}` ? (
                           <div className="bg-orange-50 rounded-lg p-3">
-                            <div className="flex items-center gap-4">
+                            <div className="flex flex-wrap items-center gap-2">
                               <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
                               <Select
                                 value={tempAssignedUser || undefined}
                                 onValueChange={setTempAssignedUser}
                               >
-                                <SelectTrigger className="w-auto min-w-64 hover:bg-secondary/20 transition-colors">
-                                  <SelectValue placeholder={t('selectUserToViewShifts')} />
+                                <SelectTrigger className="flex-1 min-w-[12rem] hover:bg-secondary/20 transition-colors">
+                                  {(() => {
+                                    const u = tempAssignedUser && tempAssignedUser !== 'none'
+                                      ? availableUsers.find(x => x.id === tempAssignedUser) : null;
+                                    if (tempAssignedUser === 'none') return <span className="text-slate-500">{t('unassigned')}</span>;
+                                    if (!u) return <SelectValue placeholder={t('selectUserToViewShifts')} />;
+                                    const c = assignment.unavailableUsers.find(x => x.user.id === u.id);
+                                    return (
+                                      <span className="flex items-center gap-2 min-w-0">
+                                        <span className="truncate">{u.firstName} {u.lastName}</span>
+                                        {c && <Badge variant="outline" className="text-xs bg-red-50 border-red-200 truncate">{c.reason}</Badge>}
+                                      </span>
+                                    );
+                                  })()}
                                 </SelectTrigger>
                                 <SelectContent className="max-h-[400px]">
                                   <SelectItem value="none">
                                     <span className="text-slate-400">{t('unassigned')}</span>
                                   </SelectItem>
-                                  {(() => {
-                                    // Eligible members of this shift/pikett (ignoring constraints)
-                                    const item = assignment.isPikett
-                                      ? piketts.find(p => p.id === assignment.shiftId)
-                                      : shifts.find(s => s.id === assignment.shiftId);
-                                    if (!item) return null;
-                                    const eligibleMembers = availableUsers.filter(u => {
-                                      if (u.status !== 'ACTIVE' && u.status !== 'active') return false;
-                                      const inTeam = u.teamId === (item as any).teamId;
-                                      const included = (item as any).includedUserIds?.includes(u.id);
-                                      const excluded = (item as any).excludedUserIds?.includes(u.id);
-                                      return (inTeam && !excluded) || included;
-                                    });
-                                    return (
-                                      <div className="py-2">
-                                        <p className="px-2 text-xs font-semibold text-orange-700 mb-1">
-                                          ⚠️ {t('constraintsBroken')}
-                                        </p>
-                                        {eligibleMembers.map(user => {
-                                          const constraint = assignment.unavailableUsers.find(u => u.user.id === user.id);
-                                          return (
-                                            <SelectItem key={user.id} value={user.id} className="min-w-max">
-                                              <div className="flex items-center justify-between gap-3 w-full min-w-[400px]">
-                                                <div className="flex items-center gap-2 flex-shrink-0">
-                                                  <Avatar className="w-6 h-6 flex-shrink-0">
-                                                    <AvatarFallback className="text-xs">
-                                                      {user.firstName?.[0]}{user.lastName?.[0]}
-                                                    </AvatarFallback>
-                                                  </Avatar>
-                                                  <span className="whitespace-nowrap">{user.firstName} {user.lastName}</span>
-                                                </div>
-                                                {constraint && (
-                                                  <Badge variant="outline" className="text-xs bg-red-50 border-red-200 flex-shrink-0 whitespace-nowrap">
-                                                    {constraint.reason}
-                                                  </Badge>
-                                                )}
-                                              </div>
-                                            </SelectItem>
-                                          );
-                                        })}
-                                      </div>
-                                    );
-                                  })()}
+                                  {renderUserOptions(assignment)}
                                 </SelectContent>
                               </Select>
+                              {assignment.isPikett && (() => {
+                                const days = pikettWeekRows(assignment.date, assignment.shiftId).length;
+                                if (days < 2) return null;
+                                return (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    aria-pressed={applyToWeek}
+                                    onClick={() => setApplyToWeek(v => !v)}
+                                    title={t('applyToWeekHint')}
+                                    className={applyToWeek
+                                      ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100 transition-colors'
+                                      : 'text-slate-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition-colors'}
+                                  >
+                                    <CalendarRange className="w-3 h-3 mr-1" />
+                                    {t('applyToWeek', { count: days })}
+                                  </Button>
+                                );
+                              })()}
                               <Button
-                                onClick={() => handleSaveAssignmentChange(assignment.date, assignment.shiftId)}
+                                onClick={() => handleSaveAssignmentChange(assignment.date, assignment.shiftId, assignment.segmentIndex, assignment.isPikett)}
                                 variant="outline"
                                 size="sm"
                                 className="hover:bg-green-50"
@@ -5180,9 +5704,12 @@ useEffect(() => {
                                 {tCommon('save')}
                               </Button>
                               <Button
-                                onClick={() => { setEditingAssignment(null); setTempAssignedUser(null); }}
+                                onClick={() => { setEditingAssignment(null); setTempAssignedUser(null); setApplyToWeek(false); }}
                                 variant="ghost"
                                 size="sm"
+                                title={tCommon('cancel')}
+                                aria-label={tCommon('cancel')}
+                                className="text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
                               >
                                 <X className="w-3 h-3" />
                               </Button>
@@ -5199,6 +5726,22 @@ useEffect(() => {
                                   searchLabel={t('ccSearch')}
                               />
                             </div>
+                          </div>
+                        ) : assignment.leftEmpty ? (
+                          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 flex items-center justify-between gap-3">
+                            <span className="flex items-center gap-2 text-sm text-slate-600">
+                              <Eraser className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                              {t('leftEmptyNote')}
+                            </span>
+                            <Button
+                              onClick={() => { setEditingAssignment(`${assignment.date}-${index}`); setTempAssignedUser(null); setApplyToWeek(false); }}
+                              variant="outline"
+                              size="sm"
+                              className="hover:bg-white flex-shrink-0"
+                            >
+                              <Edit className="w-3 h-3 mr-1" />
+                              {t('assignSomeone')}
+                            </Button>
                           </div>
                         ) : (
                         <Alert className="border-orange-200 bg-orange-50">
@@ -5333,6 +5876,177 @@ useEffect(() => {
                 </p>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Drafts: list */}
+        <Dialog open={draftsOpen} onOpenChange={setDraftsOpen}>
+          <DialogContent className="sm:max-w-[640px] max-h-[85vh] flex flex-col">
+            <DialogHeader className="flex-shrink-0">
+              <DialogTitle className="flex items-center gap-2">
+                <FolderOpen className="w-5 h-5 text-indigo-600" />
+                {t('drafts')}
+              </DialogTitle>
+              <p className="text-sm text-slate-500">{t('draftsIntro')}</p>
+            </DialogHeader>
+
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-1 px-1 mt-2">
+              {draftsLoading && draftList.length === 0 ? (
+                <div className="flex items-center justify-center py-10 text-slate-500">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  {t('processing')}
+                </div>
+              ) : draftList.length === 0 ? (
+                <div className="text-center py-10 px-6">
+                  <FilePen className="w-10 h-10 mx-auto text-slate-300 mb-3" />
+                  <p className="font-medium text-slate-700">{t('draftsEmptyTitle')}</p>
+                  <p className="text-sm text-slate-500 mt-1">{t('draftsEmptyBody')}</p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {draftList.map(d => {
+                    const isOpen = currentDraft?.id === d.id;
+                    const items = [
+                      ...d.shiftIds.map(id => {
+                        const x: any = shifts.find((y: any) => y.id === id);
+                        return x ? { id, name: x.name, color: x.color, pikett: false } : null;
+                      }),
+                      ...d.pikettIds.map(id => {
+                        const x: any = piketts.find((y: any) => y.id === id);
+                        return x ? { id, name: x.name, color: x.color, pikett: true } : null;
+                      }),
+                    ].filter(Boolean) as { id: string; name: string; color?: string; pikett: boolean }[];
+                    return (
+                      <li
+                        key={d.id}
+                        className={`rounded-lg border p-3 transition-colors ${isOpen ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-slate-800 truncate" title={d.name}>{d.name}</p>
+                              {isOpen && (
+                                <Badge variant="outline" className="text-[10px] border-indigo-300 bg-white text-indigo-700">{t('draftOpenNow')}</Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
+                              {fmtDay(d.startDate)} → {fmtDay(d.endDate)} · {t('draftSlots', { count: d.rowCount })}
+                            </p>
+                            {items.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {items.map(it => (
+                                  <span
+                                    key={it.id}
+                                    className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-700"
+                                  >
+                                    {it.pikett
+                                      ? <Shield className="w-3 h-3 text-rose-600" />
+                                      : <span className="w-2 h-2 rounded-full" style={{ backgroundColor: it.color || '#94a3b8' }} />}
+                                    {it.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
+                              <History className="w-3 h-3" />
+                              {t('draftUpdatedBy', {
+                                who: d.updatedByName || '—',
+                                when: new Date(d.updatedAt).toLocaleString(locale, {
+                                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                                }),
+                              })}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Button
+                              size="sm"
+                              onClick={() => openDraft(d.id)}
+                              disabled={isOpen}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                            >
+                              {t('draftOpen')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDeletingDraft(d)}
+                              title={t('draftDelete')}
+                              aria-label={t('draftDelete')}
+                              className="px-2 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Drafts: name a new one */}
+        <Dialog open={saveDraftOpen} onOpenChange={setSaveDraftOpen}>
+          <DialogContent className="sm:max-w-[440px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FilePen className="w-5 h-5 text-indigo-600" />
+                {t('draftSave')}
+              </DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => { e.preventDefault(); if (draftName.trim()) saveDraft(draftName.trim()); }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="draft-name">{t('draftName')}</Label>
+                <Input
+                  id="draft-name"
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  maxLength={120}
+                  autoFocus
+                />
+                <p className="text-xs text-slate-500">{t('draftSaveHint')}</p>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setSaveDraftOpen(false)}>
+                  {tCommon('cancel')}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingDraft || !draftName.trim()}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  {savingDraft ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  {tCommon('save')}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Drafts: confirm delete */}
+        <Dialog open={!!deletingDraft} onOpenChange={(o) => { if (!o) setDeletingDraft(null); }}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle>{t('draftDeleteTitle')}</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-slate-600">
+              {t('draftDeleteBody', { name: deletingDraft?.name || '' })}
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeletingDraft(null)}>{tCommon('cancel')}</Button>
+              <Button
+                onClick={() => deletingDraft && deleteDraft(deletingDraft)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                {t('draftDelete')}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

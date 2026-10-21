@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/routing';
 import Image from 'next/image';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -14,16 +14,12 @@ import {
   LogOut,
   Menu,
   X,
-  User,
   Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';

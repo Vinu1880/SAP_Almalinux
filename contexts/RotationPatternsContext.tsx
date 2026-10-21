@@ -1,7 +1,7 @@
 // contexts/RotationPatternsContext.tsx
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface WeekPattern {
@@ -28,7 +28,6 @@ const RotationPatternsContext = createContext<RotationPatternsContextType | unde
 
 export function RotationPatternsProvider({ children }: { children: ReactNode }) {
   const [patterns, setPatterns] = useState<RotationPattern[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
   const { getAccessToken, isAuthenticated } = useAuth();
 
   const authFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
@@ -88,8 +87,6 @@ export function RotationPatternsProvider({ children }: { children: ReactNode }) 
         }
       } catch (error) {
         console.error('Error loading patterns:', error);
-      } finally {
-        setIsInitialized(true);
       }
     };
 

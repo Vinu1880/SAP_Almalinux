@@ -38,29 +38,27 @@ const nextConfig: NextConfig = {
   },
 
   outputFileTracingRoot: __dirname,
-  webpack: (config, { isServer, webpack }) => {
-    // Fix pour Windows - limiter les chemins de recherche
+  webpack: (config, { webpack }) => {
+    // Windows: resolve modules from the project only.
     config.resolve.modules = [
       path.resolve(__dirname, "node_modules"),
       "node_modules",
     ];
 
-    // Désactiver complètement le cache
+    // No persistent cache.
     config.cache = false;
 
-    // Ignorer les liens symboliques Windows
+    // Do not follow Windows symlinks.
     config.resolve.symlinks = false;
 
-    // Ajouter un plugin pour ignorer les erreurs de glob sur les dossiers système
+    // Skip Windows system folders, whose globbing fails during the build.
     config.plugins = config.plugins || [];
     config.plugins.push(
       new webpack.IgnorePlugin({
         checkResource(resource: string, context: string) {
-          // Ignorer les ressources dans les dossiers système Windows
           const systemPaths = [
             'Application Data',
             'Cookies',
-            'Application\ Data',
             'C:\\Windows',
             'C:\\ProgramData'
           ];

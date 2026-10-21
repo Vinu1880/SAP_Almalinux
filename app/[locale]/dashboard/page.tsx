@@ -12,7 +12,7 @@ import {
   CheckCircle, XCircle, Clock3, TrendingUp, Users, Calendar, Filter,
   Download, RefreshCw, Loader2, Send, AlertCircle, X, Network,
   FilterX, ArrowUpDown, ArrowUp, ArrowDown, Trash2, AlertTriangle,
-  ChevronLeft, ChevronRight, Scissors, Undo2
+  ChevronLeft, ChevronRight, Scissors, Search, Undo2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,6 +52,9 @@ const DashboardPage = () => {
   const isReady = useAuthReady();
   const { getAccessToken } = useAuth();
   const [dateFilter, setDateFilter] = useState<'7d' | '30d' | '90d' | '180d' | 'all'>('all');
+  // Year of the shift date. "all" spans every year, which stops being readable
+  // once two of them overlap: the stats above the table would mix them.
+  const [yearFilter, setYearFilter] = useState<number | 'all'>(new Date().getFullYear());
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedView, setSelectedView] = useState<'shifts' | 'users' | 'calendar'>('shifts');
   const [mode, setMode] = useState<'shifts' | 'pikett'>('shifts');
@@ -67,6 +70,10 @@ const DashboardPage = () => {
   const [splitSegments, setSplitSegments] = useState<Array<{ start: string; end: string; userId: string; ccUserIds?: string[] }>>([]);
   // Copied people for the resend dialog, reset each time it opens.
   const [resendCc, setResendCc] = useState<string[]>([]);
+  // "Other users" group in the resend dialog: closed until asked for, since
+  // handing a shift outside the roster is a one-off.
+  const [resendOutsidersOpen, setResendOutsidersOpen] = useState(false);
+  const [resendOutsiderSearch, setResendOutsiderSearch] = useState('');
   const [splitting, setSplitting] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState<string>('all');
@@ -95,7 +102,7 @@ const DashboardPage = () => {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [selectedUser, selectedShift, selectedStatus, selectedDate, dateFilter, selectedTeam]);
+  }, [selectedUser, selectedShift, selectedStatus, selectedDate, dateFilter, yearFilter, selectedTeam]);
 
   React.useEffect(() => {
     resetFilters();
@@ -104,11 +111,13 @@ const DashboardPage = () => {
 
   const shiftData = useShiftAssignments({
     dateFilter: dateFilter === 'all' ? undefined : dateFilter,
+    year: yearFilter === 'all' ? undefined : yearFilter,
     teamId: selectedTeam === 'all' ? undefined : selectedTeam
   });
 
   const pikettData = usePikettAssignments({
     dateFilter: dateFilter === 'all' ? undefined : dateFilter,
+    year: yearFilter === 'all' ? undefined : yearFilter,
     teamId: selectedTeam === 'all' ? undefined : selectedTeam
   });
 
@@ -146,6 +155,98 @@ const DashboardPage = () => {
   const localDateTime = (d: Date): string =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` +
     `T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
+
+  const addDays = (day: string, n: number): string => {
+    const d = new Date(`${day}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+
+  // One pikett invitation covers a holder's contiguous days (Mon 08:00 → next
+  // Mon 08:00). Taking one day out must leave the others alone: the invitation
+  // is cut back to what remains, and a second one goes out for the days after
+  // the gap when the removed day sat in the middle. Cancelling it outright took
+  // the whole week out of the holder's calendar.
+  // Returns false when Outlook could not be brought in line.
+  const detachPikettDay = async (row: any, eventId: string, graphToken: string): Promise<boolean> => {
+    const day = String(row.date).slice(0, 10);
+    const pikett = row.pikett;
+    const mailbox = pikett?.senderMailbox || 'me';
+    const headers = { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken };
+
+    let siblings: any[] = [];
+    try {
+      const res = await authFetch(`/api/pikett-assignments?startDate=${addDays(day, -14)}&endDate=${addDays(day, 14)}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      siblings = (Array.isArray(data) ? data : []).filter((a: any) =>
+        a.id !== row.id && a.outlookEventId === eventId && a.status !== 'CANCELLED'
+      );
+    } catch {
+      return false;
+    }
+
+    if (siblings.length === 0) {
+      const r = await authFetch('/api/outlook/send-event', {
+        method: 'DELETE', headers, body: JSON.stringify({ mailbox, eventId }),
+      }).catch(() => null);
+      return !!r?.ok;
+    }
+
+    const days = Array.from(new Set(siblings.map((a: any) => String(a.date).slice(0, 10)))).sort();
+    const ranges: string[][] = [];
+    for (const d of days) {
+      const last = ranges[ranges.length - 1];
+      if (last && addDays(last[last.length - 1], 1) === d) last.push(d);
+      else ranges.push([d]);
+    }
+    const hour = (pikett?.startHour || '08:00').slice(0, 5);
+    const window = (r: string[]) => ({
+      start: { dateTime: `${r[0]}T${hour}:00`, timeZone: 'Europe/Zurich' },
+      end: { dateTime: `${addDays(r[r.length - 1], 1)}T${hour}:00`, timeZone: 'Europe/Zurich' },
+    });
+
+    let ok = true;
+    const patched = await authFetch('/api/outlook/send-event', {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ mailbox, eventId, changes: window(ranges[0]) }),
+    }).catch(() => null);
+    if (!patched?.ok) ok = false;
+
+    for (const r of ranges.slice(1)) {
+      const holder = siblings.find((a: any) => String(a.date).slice(0, 10) === r[0])?.user || row.user;
+      const cc = resolveCc(row.ccUserIds || [], users || []);
+      const name = pikett?.name || '';
+      const event = {
+        subject: subjectWithCc(`${name} - ${holder.firstName} ${holder.lastName}`, cc),
+        body: { contentType: 'HTML', content: `<h2>${name}</h2><p>${hour} → ${hour}</p>` },
+        ...window(r),
+        attendees: [
+          { emailAddress: { address: holder.email, name: `${holder.firstName} ${holder.lastName}` }, type: 'required' },
+          ...ccAttendees(cc),
+        ],
+        location: { displayName: 'Office' },
+        isReminderOn: true,
+        reminderMinutesBeforeStart: 1440,
+        responseRequested: true,
+        allowNewTimeProposals: false,
+        showAs: 'busy',
+        categories: ['Pikett', name],
+      };
+      const sent = await authFetch('/api/outlook/send-event', {
+        method: 'POST', headers, body: JSON.stringify({ mailbox, event }),
+      }).catch(() => null);
+      if (!sent?.ok) { ok = false; continue; }
+      const { eventId: newId } = await sent.json();
+      for (const a of siblings.filter((x: any) => r.includes(String(x.date).slice(0, 10)))) {
+        await authFetch(`/api/pikett-assignments/${a.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outlookEventId: newId }),
+        }).catch(() => null);
+      }
+    }
+    return ok;
+  };
 
   const statusDotColor = (status: string) => {
     switch (status) {
@@ -351,7 +452,8 @@ const DashboardPage = () => {
           return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
         };
         const dateStr = normalizeDate(resendingAssignment.date);
-        const shift = resendingAssignment.shift;
+        const isPikett = mode !== 'shifts';
+        const shift = isPikett ? resendingAssignment.pikett : resendingAssignment.shift;
 
         const eligibleUsers = getEligibleUsersForShift(shift);
 
@@ -366,7 +468,7 @@ const DashboardPage = () => {
 
         let dateAssignments = assignments;
         try {
-          const res = await authFetch(`/api/shift-assignments?startDate=${prevDateStr}&endDate=${nextDateStr}`);
+          const res = await authFetch(`/api/${isPikett ? 'pikett' : 'shift'}-assignments?startDate=${prevDateStr}&endDate=${nextDateStr}`);
           if (res.ok) {
             dateAssignments = await res.json();
           } else {
@@ -378,8 +480,10 @@ const DashboardPage = () => {
         const unavailableUsersMap = await fetchUnavailableUsersForDate(
           dateStr,
           eligibleEmails,
-          (shift?.startTime || '08:00').slice(0, 5),
-          (shift?.endTime || '17:30').slice(0, 5)
+          // A pikett day starts at its handover hour and runs past midnight;
+          // the rest of this date is what can be checked here.
+          isPikett ? (shift?.startHour || '08:00').slice(0, 5) : (shift?.startTime || '08:00').slice(0, 5),
+          isPikett ? '23:59' : (shift?.endTime || '17:30').slice(0, 5)
         );
 
         const available: any[] = [];
@@ -391,7 +495,9 @@ const DashboardPage = () => {
           const refusedAssignment = dateAssignments.find(a =>
             normalizeDate(a.date) === dateStr &&
             a.userId === user.id &&
-            (a as any).shiftId === (resendingAssignment as any).shiftId &&
+            (isPikett
+              ? (a as any).pikettId === (resendingAssignment as any).pikettId
+              : (a as any).shiftId === (resendingAssignment as any).shiftId) &&
             a.status === 'REFUSED'
           );
 
@@ -426,7 +532,9 @@ const DashboardPage = () => {
             continue;
           }
 
-          if (!isUserWorkingOnDay(user, dateStr, shift?.startTime)) {
+          // A pikett is on call around the clock, weekends included: working
+          // days and adjacent days do not apply to it.
+          if (!isPikett && !isUserWorkingOnDay(user, dateStr, shift?.startTime)) {
             // A global joker (workPercent 0) never "works today" — saying so
             // hides why they are really set aside.
             const isGlobalJoker = (user.workPercent ?? 100) === 0;
@@ -451,7 +559,7 @@ const DashboardPage = () => {
             }
           }
 
-          const hasConsecutiveShift = dateAssignments.some(a => {
+          const hasConsecutiveShift = !isPikett && dateAssignments.some(a => {
             const aDateNorm = normalizeDate(a.date);
             return (aDateNorm === prevDateStr || aDateNorm === nextDateStr) &&
               a.userId === user.id &&
@@ -483,7 +591,7 @@ const DashboardPage = () => {
     };
 
     calculateAvailability();
-  }, [resendingAssignment, assignments, users]);
+  }, [resendingAssignment, assignments, users, mode]);
 
   // Seed the dialog with two halves of the shift window, rounded to the hour
   // boundary in the middle, so the admin only adjusts what differs.
@@ -507,6 +615,9 @@ const DashboardPage = () => {
     // invite them all over again.
     setResendingAssignment(assignment);
     setResendCc((assignment as any).ccUserIds || []);
+    // Fold the outsiders group back for each new dialog.
+    setResendOutsidersOpen(false);
+    setResendOutsiderSearch('');
     try {
       const apiBase = mode === 'shifts' ? '/api/shift-assignments' : '/api/pikett-assignments';
       const res = await authFetch(`${apiBase}/${assignment.id}`);
@@ -994,7 +1105,19 @@ const DashboardPage = () => {
         });
       }
 
-      if (resendingAssignment.outlookEventId) {
+      let detachFailed = false;
+      if (resendingAssignment.outlookEventId && mode !== 'shifts') {
+        detachFailed = !(await detachPikettDay(resendingAssignment, resendingAssignment.outlookEventId, graphToken));
+        // The old row no longer has an invitation of its own; left syncable it
+        // would keep reading the holder's answer to the rest of the week.
+        if (!sameRow) {
+          await authFetch(`${apiBase}/${resendingAssignment.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'CANCELLED' }),
+          }).catch(() => null);
+        }
+      } else if (resendingAssignment.outlookEventId) {
         try {
           await authFetch('/api/outlook/send-event', {
             method: 'DELETE',
@@ -1009,6 +1132,14 @@ const DashboardPage = () => {
       }
 
       await refresh(); fetchCalendarAssignments();
+
+      if (detachFailed) {
+        setActionMessage({ type: 'error', text: t('pikettDetachError') });
+        setTimeout(() => setActionMessage(null), 8000);
+        setResendingAssignment(null);
+        setSelectedNewUser(null);
+        return;
+      }
 
       setActionMessage({
         type: 'success',
@@ -1039,13 +1170,19 @@ const DashboardPage = () => {
         const graphToken = await getAccessToken();
         if (graphToken) {
           const mailbox = (mode === 'shifts' ? deletingAssignment.shift?.senderMailbox : deletingAssignment.pikett?.senderMailbox) || 'me';
-          try {
-            await authFetch('/api/outlook/send-event', {
-              method: 'DELETE',
-              headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
-              body: JSON.stringify({ mailbox, eventId: deletingAssignment.outlookEventId })
-            });
-          } catch {
+          if (mode !== 'shifts') {
+            if (!(await detachPikettDay(deletingAssignment, deletingAssignment.outlookEventId, graphToken))) {
+              throw new Error(t('pikettDetachError'));
+            }
+          } else {
+            try {
+              await authFetch('/api/outlook/send-event', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'X-Graph-Token': graphToken },
+                body: JSON.stringify({ mailbox, eventId: deletingAssignment.outlookEventId })
+              });
+            } catch {
+            }
           }
         }
       }
@@ -1304,6 +1441,30 @@ const DashboardPage = () => {
                 <TabsTrigger value="all" className="text-xs">{t('allPeriod')}</TabsTrigger>
               </TabsList>
             </Tabs>
+
+            <Select
+              value={String(yearFilter)}
+              onValueChange={(v) => setYearFilter(v === 'all' ? 'all' : Number(v))}
+            >
+              <SelectTrigger className="w-[110px] h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(() => {
+                  // Only years that actually hold shifts, plus the current one,
+                  // so the list never offers an empty selection.
+                  const years = new Set<number>([new Date().getFullYear()]);
+                  for (const a of (assignments || [])) {
+                    const y = new Date((a as any).date).getFullYear();
+                    if (!Number.isNaN(y)) years.add(y);
+                  }
+                  return [...years].sort((x, y) => y - x).map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ));
+                })()}
+                <SelectItem value="all">{t('allYears')}</SelectItem>
+              </SelectContent>
+            </Select>
 
             <div className="flex items-center gap-2">
               <Button
@@ -2223,7 +2384,7 @@ const DashboardPage = () => {
           setSelectedNewUser(null);
         }
       }}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+        <DialogContent className="sm:max-w-[900px] max-h-[88vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>{t('resendTitle')}</DialogTitle>
             <DialogDescription>
@@ -2241,7 +2402,7 @@ const DashboardPage = () => {
                 <p className="text-slate-500">{t('checkingAvailability')}</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {/* No eligible users */}
                 {usersAvailability.available.length === 0 &&
                  usersAvailability.alreadyAssigned.length === 0 &&
@@ -2256,16 +2417,16 @@ const DashboardPage = () => {
                 {/* Available users */}
                 {usersAvailability.available.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2 sticky top-0 bg-white/95 backdrop-blur-sm py-1 z-10">
                       <CheckCircle className="w-4 h-4" />
                       {t('availableCount', { count: usersAvailability.available.length })}
                     </h4>
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {usersAvailability.available.map(user => (
                         <div
                           key={user.id}
                           onClick={() => setSelectedNewUser(user.id)}
-                          className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                          className={`p-2.5 border rounded-lg cursor-pointer transition-all ${
                             selectedNewUser === user.id
                               ? 'border-blue-500 bg-blue-50 shadow-sm'
                               : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
@@ -2301,17 +2462,17 @@ const DashboardPage = () => {
                 {usersAvailability.alreadyAssigned.length > 0 && (
                   <div>
                     <div className="border-t pt-3">
-                      <h4 className="text-sm font-semibold text-orange-700 mb-2 flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-orange-700 mb-2 flex items-center gap-2 sticky top-0 bg-white/95 backdrop-blur-sm py-1 z-10">
                         <AlertCircle className="w-4 h-4" />
                         ⚠️ {t('alreadyAssignedTodayWithCount', { count: usersAvailability.alreadyAssigned.length })}
                       </h4>
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {usersAvailability.alreadyAssigned.map(user => {
                           return (
                             <div
                               key={user.id}
                               onClick={() => setSelectedNewUser(user.id)}
-                              className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                              className={`p-2.5 border rounded-lg cursor-pointer transition-all ${
                                 selectedNewUser === user.id
                                   ? 'border-blue-500 bg-blue-50 shadow-sm'
                                   : 'border-orange-200 bg-orange-50 hover:border-blue-300'
@@ -2352,16 +2513,16 @@ const DashboardPage = () => {
                 {usersAvailability.refused.length > 0 && (
                   <div>
                     <div className="border-t pt-3">
-                      <h4 className="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-2 sticky top-0 bg-white/95 backdrop-blur-sm py-1 z-10">
                         <XCircle className="w-4 h-4 text-slate-500" />
                         {t('refusedThisShift', { count: usersAvailability.refused.length })}
                       </h4>
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {usersAvailability.refused.map(user => (
                           <div
                             key={user.id}
                             onClick={() => setSelectedNewUser(user.id)}
-                            className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                            className={`p-2.5 border rounded-lg cursor-pointer transition-all ${
                               selectedNewUser === user.id
                                 ? 'border-blue-500 bg-blue-50 shadow-sm'
                                 : 'border-slate-200 bg-slate-50 hover:border-blue-300'
@@ -2401,16 +2562,16 @@ const DashboardPage = () => {
                 {usersAvailability.unavailable.length > 0 && (
                   <div>
                     <div className="border-t pt-3">
-                      <h4 className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2 sticky top-0 bg-white/95 backdrop-blur-sm py-1 z-10">
                         <XCircle className="w-4 h-4" />
                         {t('brokenConstraints', { count: usersAvailability.unavailable.length })}
                       </h4>
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {usersAvailability.unavailable.map(({ user, reason }) => (
                           <div
                             key={user.id}
                             onClick={() => setSelectedNewUser(user.id)}
-                            className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                            className={`p-2.5 border rounded-lg cursor-pointer transition-all ${
                               selectedNewUser === user.id
                                 ? 'border-blue-500 bg-blue-50 shadow-sm'
                                 : 'border-red-200 bg-red-50 hover:border-blue-300'
@@ -2445,6 +2606,100 @@ const DashboardPage = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Everyone else, for one-off cases. Folded away by default:
+                    handing a shift to somebody outside the roster is the
+                    exception, and it must not require editing the shift's
+                    members, which would then have to be undone. */}
+                {(() => {
+                  const known = new Set<string>([
+                    ...usersAvailability.available.map((u: any) => u.id),
+                    ...usersAvailability.alreadyAssigned.map((u: any) => u.id),
+                    ...usersAvailability.refused.map((u: any) => u.id),
+                    ...usersAvailability.unavailable.map((x: any) => x.user.id),
+                  ]);
+                  const outsiders = (users || []).filter((u: any) =>
+                    (u.status === 'ACTIVE' || u.status === 'active') &&
+                    u.id !== resendingAssignment?.userId &&
+                    !known.has(u.id)
+                  );
+                  if (outsiders.length === 0) return null;
+                  const needle = resendOutsiderSearch.trim().toLowerCase();
+                  const shown = needle
+                    ? outsiders.filter((u: any) =>
+                        `${u.firstName} ${u.lastName} ${u.email || ''} ${u.team?.name || ''}`
+                          .toLowerCase().includes(needle))
+                    : outsiders;
+                  return (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResendOutsidersOpen(o => !o);
+                          setResendOutsiderSearch('');
+                        }}
+                        className="w-full text-sm font-semibold text-slate-500 mb-2 flex items-center gap-2 hover:text-slate-700 transition-colors"
+                      >
+                        <ChevronRight className={`w-4 h-4 transition-transform ${resendOutsidersOpen ? 'rotate-90' : ''}`} />
+                        {t('otherUsers')} ({outsiders.length})
+                      </button>
+                      {resendOutsidersOpen && (
+                        <>
+                          {outsiders.length > 5 && (
+                            <div className="relative mb-2">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                              <Input
+                                value={resendOutsiderSearch}
+                                onChange={(e) => setResendOutsiderSearch(e.target.value)}
+                                placeholder={t('ccSearch')}
+                                className="h-8 pl-8 text-sm"
+                              />
+                            </div>
+                          )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {shown.map((user: any) => (
+                              <div
+                                key={user.id}
+                                onClick={() => setSelectedNewUser(user.id)}
+                                className={`p-2.5 border rounded-lg cursor-pointer transition-all ${
+                                  selectedNewUser === user.id
+                                    ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                    : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <Avatar className="w-8 h-8">
+                                      <AvatarFallback className="text-xs bg-slate-200 text-slate-600">
+                                        {user.firstName[0]}{user.lastName[0]}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                      <p className="font-medium text-slate-800">
+                                        {user.firstName} {user.lastName}
+                                      </p>
+                                      <p className="text-xs text-slate-500">
+                                        {user.team?.name || tCommon('noTeam')} • {user.email}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {selectedNewUser === user.id && (
+                                    <CheckCircle className="w-5 h-5 text-blue-600" />
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            {shown.length === 0 && (
+                              <p className="text-xs text-slate-400 text-center py-3">
+                                {t('noSearchResult')}
+                              </p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

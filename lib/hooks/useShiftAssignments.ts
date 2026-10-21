@@ -78,6 +78,8 @@ export interface TeamStats {
 
 interface UseShiftAssignmentsOptions {
   dateFilter?: '24h' | '7d' | '30d' | '90d' | '180d';
+  /** Calendar year of the shift date itself, not of when it was sent. */
+  year?: number;
   teamId?: string;
   userId?: string;
   status?: 'PENDING' | 'TENTATIVE' | 'ACCEPTED' | 'REFUSED' | 'CANCELLED';
@@ -110,6 +112,12 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
       // Build query parameters
       const params = new URLSearchParams();
       if (options.dateFilter) params.append('dateFilter', options.dateFilter);
+      // A year filters on the shift date; dateFilter filters on when it was
+      // sent. They answer different questions, so a year wins when both are set.
+      if (options.year) {
+        params.append('startDate', `${options.year}-01-01`);
+        params.append('endDate', `${options.year}-12-31`);
+      }
       if (options.teamId) params.append('teamId', options.teamId);
       if (options.userId) params.append('userId', options.userId);
       if (options.status) params.append('status', options.status);
@@ -125,12 +133,16 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [options.dateFilter, options.teamId, options.userId, options.status]);
+  }, [options.dateFilter, options.year, options.teamId, options.userId, options.status]);
 
   const fetchStats = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (options.dateFilter) params.append('dateFilter', options.dateFilter);
+      if (options.year) {
+        params.append('startDate', `${options.year}-01-01`);
+        params.append('endDate', `${options.year}-12-31`);
+      }
       if (options.teamId) params.append('teamId', options.teamId);
 
       const response = await authFetch(`/api/shift-assignments/stats?${params.toString()}`);
@@ -143,7 +155,7 @@ export function useShiftAssignments(options: UseShiftAssignmentsOptions = {}) {
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
-  }, [options.dateFilter, options.teamId]);
+  }, [options.dateFilter, options.year, options.teamId]);
 
   const createAssignments = async (assignmentsData: Array<{
     date: string;

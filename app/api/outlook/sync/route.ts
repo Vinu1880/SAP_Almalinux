@@ -205,14 +205,37 @@ export async function POST(request: NextRequest) {
             where: { id: { in: currentCc } },
             select: { id: true, email: true, firstName: true, lastName: true },
           });
-          const declinedCcIds = ccUsers
-            .filter(cc => {
-              const att = event.attendees?.find(
-                (a: any) => a.emailAddress?.address?.toLowerCase() === cc.email.toLowerCase()
+          // Same rule as the holder: the organizer copy only learns of a decline
+          // when a response is sent, so the copied person's own calendar wins.
+          const ccDeclined = async (cc: { email: string }): Promise<boolean> => {
+            const att = event.attendees?.find(
+              (a: any) => a.emailAddress?.address?.toLowerCase() === cc.email.toLowerCase()
+            );
+            if (att?.status?.response === 'declined') return true;
+            if (!event.iCalUId) return false;
+            try {
+              const r = await fetch(
+                `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(cc.email)}/events?$filter=iCalUId eq '${event.iCalUId}'&$select=responseStatus&$top=1`,
+                { headers: { 'Authorization': `Bearer ${graphToken}` } }
               );
-              return att?.status?.response === 'declined';
-            })
-            .map(cc => cc.id);
+              if (!r.ok) {
+                console.warn(`[outlook/sync] CC lookup failed for ${cc.email}: ${r.status}`);
+                return false;
+              }
+              const local = (await r.json()).value?.[0];
+              if (local) return local.responseStatus?.response === 'declined';
+              // Declining removes the event from the calendar; an unopened
+              // invite looks the same, so wait a day before reading it as no.
+              return (Date.now() - new Date(assignment.createdAt).getTime()) / 3600000 >= 24;
+            } catch (e) {
+              console.warn(`[outlook/sync] CC lookup error for ${cc.email}:`, e);
+              return false;
+            }
+          };
+          const declinedCcIds: string[] = [];
+          for (const cc of ccUsers) {
+            if (await ccDeclined(cc)) declinedCcIds.push(cc.id);
+          }
 
           if (declinedCcIds.length > 0) {
             const remaining = currentCc.filter(id => !declinedCcIds.includes(id));

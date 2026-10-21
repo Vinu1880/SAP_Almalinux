@@ -229,7 +229,6 @@ const UsersPage = () => {
   const {
     users,
     loading: usersLoading, 
-    error: usersError, 
     createUser,
     updateUser,
     deleteUser,
@@ -239,7 +238,6 @@ const UsersPage = () => {
   const { 
     teams, 
     loading: teamsLoading, 
-    error: teamsError,
     createTeam,
     updateTeam,
     deleteTeam,
@@ -852,7 +850,6 @@ const UsersPage = () => {
   };
 
   const TeamMembersSelector = ({
-    teamId,
     currentMembers,
     onMembersChange
   }: {

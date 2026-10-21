@@ -216,3 +216,16 @@ export function validateBody<T>(schema: z.ZodType<T>, data: unknown): { success:
   }
   return { success: true, data: result.data, error: '' };
 }
+
+// Planning drafts. Rows are kept loose on purpose: they are a snapshot of the
+// planner preview, shaped and read back by the planner alone.
+const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+export const planningDraftSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  shiftIds: z.array(cuidSchema).max(100).default([]),
+  pikettIds: z.array(cuidSchema).max(100).default([]),
+  rows: z.array(z.record(z.string(), z.any())).max(5000),
+});
+export const updatePlanningDraftSchema = planningDraftSchema.partial();

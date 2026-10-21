@@ -13,10 +13,20 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const dateFilter = searchParams.get('dateFilter');
     const teamId = searchParams.get('teamId');
+    const rangeStart = searchParams.get('startDate');
+    const rangeEnd = searchParams.get('endDate');
 
     const where: any = {};
 
-    if (dateFilter) {
+    // A date range filters on the shift date, which is what a year selector
+    // means: "show me 2027", not "show me what was sent in 2027". dateFilter
+    // keeps filtering on createdAt, since it tracks sending activity.
+    if (rangeStart && rangeEnd) {
+      where.date = {
+        gte: new Date(rangeStart),
+        lte: new Date(rangeEnd),
+      };
+    } else if (dateFilter) {
       let startDate = new Date();
       if (dateFilter === '24h') {
         startDate.setHours(startDate.getHours() - 24);

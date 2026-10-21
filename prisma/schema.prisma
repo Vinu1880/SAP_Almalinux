@@ -342,3 +342,23 @@ model UserRule {
 
   @@index([userId])
 }
+
+// A planning preview saved before sending, so several shifts or piketts can be
+// prepared in parallel and sent together. Shared by every admin. Its rows count
+// as taken when another plan is generated, so the same person is not booked
+// twice across drafts, but they never reserve a slot or reach Outlook.
+model PlanningDraft {
+  id            String   @id @default(cuid())
+  name          String
+  startDate     String   // YYYY-MM-DD
+  endDate       String   // YYYY-MM-DD
+  shiftIds      String[] @default([])
+  pikettIds     String[] @default([])
+  // Slim preview rows: { d, s, p, u[], seg?, cc?, e?, m?, r?, x? }
+  rows          Json
+  updatedByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([updatedAt])
+}

@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navigation from '@/components/Navigation';
 import { useTranslations } from 'next-intl';
@@ -66,7 +66,6 @@ const ShiftsPage = () => {
     createPikett,
     updatePikett: updatePikettHook,
     deletePikett: deletePikettHook,
-    refetch: refetchPiketts
   } = usePiketts();
 
   const {
@@ -76,7 +75,6 @@ const ShiftsPage = () => {
     createShift, 
     updateShift, 
     deleteShift,
-    refetch: refetchShifts 
   } = useShifts();
   
   const { 
