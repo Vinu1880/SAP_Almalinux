@@ -14,12 +14,12 @@ Outlook invitations from a shared mailbox, and tracks the answers.
 
 `npm` and `npx` come with Node.js — there is nothing else to install globally. Prisma,
 TypeScript and tsx are project dependencies, installed by `npm ci`. Use the Node.js major
-version of the `Dockerfile` (`FROM node:20-alpine`) so local builds match the container.
+version of the `Dockerfile` (`FROM node:24-alpine`) so local builds match the container.
 
 Development machine (Windows, PowerShell):
 
 ```powershell
-winget install --id OpenJS.NodeJS.20 -e     # Node.js 20 + npm + npx
+winget install --id OpenJS.NodeJS.LTS -e --version 24.22.1   # Node.js 24 + npm + npx
 winget install --id Git.Git -e
 winget install --id Docker.DockerDesktop -e
 ```
@@ -112,7 +112,7 @@ Production (AlmaLinux, Podman):
 podman exec shiftpilot-postgres pg_dump -U sa_shiftpilot -d shiftpilot -f /tmp/before-update.sql
 podman cp shiftpilot-postgres:/tmp/before-update.sql ./backups/
 git pull
-podman build -t shiftpilot-app:latest .
+podman build --pull -t shiftpilot-app:latest .
 podman-compose up -d app
 podman logs shiftpilot-app --tail 30
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/shifts            # 401
@@ -169,9 +169,12 @@ the container stops and the logs show why.
    ```
 
 Runtime images: Node.js and PostgreSQL versions are set in `Dockerfile` and
-`docker-compose.yml` — see [Node.js releases](https://nodejs.org/en/about/previous-releases)
-and [PostgreSQL versioning](https://www.postgresql.org/support/versioning/). A PostgreSQL
-major upgrade needs a dump and restore, not just a new image tag.
+`docker-compose.yml` — see [Node.js releases](https://nodejs.org/en/about/previous-releases),
+[Node.js security releases](https://nodejs.org/en/blog/vulnerability) and
+[PostgreSQL versioning](https://www.postgresql.org/support/versioning/). Stay on an LTS
+line (even number). Build with `--pull` so a patched base image is picked up:
+`docker compose build --pull app` / `podman build --pull -t shiftpilot-app:latest .`.
+A PostgreSQL major upgrade needs a dump and restore, not just a new image tag.
 
 npm reference: [outdated](https://docs.npmjs.com/cli/v10/commands/npm-outdated) ·
 [update](https://docs.npmjs.com/cli/v10/commands/npm-update) ·
