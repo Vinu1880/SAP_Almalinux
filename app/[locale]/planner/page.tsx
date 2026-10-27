@@ -1813,7 +1813,8 @@ const processShiftAssignments = async () => {
               // eslint-disable-next-line no-console
               console.warn(`[pikett] ${pikett.name} ${weekKey}: rest rule (${minRest} weeks) relaxed for ${assignedUserForWeek.firstName} ${assignedUserForWeek.lastName}`);
             }
-            // Block this user from support shifts during the pikett week.
+            // Week marker for the pikett-to-pikett rules. Support shifts are
+            // blocked day by day further down (pikettDayHolds).
             if (pikett.avoidSupportSameWeek !== false) {
               for (const d of weekDates) {
                 pikettWeekMemberSet.add(`${weekKey}|${assignedUserForWeek.id}`);
@@ -3720,9 +3721,9 @@ useEffect(() => {
                                             }
                                           }
 
-                                          // 3.5 Check "on pikett this week" and "rest-weeks law"
-                                          //     (matches PRIORITY 2.7 of auto-assign; also warns for pikett↔pikett same-week
-                                          //     and cross-pikett rest-week violations — the user is still selectable)
+                                          // 3.5 Pikett context: another pikett the same week and the rest-weeks
+                                          //     law. Support shifts on a pikett day are caught in step 1, drafts
+                                          //     just below. The user stays selectable either way.
                                           const isoWk = (d: string) => {
                                             const [y, m, dd] = d.split('-').map(Number);
                                             const tmp = new Date(Date.UTC(y, (m || 1) - 1, dd || 1));
