@@ -2711,6 +2711,7 @@ const DashboardPage = () => {
               onChange={setResendCc}
               label={t('ccLabel')}
               addLabel={t('ccAdd')}
+              closeLabel={tCommon('close')}
               emptyLabel={t('ccEmpty')}
               jokerLabel={t('ccJoker')}
               searchLabel={t('ccSearch')}
@@ -2846,6 +2847,7 @@ const DashboardPage = () => {
                           onChange={(ids) => updateSegment(i, { ccUserIds: ids } as any)}
                           label={t('ccLabel')}
                           addLabel={t('ccAdd')}
+                          closeLabel={tCommon('close')}
                           emptyLabel={t('ccEmpty')}
                           jokerLabel={t('ccJoker')}
                                   searchLabel={t('ccSearch')}

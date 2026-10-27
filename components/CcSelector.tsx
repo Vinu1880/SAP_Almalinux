@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, UserPlus, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,8 @@ interface CcSelectorProps {
   onChange: (ids: string[]) => void;
   label: string;
   addLabel: string;
+  /** Shown on the button while the list is open; picks already apply on click. */
+  closeLabel?: string;
   emptyLabel: string;
   jokerLabel: string;
   searchLabel?: string;
@@ -40,6 +42,7 @@ export function CcSelector({
   onChange,
   label,
   addLabel,
+  closeLabel,
   emptyLabel,
   jokerLabel,
   searchLabel,
@@ -47,6 +50,21 @@ export function CcSelector({
 }: CcSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Each click already adds or removes someone, so closing needs no confirm:
+  // a click anywhere outside folds the list away.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
 
   const selected = candidates.filter(c => selectedIds.includes(c.id));
 
@@ -62,7 +80,7 @@ export function CcSelector({
   };
 
   return (
-    <div className="space-y-2">
+    <div ref={rootRef} className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-slate-700">{label}</label>
         <Button
@@ -70,11 +88,12 @@ export function CcSelector({
           variant="outline"
           size="sm"
           disabled={disabled}
-          onClick={() => setOpen(o => !o)}
+          onClick={() => { setOpen(o => !o); setQuery(''); }}
           className="h-7 text-xs hover:bg-sky-50 hover:text-sky-700 hover:border-sky-300 transition-colors"
         >
-          <UserPlus className="w-3 h-3 mr-1" />
-          {addLabel}
+          {open
+            ? <><Check className="w-3 h-3 mr-1" />{closeLabel || addLabel}</>
+            : <><UserPlus className="w-3 h-3 mr-1" />{addLabel}</>}
         </Button>
       </div>
 

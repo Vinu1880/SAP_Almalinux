@@ -1,5 +1,6 @@
 {
   "common": {
+    "close": "Fermer",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "cancel": "Annuler",
@@ -558,6 +559,7 @@
     "copyright": "© 2026 ShiftPilot v2.3. Tous droits réservés."
   },
   "planner": {
+    "discardChanges": "Annuler les modifications",
     "title": "Planificateur",
     "settings": "Paramètres",
     "planningSettings": "Paramètres de planification",

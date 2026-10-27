@@ -1,6 +1,6 @@
 'use client';
 
-import { subjectWithCc } from '@/lib/ccInvite';
+import { subjectWithCc, ccAttendees } from '@/lib/ccInvite';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthFetch, useAuthReady } from '@/lib/hooks/useAuthFetch';
@@ -63,21 +63,26 @@ export const AutoSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // the team reads them as involved — rewrite it. Only the browser holds
         // a delegated Graph token, which is why the server cannot do this.
         if (graphToken && Array.isArray(result.ccDeclines) && result.ccDeclines.length > 0) {
-          for (const d of result.ccDeclines) {
+          // One update per event: pikett day rows share theirs, and a later
+          // entry (a holder refusal) supersedes an earlier one.
+          const byEvent = new Map<string, any>();
+          for (const d of result.ccDeclines) byEvent.set(d.outlookEventId, d);
+          for (const d of byEvent.values()) {
             try {
               const holder = `${d.holder?.firstName || ''} ${d.holder?.lastName || ''}`.trim();
               const base = `${d.itemName || ''} - ${holder}`.trim();
               const subject = subjectWithCc(base, d.remainingCc || []);
               const changes: any = { subject };
 
-              // The holder refused, so the copied people have to come off the
-              // event itself — a subject rewrite alone would leave the slot
-              // sitting in their calendar. Only the required attendee stays.
-              if (d.dropAttendees && d.holder?.email) {
-                changes.attendees = [{
-                  emailAddress: { address: d.holder.email, name: holder },
-                  type: 'required',
-                }];
+              // The attendee list follows the row: the holder, plus whoever is
+              // still copied. A decline then takes the person off the event
+              // itself, not only off the subject; a holder refusal leaves the
+              // holder alone (remainingCc is empty).
+              if (d.holder?.email) {
+                changes.attendees = [
+                  { emailAddress: { address: d.holder.email, name: holder }, type: 'required' },
+                  ...ccAttendees(d.remainingCc || []),
+                ];
               }
 
               await authFetch('/api/outlook/send-event', {

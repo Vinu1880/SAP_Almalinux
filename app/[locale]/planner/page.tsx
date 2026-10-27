@@ -615,19 +615,26 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
     setTempShiftAssignments(prev => prev.map(update));
   };
 
-  const handleSaveAssignmentChange = (
-    assignmentDate: string,
-    assignmentShiftId: string,
-    segmentIndex?: number,
-    isPikett?: boolean,
-  ) => {
-    if (tempAssignedUser === null) return;
+  // Picking someone applies at once: there is no separate save to forget.
+  const pickHolder = (a: ShiftAssignment, userId: string, wholeWeek: boolean = applyToWeek) => {
+    setTempAssignedUser(userId);
     const keys = new Set<string>(
-      isPikett && applyToWeek
-        ? pikettWeekRows(assignmentDate, assignmentShiftId).map(a => rowKey(a.date, a.shiftId, a.segmentIndex))
-        : [rowKey(assignmentDate, assignmentShiftId, segmentIndex)]
+      a.isPikett && wholeWeek
+        ? pikettWeekRows(a.date, a.shiftId).map(r => rowKey(r.date, r.shiftId, r.segmentIndex))
+        : [rowKey(a.date, a.shiftId, a.segmentIndex)]
     );
-    applyHolder(keys, tempAssignedUser);
+    applyHolder(keys, userId);
+    // Done once someone is picked. For a pikett, "whole week" is switched
+    // on before the pick.
+    setEditingAssignment(null);
+    setTempAssignedUser(null);
+    setApplyToWeek(false);
+  };
+
+  // Only sets the scope; the next pick applies to the whole week.
+  const toggleWholeWeek = () => setApplyToWeek(v => !v);
+
+  const closeEditor = () => {
     setEditingAssignment(null);
     setTempAssignedUser(null);
     setApplyToWeek(false);
@@ -1122,7 +1129,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
   });
 
   // Overwrite the open draft, or create a new one under `name`.
-  const saveDraft = async (name?: string) => {
+  const saveDraft = async (name?: string, silent = false) => {
     if (shiftAssignments.length === 0) return;
     setSavingDraft(true);
     try {
@@ -1140,7 +1147,7 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
       setCurrentDraft({ id: saved.id, name: saved.name });
       setDraftSignature(signatureOf(shiftAssignments));
       setSaveDraftOpen(false);
-      setDraftNotice({ tone: 'ok', text: t('draftSaved', { name: saved.name }) });
+      if (!silent) setDraftNotice({ tone: 'ok', text: t('draftSaved', { name: saved.name }) });
       refreshDrafts();
     } catch {
       setDraftNotice({ tone: 'warn', text: t('draftSaveError') });
@@ -1148,6 +1155,14 @@ const isUserWorkingOnDay = (user: any, date: string, shiftTime?: string, shiftEn
       setSavingDraft(false);
     }
   };
+
+  // An open draft saves itself two seconds after the last change.
+  useEffect(() => {
+    if (!currentDraft || !draftDirty || savingDraft || sendingInvitations) return;
+    const timer = setTimeout(() => { saveDraft(undefined, true); }, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDraft, draftDirty, shiftAssignments, savingDraft, sendingInvitations]);
 
   const openDraft = async (id: string) => {
     if (draftDirty && !window.confirm(t('draftDiscardConfirm'))) return;
@@ -1668,8 +1683,20 @@ const processShiftAssignments = async () => {
           const weekKey = weekKeyIter;
           const currentWeekIdx = weekKeyToIdx(weekKey);
 
-          // Rank: fewest weeks first, then longest rest first.
+          // Support shifts the person already holds this week, sent or in
+          // another draft. Piketts are planned before shifts, so without this
+          // a pikett lands on someone who already works those days.
+          const shiftDaysThisWeek = (uid: string): number =>
+            pikett.avoidSupportSameWeek === false ? 0 : weekDates.filter(d =>
+              sentWorkDays.has(`${d}|${uid}`) || draftHolds.has(`sd|${d}|${uid}`)
+            ).length;
+
+          // Rank: fewest support-shift days that week, then fewest weeks,
+          // then longest rest.
           const rankedCandidates = [...shuffledUsers].sort((a: any, b: any) => {
+            const sa = shiftDaysThisWeek(a.id);
+            const sb = shiftDaysThisWeek(b.id);
+            if (sa !== sb) return sa - sb;
             const ca = pikettWeekCount.get(a.id) ?? 0;
             const cb = pikettWeekCount.get(b.id) ?? 0;
             if (ca !== cb) return ca - cb;
@@ -3749,7 +3776,7 @@ useEffect(() => {
                                               usersWithConsecutiveShifts.push({ user, reason: r, conflictEvents: [] });
                                             }
                                           }
-                                          const draftSameDay = !assignment.isPikett ? draftHoldsView[`sd|${assignment.date}|${user.id}`] : undefined;
+                                          const draftSameDay = draftHoldsView[`sd|${assignment.date}|${user.id}`];
                                           if (draftSameDay) {
                                             const r = t('reasonAlreadyAssignedToShift', { shift: draftSameDay });
                                             addReason(user.id, r);
@@ -5493,13 +5520,15 @@ useEffect(() => {
             open={isDetailDialogOpen}
             onOpenChange={(open) => {
               if (!open) {
-                setEditingAssignment(null);
-                setTempAssignedUser(null);
+                // Closing (cross, Escape, click outside) keeps the changes;
+                // only the Cancel button discards them.
+                setShiftAssignments(tempShiftAssignments);
+                closeEditor();
               }
               setIsDetailDialogOpen(open);
             }}
           >
-          <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto overflow-x-hidden [&>button]:hidden">
+          <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto overflow-x-hidden [&>button]:hidden">
             <DialogHeader>
               <DialogTitle>
                 {selectedDayAssignments && selectedDayAssignments[0] && (
@@ -5561,12 +5590,12 @@ useEffect(() => {
                         {assignment.assignedUsers.length > 0 ? (
                           <div className="bg-green-50 rounded-lg p-3">
                             <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div className="flex items-center gap-4 min-w-0 flex-1">
+                              <div className="flex items-center gap-4 min-w-0 flex-1 basis-[280px]">
                                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
                                 {editingAssignment === `${assignment.date}-${index}` ? (
                                   <Select
                                     value={tempAssignedUser || assignment.assignedUsers[0]?.id}
-                                    onValueChange={setTempAssignedUser}
+                                    onValueChange={(v) => pickHolder(assignment, v)}
                                   >
                                     <SelectTrigger className="w-full sm:w-auto sm:min-w-64 max-w-full hover:bg-secondary/20 transition-colors">
                                       {(() => {
@@ -5613,7 +5642,7 @@ useEffect(() => {
                                               {assignment.assignedUsers[0].lastName?.[0]}
                                             </AvatarFallback>
                                           </Avatar>
-                                          <div className="flex-1 space-y-1">
+                                          <div className="flex-1 min-w-0 space-y-1">
                                             <p className="font-semibold text-base text-slate-900">
                                               {assignment.assignedUsers[0].firstName} {assignment.assignedUsers[0].lastName}
                                             </p>
@@ -5621,8 +5650,8 @@ useEffect(() => {
                                               {assignment.assignedUsers[0].email}
                                             </p>
                                             {assignment.isManualOverride && (
-                                              <Badge className="text-xs mt-2 bg-orange-100 text-orange-700 border-0 inline-flex items-center gap-1">
-                                                <AlertCircle className="w-3 h-3" />
+                                              <Badge className="text-xs mt-2 bg-orange-100 text-orange-700 border-0 inline-flex items-start gap-1 whitespace-normal text-left h-auto max-w-full">
+                                                <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                                                 {t('assignedManually')} ({assignment.overrideReason})
                                               </Badge>
                                             )}
@@ -5674,7 +5703,7 @@ useEffect(() => {
                                           size="sm"
                                           variant="outline"
                                           aria-pressed={applyToWeek}
-                                          onClick={() => setApplyToWeek(v => !v)}
+                                          onClick={toggleWholeWeek}
                                           title={t('applyToWeekHint')}
                                           className={applyToWeek
                                             ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100 transition-colors'
@@ -5688,23 +5717,12 @@ useEffect(() => {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => {
-                                        handleSaveAssignmentChange(assignment.date, assignment.shiftId, assignment.segmentIndex, assignment.isPikett);
-                                      }}
-                                      className="hover:bg-orange-600/10 hover:text-orange-600 hover:border-orange-600 transition-colors"
+                                      onClick={closeEditor}
+                                      title={tCommon('close')}
+                                      aria-label={tCommon('close')}
+                                      className="hover:bg-green-50 hover:text-green-700 hover:border-green-300 transition-colors"
                                     >
-                                      <Save className="w-3 h-3" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      onClick={() => {
-                                        setEditingAssignment(null);
-                                        setTempAssignedUser(null);
-                                        setApplyToWeek(false);
-                                      }}
-                                      className="bg-red-600 hover:bg-red-700 text-white transition-colors"
-                                    >
-                                      <X className="w-3 h-3" />
+                                      <CheckCircle className="w-3.5 h-3.5" />
                                     </Button>
                                   </div>
                                 ) : (
@@ -5772,6 +5790,7 @@ useEffect(() => {
                                   onChange={(ids) => updateAssignmentCc(assignment, ids)}
                                   label={t('ccLabel')}
                                   addLabel={t('ccAdd')}
+                                  closeLabel={tCommon('close')}
                                   emptyLabel={t('ccEmpty')}
                                   jokerLabel={t('ccJoker')}
                                   searchLabel={t('ccSearch')}
@@ -5785,7 +5804,7 @@ useEffect(() => {
                               <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
                               <Select
                                 value={tempAssignedUser || undefined}
-                                onValueChange={setTempAssignedUser}
+                                onValueChange={(v) => pickHolder(assignment, v)}
                               >
                                 <SelectTrigger className="flex-1 min-w-[12rem] hover:bg-secondary/20 transition-colors">
                                   {(() => {
@@ -5817,7 +5836,7 @@ useEffect(() => {
                                     size="sm"
                                     variant="outline"
                                     aria-pressed={applyToWeek}
-                                    onClick={() => setApplyToWeek(v => !v)}
+                                    onClick={toggleWholeWeek}
                                     title={t('applyToWeekHint')}
                                     className={applyToWeek
                                       ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100 transition-colors'
@@ -5829,23 +5848,14 @@ useEffect(() => {
                                 );
                               })()}
                               <Button
-                                onClick={() => handleSaveAssignmentChange(assignment.date, assignment.shiftId, assignment.segmentIndex, assignment.isPikett)}
+                                onClick={closeEditor}
                                 variant="outline"
                                 size="sm"
-                                className="hover:bg-green-50"
+                                title={tCommon('close')}
+                                aria-label={tCommon('close')}
+                                className="hover:bg-green-50 hover:text-green-700 hover:border-green-300 transition-colors"
                               >
-                                <Save className="w-3 h-3 mr-1" />
-                                {tCommon('save')}
-                              </Button>
-                              <Button
-                                onClick={() => { setEditingAssignment(null); setTempAssignedUser(null); setApplyToWeek(false); }}
-                                variant="ghost"
-                                size="sm"
-                                title={tCommon('cancel')}
-                                aria-label={tCommon('cancel')}
-                                className="text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
-                              >
-                                <X className="w-3 h-3" />
+                                <CheckCircle className="w-3.5 h-3.5" />
                               </Button>
                             </div>
                             <div className="mt-3 pt-3 border-t border-orange-200/70">
@@ -5855,6 +5865,7 @@ useEffect(() => {
                                 onChange={(ids) => updateAssignmentCc(assignment, ids)}
                                 label={t('ccLabel')}
                                 addLabel={t('ccAdd')}
+                                closeLabel={tCommon('close')}
                                 emptyLabel={t('ccEmpty')}
                                 jokerLabel={t('ccJoker')}
                                   searchLabel={t('ccSearch')}
@@ -5953,7 +5964,7 @@ useEffect(() => {
                         }}
                         className="min-w-[100px] hover:bg-secondary/20"
                       >
-                        {tCommon("cancel")}
+                        {t('discardChanges')}
                       </Button>
                       <Button
                         onClick={() => {
@@ -5966,7 +5977,7 @@ useEffect(() => {
                         className="bg-primary hover:bg-primary/90 min-w-[120px]"
                       >
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        {tCommon("validate")}
+                        {tCommon('validate')}
                       </Button>
                     </div>
                   </div>

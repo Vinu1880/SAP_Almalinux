@@ -87,9 +87,14 @@ export async function POST(request: NextRequest) {
           ? prisma.pikettAssignment.update({ where: { id }, data })
           : prisma.shiftAssignment.update({ where: { id }, data });
 
+        // A refusal outlives its invitation: resending the slot to someone
+        // else cancels the refused event, and the dashboard still has to show
+        // who said no. Only rows that were still live become CANCELLED.
+        const isLive = assignment.status !== 'CANCELLED' && assignment.status !== 'REFUSED';
+
         if (!eventResponse.ok) {
           if (eventResponse.status === 404) {
-            if (assignment.status !== 'CANCELLED') {
+            if (isLive) {
               await updateStatus({ status: 'CANCELLED', respondedAt: new Date() });
               await prisma.auditLog.create({
                 data: {
@@ -116,7 +121,7 @@ export async function POST(request: NextRequest) {
         const event = await eventResponse.json();
 
         if (event.isCancelled === true) {
-          if (assignment.status !== 'CANCELLED') {
+          if (isLive) {
             await updateStatus({ status: 'CANCELLED', respondedAt: new Date() });
             await prisma.auditLog.create({
               data: {
@@ -246,7 +251,7 @@ export async function POST(request: NextRequest) {
               mailbox,
               removed: declinedCcIds,
               remainingCc: ccUsers.filter(u => remaining.includes(u.id)),
-              holder: { firstName: user.firstName, lastName: user.lastName },
+              holder: { firstName: user.firstName, lastName: user.lastName, email: user.email },
               itemName: _kind === 'pikett'
                 ? (assignment as any).pikett?.name
                 : (assignment as any).shift?.name,
@@ -260,6 +265,39 @@ export async function POST(request: NextRequest) {
                 data: { source: 'outlook-sync', reason: 'CC declined', removed: declinedCcIds },
               },
             });
+          }
+        }
+
+        // The event can still list someone who is no longer copied: a decline
+        // handled before attendees were pruned, or a copy removed by hand. Hand
+        // it back so the browser rewrites the attendee list and the subject.
+        if (assignment.status !== 'REFUSED' && !ccDeclines.some(d => d.outlookEventId === assignment.outlookEventId)) {
+          const optionalOnEvent: string[] = (event.attendees || [])
+            .filter((a: any) => a.type === 'optional')
+            .map((a: any) => String(a.emailAddress?.address || '').toLowerCase())
+            .filter(Boolean);
+          if (optionalOnEvent.length > 0) {
+            const keptIds: string[] = (assignment as any).ccUserIds || [];
+            const kept = keptIds.length > 0
+              ? await prisma.user.findMany({
+                  where: { id: { in: keptIds } },
+                  select: { id: true, email: true, firstName: true, lastName: true },
+                })
+              : [];
+            const keptEmails = new Set(kept.map(u => (u.email || '').toLowerCase()));
+            if (optionalOnEvent.some(e => !keptEmails.has(e))) {
+              ccDeclines.push({
+                assignmentId: id,
+                outlookEventId: assignment.outlookEventId!,
+                mailbox,
+                removed: [],
+                remainingCc: kept,
+                holder: { firstName: user.firstName, lastName: user.lastName, email: user.email },
+                itemName: _kind === 'pikett'
+                  ? (assignment as any).pikett?.name
+                  : (assignment as any).shift?.name,
+              });
+            }
           }
         }
 
